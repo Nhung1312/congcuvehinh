@@ -717,21 +717,11 @@ export const App: React.FC = () => {
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-100 text-slate-900 font-sans">
       
-      {/* THANH THÔNG BÁO DEMO & KÍCH HOẠT BẢN QUYỀN */}
-      <div className="bg-amber-50 text-amber-900 px-4 py-2 text-center text-xs font-medium border-b border-amber-200 flex items-center justify-center gap-3 shrink-0">
-        <span>🚀 Chế độ Dùng thử - Công cụ Vẽ hình Toán THCS</span>
-        {!isLicensed ? (
-          <button 
-            onClick={() => setShowActivationModal(true)}
-            className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded font-bold shadow-sm transition"
-          >
-            Nhập mã bản quyền (299k)
-          </button>
-        ) : (
-          <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-            ✓ Đã kích hoạt bản quyền vĩnh viễn
-          </span>
-        )}
+      {/* THANH THÔNG BÁO TRẢI NGHIỆM MIỄN PHÍ */}
+      <div className="bg-blue-50 text-blue-800 px-4 py-2.5 text-center text-sm font-medium border-b border-blue-200 flex items-center justify-center shrink-0">
+        <span>
+          🎉 Chào mừng thầy cô trải nghiệm miễn phí <b>Công cụ Vẽ hình Toán THCS</b>. Mọi góp ý hoặc cần hỗ trợ vui lòng liên hệ Zalo: <b>0775172026</b>
+        </span>
       </div>
 
       {/* 1. Header trên cùng */}
@@ -844,7 +834,7 @@ export const App: React.FC = () => {
             </form>
 
             <div className="mt-4 pt-4 border-t border-slate-100 text-center text-xs text-slate-400">
-              Cần hỗ trợ mua mã? Liên hệ Zalo: 09xx.xxx.xxx
+              Cần hỗ trợ mua mã? Liên hệ Zalo: 0775172026
             </div>
           </div>
         </div>
