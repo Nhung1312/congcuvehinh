@@ -8,6 +8,7 @@ import { TemplatesModal } from './components/TemplatesModal';
 import { SavedProjectsModal } from './components/SavedProjectsModal';
 import { HelpModal } from './components/HelpModal';
 import { storage, TEXTBOOK_TEMPLATES } from './storage/storageService';
+import { supabase } from './supabaseClient'; // Thêm kết nối Supabase
 import {
   copyImageToClipboard,
   copySvgCodeToClipboard,
@@ -31,6 +32,70 @@ import { FractionBarEditor } from './components/EditorPanels/FractionBarEditor';
 import { NumberLineEditor } from './components/EditorPanels/NumberLineEditor';
 
 export const App: React.FC = () => {
+  // Trạng thái quản lý bản quyền
+  const [isLicensed, setIsLicensed] = useState(false);
+  const [showActivationModal, setShowActivationModal] = useState(false);
+  const [licenseKey, setLicenseKey] = useState('');
+  const [email, setEmail] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
+
+  // Kiểm tra xem máy này đã kích hoạt bản quyền từ trước chưa
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('user_licensed_email');
+    if (savedEmail) {
+      setIsLicensed(true);
+    }
+  }, []);
+
+  // Hàm xử lý kích hoạt bản quyền
+  const handleActivate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    if (!licenseKey || !email) {
+      setErrorMsg('Vui lòng nhập đầy đủ Email và Mã bản quyền!');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('licenses')
+        .select('*')
+        .eq('license_key', licenseKey.trim())
+        .single();
+
+      if (error || !data) {
+        setErrorMsg('Mã bản quyền không tồn tại!');
+        return;
+      }
+
+      if (data.is_activated) {
+        setErrorMsg('Mã bản quyền này đã được kích hoạt ở thiết bị khác!');
+        return;
+      }
+
+      const { error: updateError } = await supabase
+        .from('licenses')
+        .update({ is_activated: true, owner_email: email.trim() })
+        .eq('license_key', licenseKey.trim());
+
+      if (updateError) {
+        setErrorMsg('Có lỗi xảy ra, vui lòng thử lại!');
+        return;
+      }
+
+      localStorage.setItem('user_licensed_email', email.trim());
+      setIsLicensed(true);
+      setSuccessMsg('Kích hoạt thành công! Cảm ơn bạn đã mua bản quyền.');
+      setTimeout(() => setShowActivationModal(false), 2000);
+
+    } catch (err) {
+      setErrorMsg('Lỗi kết nối hệ thống!');
+    }
+  };
+
   // Quản lý Lịch sử (Undo/Redo) với giới hạn 50 bước
   const [historyState, setHistoryState] = useState({
     past: [] as ChartDocument[],
@@ -40,19 +105,18 @@ export const App: React.FC = () => {
   
   const currentDoc = historyState.present;
 
-  // Hàm cập nhật trạng thái (ghi đè setCurrentDoc cũ)
   const setCurrentDoc = (value: React.SetStateAction<ChartDocument>) => {
     setHistoryState((prev) => {
       const nextDoc = typeof value === 'function' ? value(prev.present) : value;
-      if (nextDoc === prev.present) return prev; // Không đổi thì bỏ qua
+      if (nextDoc === prev.present) return prev;
 
       const newPast = [...prev.past, prev.present];
-      if (newPast.length > 50) newPast.shift(); // Giới hạn 50 bước để tránh nặng RAM
+      if (newPast.length > 50) newPast.shift();
 
       return {
         past: newPast,
         present: nextDoc,
-        future: [] // Xóa tương lai khi có hành động mới
+        future: []
       };
     });
   };
@@ -75,16 +139,12 @@ export const App: React.FC = () => {
     });
   };
 
-  // Trạng thái modal
   const [showDataTableModal, setShowDataTableModal] = useState(false);
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
   const [showSavedModal, setShowSavedModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
-
-  // Toast feedback khi copy
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
 
-  // Hiển thị toast thông báo
   const showToast = (message: string) => {
     setCopyFeedback(message);
     setTimeout(() => {
@@ -92,7 +152,6 @@ export const App: React.FC = () => {
     }, 3500);
   };
 
-  // Chọn loại công cụ mới từ Sidebar
   const handleSelectTool = (type: ToolType) => {
     const baseSettings: BaseChartSettings = {
       title: getInitialTitle(type),
@@ -121,7 +180,6 @@ export const App: React.FC = () => {
     setCurrentDoc(newDoc);
   };
 
-  // Trả về tiêu đề mặc định theo loại hình
   const getInitialTitle = (type: ToolType): string => {
     switch (type) {
       case 'PIE_CHART': return 'TỈ LỆ CÁC THÀNH PHẦN (%)';
@@ -142,7 +200,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Trả về dữ liệu mẫu khởi tạo cho từng loại hình
   const getInitialDataForType = (type: ToolType) => {
     switch (type) {
       case 'PIE_CHART':
@@ -339,12 +396,10 @@ export const App: React.FC = () => {
     }
   };
 
-  // Hàm dịch chuyển hình phục vụ phím tắt
   const handleTranslateShape = (dx: number, dy: number) => {
     setCurrentDoc(prev => {
       if(!prev.data.geometry) return prev;
-      
-      const newData = JSON.parse(JSON.stringify(prev.data)); // Clone data
+      const newData = JSON.parse(JSON.stringify(prev.data));
       const geo = newData.geometry;
       
       if(geo.triangle?.points) geo.triangle.points = geo.triangle.points.map((p:any) => ({x: p.x + dx, y: p.y + dy}));
@@ -357,34 +412,28 @@ export const App: React.FC = () => {
     });
   };
 
-  // Bắt sự kiện phím tắt toàn cục (Shortcuts)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Bỏ qua nếu đang gõ text trong thẻ input/textarea
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
 
-      // Ctrl + Z (Undo) & Ctrl + Shift + Z (Redo)
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (e.shiftKey) handleRedo();
         else handleUndo();
       }
 
-      // Ctrl + Y (Redo)
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
         e.preventDefault();
         handleRedo();
       }
 
-      // Ctrl + C: Copy hình
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
         e.preventDefault();
         handleCopyImage();
       }
 
-      // Các phím mũi tên: Dịch chuyển hình học
       if (currentDoc.type.startsWith('GEOMETRY_')) {
-        const step = e.shiftKey ? 20 : 5; // Giữ Shift để đi nhanh hơn
+        const step = e.shiftKey ? 20 : 5;
         if (e.key === 'ArrowUp') { handleTranslateShape(0, -step); e.preventDefault(); }
         else if (e.key === 'ArrowDown') { handleTranslateShape(0, step); e.preventDefault(); }
         else if (e.key === 'ArrowLeft') { handleTranslateShape(-step, 0); e.preventDefault(); }
@@ -396,7 +445,6 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentDoc]);
 
-  // Toggle Chế độ in đề thi đen trắng
   const handleToggleExamMode = () => {
     setCurrentDoc((prev) => ({
       ...prev,
@@ -407,18 +455,15 @@ export const App: React.FC = () => {
     }));
   };
 
-  // Lưu tài liệu vào LocalStorage
   const handleSaveDoc = async () => {
     await storage.save(currentDoc);
     showToast('Đã lưu hình vẽ vào bộ nhớ máy thành công!');
   };
 
-  // Lấy thẻ SVG đang hiển thị trên màn hình
   const getSvgElement = (): SVGSVGElement | null => {
     return document.getElementById('svg-math-canvas') as unknown as SVGSVGElement | null;
   };
 
-  // Sao chép hình trực tiếp vào Clipboard (cho Word)
   const handleCopyImage = async () => {
     const svgEl = getSvgElement();
     if (!svgEl) {
@@ -429,7 +474,6 @@ export const App: React.FC = () => {
     showToast(res.message);
   };
 
-  // Sao chép mã SVG
   const handleCopySvg = async () => {
     const svgEl = getSvgElement();
     if (!svgEl) return;
@@ -437,13 +481,11 @@ export const App: React.FC = () => {
     showToast(res.message);
   };
 
-  // Sao chép mã TikZ / LaTeX
   const handleCopyTikz = async () => {
     const res = await copyTikzToClipboard(currentDoc);
     showToast(res.message);
   };
 
-  // Tải ảnh PNG 600 DPI (siêu nét)
   const handleDownloadPng = async () => {
     const svgEl = getSvgElement();
     if (!svgEl) return;
@@ -451,7 +493,6 @@ export const App: React.FC = () => {
     showToast('Đang tải tệp ảnh PNG siêu nét (600 DPI)...');
   };
 
-  // Tải file SVG
   const handleDownloadSvg = () => {
     const svgEl = getSvgElement();
     if (!svgEl) return;
@@ -459,13 +500,11 @@ export const App: React.FC = () => {
     showToast('Đang tải tệp SVG Vector...');
   };
 
-  // Tải cấu hình JSON
   const handleDownloadJson = () => {
     downloadJsonConfig(currentDoc, currentDoc.title || 'cau_hinh_hinh_toan');
     showToast('Đã tải tệp cấu hình JSON.');
   };
 
-  // Nhập cấu hình JSON
   const handleUploadJson = async (file: File) => {
     try {
       const parsedDoc = await readJsonConfig(file);
@@ -476,7 +515,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Render Editor Panel tương ứng bên trái
   const renderEditorPanel = () => {
     const { type, data, settings } = currentDoc;
 
@@ -678,6 +716,24 @@ export const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-100 text-slate-900 font-sans">
+      
+      {/* THANH THÔNG BÁO DEMO & KÍCH HOẠT BẢN QUYỀN */}
+      <div className="bg-amber-50 text-amber-900 px-4 py-2 text-center text-xs font-medium border-b border-amber-200 flex items-center justify-center gap-3 shrink-0">
+        <span>🚀 Chế độ Dùng thử - Công cụ Vẽ hình Toán THCS</span>
+        {!isLicensed ? (
+          <button 
+            onClick={() => setShowActivationModal(true)}
+            className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded font-bold shadow-sm transition"
+          >
+            Nhập mã bản quyền (299k)
+          </button>
+        ) : (
+          <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+            ✓ Đã kích hoạt bản quyền vĩnh viễn
+          </span>
+        )}
+      </div>
+
       {/* 1. Header trên cùng */}
       <Header
         currentDoc={currentDoc}
@@ -705,13 +761,11 @@ export const App: React.FC = () => {
 
       {/* 2. Thân chính: Sidebar Danh mục + Panel Nhập liệu + Canvas Hiển thị SVG */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar Chọn loại công cụ */}
         <Sidebar
           currentType={currentDoc.type}
           onSelectTool={handleSelectTool}
         />
 
-        {/* Panel Nhập liệu & Tùy chỉnh chi tiết */}
         <section className="w-80 lg:w-96 bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-y-auto p-4 select-none h-full">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
             <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
@@ -722,13 +776,11 @@ export const App: React.FC = () => {
             </span>
           </div>
 
-          {/* Form chỉnh sửa */}
           <div className="flex-1 space-y-4">
             {renderEditorPanel()}
           </div>
         </section>
 
-        {/* Khung Canvas Trực quan & Xem trước hình ảnh SVG */}
         <main className="flex-1 flex flex-col h-full overflow-hidden">
           <CanvasArea
             currentDoc={currentDoc}
@@ -743,7 +795,62 @@ export const App: React.FC = () => {
         </main>
       </div>
 
-      {/* 3. Các Dialog Modals */}
+      {/* 3. Modal Kích hoạt bản quyền */}
+      {showActivationModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-2xl relative">
+            <button 
+              onClick={() => setShowActivationModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 font-bold"
+            >
+              ✕
+            </button>
+            
+            <h3 className="text-lg font-bold text-slate-800 text-center mb-1">Kích Hoạt Bản Quyền</h3>
+            <p className="text-xs text-slate-500 text-center mb-5">Mở khóa vĩnh viễn mọi tính năng (Giá: 299.000đ)</p>
+            
+            <form onSubmit={handleActivate} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Email của bạn:</label>
+                <input 
+                  type="email" 
+                  value={email} 
+                  onChange={(e) => setEmail(e.target.value)} 
+                  placeholder="nguyenvana@gmail.com"
+                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Mã bản quyền (License Key):</label>
+                <input 
+                  type="text" 
+                  value={licenseKey} 
+                  onChange={(e) => setLicenseKey(e.target.value)} 
+                  placeholder="Nhập mã nhận được từ tác giả..."
+                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {errorMsg && <p className="text-red-500 text-xs">{errorMsg}</p>}
+              {successMsg && <p className="text-emerald-600 text-xs font-medium">{successMsg}</p>}
+
+              <button 
+                type="submit" 
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-sm transition shadow-md"
+              >
+                Xác Nhận Kích Hoạt
+              </button>
+            </form>
+
+            <div className="mt-4 pt-4 border-t border-slate-100 text-center text-xs text-slate-400">
+              Cần hỗ trợ mua mã? Liên hệ Zalo: 09xx.xxx.xxx
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Các Dialog Modals khác */}
       <DataTableModal
         isOpen={showDataTableModal}
         onClose={() => setShowDataTableModal(false)}
