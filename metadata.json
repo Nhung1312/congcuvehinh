@@ -1,0 +1,6 @@
+{
+  "name": "Tool Vẽ Biểu Đồ & Hình Toán THCS",
+  "description": "Ứng dụng chuyên nghiệp dành cho giáo viên Toán THCS vẽ biểu đồ thống kê, hình học phẳng, đồ thị hàm số và mô hình toán học xuất ảnh chuẩn đề thi Word và PDF.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
