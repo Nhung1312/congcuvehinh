@@ -27,6 +27,7 @@ import { PictogramSvg } from '../renderers/PictogramSvg';
 import { CoordinatePlaneSvg } from '../renderers/CoordinatePlaneSvg';
 import { FunctionGraphSvg } from '../renderers/FunctionGraphSvg';
 import { GeometrySvg } from '../renderers/GeometrySvg';
+import { SpatialGeometrySvg } from '../renderers/SpatialGeometrySvg';
 import { FractionBarSvg } from '../renderers/FractionBarSvg';
 import { NumberLineSvg } from '../renderers/NumberLineSvg';
 import {
@@ -253,6 +254,7 @@ export const CanvasArea: React.FC<CanvasAreaProps> = ({
       case 'GEOMETRY_TRIANGLE':
       case 'GEOMETRY_QUADRILATERAL':
       case 'GEOMETRY_CIRCLE':
+      case 'AI_GEOMETRY':
         return (
           <GeometrySvg
             data={data.geometry as any}
@@ -264,6 +266,8 @@ export const CanvasArea: React.FC<CanvasAreaProps> = ({
             onUpdateCirclePoints={onUpdateCirclePoints}
           />
         );
+      case 'GEOMETRY_SPATIAL':
+        return <SpatialGeometrySvg data={data.spatialGeometry as any} settings={settings} />;
       case 'FRACTION_BAR': return <FractionBarSvg data={data.fractionBar as any} settings={settings} />;
       case 'NUMBER_LINE': return <NumberLineSvg data={data.numberLine as any} settings={settings} />;
       default: return <div className="text-sm text-slate-400">Chưa chọn loại hình vẽ</div>;

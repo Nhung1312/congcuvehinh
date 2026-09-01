@@ -1,6 +1,8 @@
-export type ToolCategory = 'statistics' | 'coordinates' | 'geometry' | 'spatial' | 'models';
+export type ToolCategory = 'ai' | 'statistics' | 'coordinates' | 'geometry' | 'spatial' | 'models';
 
 export type ToolType = 
+  // AI Tự động dựng hình
+  | 'AI_GEOMETRY'
   // Thống kê - Biểu đồ
   | 'PIE_CHART'
   | 'BAR_CHART'
@@ -16,6 +18,8 @@ export type ToolType =
   | 'GEOMETRY_TRIANGLE'
   | 'GEOMETRY_QUADRILATERAL'
   | 'GEOMETRY_CIRCLE'
+  | 'GEOMETRY_POLYGON'
+  | 'GEOMETRY_SYMMETRY'
   // Hình không gian (Toán 7-8-9)
   | 'GEOMETRY_SPATIAL'
   // Mô hình toán
@@ -30,6 +34,7 @@ export type PatternType =
   | 'hatch-vertical'    // Sọc dọc
   | 'grid-square'       // Lưới vuông
   | 'grid-cross'        // Caro chéo
+  | 'crosshatch'        // Caro chéo / gạch chéo
   | 'dots'              // Chấm bi
   | 'dots-dense'        // Chấm bi dày
   | 'waves'             // Sóng nước
@@ -288,7 +293,8 @@ export type QuadType =
   | 'parallelogram'
   | 'rectangle'
   | 'rhombus'
-  | 'square';
+  | 'square'
+  | 'cyclic'; // Tứ giác nội tiếp đường tròn
 export type StrokeDashType = 'solid' | 'dashed' | 'dotted';
 
 export interface Point2D {
@@ -391,7 +397,7 @@ export interface CustomAuxLine {
 export interface CustomAuxPoint {
   id: string;
   name: string; // Tên điểm, ví dụ 'M', 'N', 'I', 'K', 'P', 'H', 'O'
-  type: 'midpoint' | 'ratio' | 'projection' | 'free' | 'intersection';
+  type: 'midpoint' | 'ratio' | 'projection' | 'free' | 'intersection' | 'on-circle';
   segment?: string | [string, string] | string[]; // Đoạn thẳng chứa trung điểm hoặc tỉ lệ, ví dụ 'AB', ['B', 'C']
   ratio?: number; // Tỉ lệ chia (0 đến 1, ví dụ 0.5 = trung điểm, 0.33 = 1/3)
   fromPoint?: string; // Đỉnh hạ hình chiếu (cho type 'projection')
@@ -400,6 +406,9 @@ export interface CustomAuxPoint {
   line2?: string | [string, string] | string[]; // Đường 2 (cho type 'intersection')
   freeX?: number; // Tọa độ tự do
   freeY?: number;
+  angle?: number; // Góc (độ) cho điểm trên đường tròn
+  centerPoint?: string;
+  radius?: number;
   showPoint?: boolean;
   showLabel?: boolean;
   color?: string;
@@ -511,6 +520,33 @@ export interface TriangleData {
     style?: StrokeDashType;
   };
 
+  // Định lý Ta-lét: Đường thẳng song song cắt hai cạnh tam giác (MN // BC)
+  thales?: {
+    enabled: boolean;
+    pointMName?: string; // 'M'
+    pointNName?: string; // 'N'
+    ratio?: number; // Tỉ lệ AM/AB (mặc định 0.4, giá trị từ 0.05 đến 0.95)
+    cutSide?: 'AB-AC' | 'BA-BC' | 'CA-CB'; // Cặp cạnh bị cắt
+    showParallelMarkers?: boolean; // Ký hiệu mũi tên song song
+    parallelMarkerType?: 1 | 2; // 1: '>', 2: '>>'
+    showRatiosText?: boolean; // Hiển thị tỉ lệ "AM/AB = AN/AC = MN/BC"
+    showDashedExtensions?: boolean; // Kéo dài đường thẳng MN nét đứt
+    showFillTriangle?: boolean; // Highlight tam giác đồng dạng AMN
+    fillColor?: string;
+    fillOpacity?: number;
+    lineStyle?: GeometrySegmentStyle;
+    showPoints?: boolean;
+    showLabels?: boolean;
+    segmentLengthLabels?: {
+      AM?: string;
+      MB?: string;
+      AN?: string;
+      NC?: string;
+      MN?: string;
+      BC?: string;
+    };
+  };
+
   // Tùy chọn ký hiệu & thông số
   showRightAngleMarker?: boolean;
   showEqualSidesMarker?: boolean;
@@ -596,6 +632,15 @@ export interface QuadData {
   showSideLengths?: boolean;
   sideLengthLabels?: string[]; // [AB, BC, CD, DA] labels
 
+  // Tứ giác nội tiếp đường tròn (Tool 1)
+  showCircumcircle?: boolean;
+  circumcircleCenterName?: string; // 'O'
+  circumcircleStyle?: StrokeDashType;
+  circumcircleColor?: string;
+  circumcircleStrokeWidth?: number;
+  showCircumcircleCenter?: boolean;
+  showCircumcircleRadii?: boolean;
+
   // Backward compatibility fields
   width?: number;
   height?: number;
@@ -648,9 +693,12 @@ export interface LineRayData {
   perpLineLabel1?: string; // 'd'
   perpLineLabel2?: string; // 'd\''
 
-  // Giao điểm
+  // Giao điểm (Tool 5)
   intersectionName?: string; // 'O'
   showIntersectionPoint?: boolean;
+  intersectionElem1Type?: 'line' | 'ray' | 'segment';
+  intersectionElem2Type?: 'line' | 'ray' | 'segment';
+  showDashedExtensions?: boolean; // Hiển thị đường kéo dài nét đứt tới giao điểm
 
   // Đường phụ & Ký hiệu
   auxLines?: CustomAuxLine[];
@@ -747,14 +795,19 @@ export interface AngleData {
 // ==========================================
 
 export type CirclePresetType =
-  | 'basic'           // Đường tròn cơ bản: Tâm O, bán kính OA/R
-  | 'diameter-chord'  // Đường kính AB & Dây cung CD, hạ OH ⊥ CD
-  | 'arc'             // Cung tròn AB (Cung nhỏ / lớn, tên cung)
-  | 'tangent-point'   // Tiếp tuyến tại điểm A trên đường tròn (Ax ⊥ OA)
-  | 'two-tangents'    // Hai tiếp tuyến PA, PB cắt nhau từ điểm P ngoài đường tròn
-  | 'secant'          // Cát tuyến PCD từ điểm P ngoài đường tròn
-  | 'two-circles'     // Hai đường tròn (O1, R1) và (O2, R2) cắt nhau
-  | 'inscribed-angle';// Góc nội tiếp ∠APB & Góc ở tâm ∠AOB
+  | 'basic'               // Đường tròn cơ bản: Tâm O, bán kính OA/R
+  | 'diameter-chord'      // Đường kính AB & Dây cung CD, hạ OH ⊥ CD
+  | 'arc'                 // Cung tròn AB (Cung nhỏ / lớn, tên cung)
+  | 'sector'              // Hình quạt tròn AOB (Bán kính OA, OB, cung AB, góc ở tâm AOB)
+  | 'segment'             // Hình viên phân (Dây cung AB và cung tròn AB)
+  | 'tangent-point'       // Tiếp tuyến tại điểm A trên đường tròn (Ax ⊥ OA)
+  | 'two-tangents'        // Hai tiếp tuyến PA, PB cắt nhau từ điểm P ngoài đường tròn
+  | 'secant'              // Cát tuyến PCD từ điểm P ngoài đường tròn
+  | 'two-circles'         // Hai đường tròn (O1, R1) và (O2, R2) - Vị trí tương đối & tiếp tuyến chung
+  | 'inscribed-angle'     // Góc nội tiếp ∠APB & Góc ở tâm ∠AOB
+  | 'tangent-chord-angle' // Góc tạo bởi tiếp tuyến và dây cung ∠BAx
+  | 'interior-angle'      // Góc có đỉnh bên trong đường tròn (giao 2 dây cung AB, CD tại E)
+  | 'exterior-angle';     // Góc có đỉnh bên ngoài đường tròn (2 cát tuyến PAB, PCD từ P)
 
 export interface CircleData {
   presetType?: CirclePresetType;
@@ -800,6 +853,24 @@ export interface CircleData {
   showArcName?: boolean;
   arcStyle?: GeometrySegmentStyle;
 
+  // 4b. Hình quạt tròn (Sector) & Hình viên phân (Segment)
+  sectorAngleDeg?: number;          // Số đo góc ở tâm (độ, ví dụ 60, 90, 120)
+  showSectorRadii?: boolean;        // Vẽ 2 bán kính OA, OB
+  showSectorChord?: boolean;        // Vẽ dây cung AB cho hình viên phân
+  showCentralAngleMarker?: boolean; // Ký hiệu góc ở tâm ∠AOB
+  showCentralAngleDegree?: boolean; // Nhãn số đo góc (ví dụ "60°", "α")
+  centralAngleLabel?: string;       // Nhãn tùy chỉnh góc
+  showArcLengthLabel?: boolean;     // Hiển thị nhãn độ dài cung l
+  arcLengthLabel?: string;          // ví dụ "l = 4π cm"
+  showSectorAreaLabel?: boolean;    // Hiển thị nhãn diện tích quạt S
+  sectorAreaLabel?: string;         // ví dụ "S = 6π cm²"
+  showSegmentAreaLabel?: boolean;   // Hiển thị nhãn diện tích hình viên phân
+  segmentAreaLabel?: string;
+  arcPointNames?: [string, string]; // ['A', 'B']
+  arcMidpointName?: string;         // 'm' (tạo cung AmB)
+  radiiStyle?: GeometrySegmentStyle;
+  chordSegmentStyle?: GeometrySegmentStyle;
+
   // 5. Tiếp tuyến
   showTangent?: boolean;
   tangentType?: 'at-point' | 'two-tangents'; // Tại điểm A hoặc 2 tiếp tuyến từ P
@@ -825,15 +896,46 @@ export interface CircleData {
   showCentralAngle?: boolean;
   angleStyle?: GeometrySegmentStyle;
 
-  // 8. Đường tròn thứ 2
+  // 8. Góc tạo bởi tiếp tuyến và dây cung (Tool 3.1)
+  showTangentChordAngle?: boolean;
+  tangentChordPointName?: string; // 'A' (tiếp điểm)
+  chordTargetPointName?: string;  // 'B' (điểm mút dây cung trên đường tròn)
+  tangentRayName?: string;        // 'x' (tia Ax)
+  showInscribedCompareAngle?: boolean; // Góc nội tiếp chắn cùng cung ACB để so sánh bằng nhau
+  compareVertexName?: string;     // 'C'
+  tangentChordAngleStyle?: GeometrySegmentStyle;
+
+  // 9. Góc có đỉnh bên trong đường tròn (Tool 3.2)
+  showInteriorAngle?: boolean;
+  interiorIntersectionName?: string; // 'E'
+  interiorChord1Points?: [string, string]; // ['A', 'B']
+  interiorChord2Points?: [string, string]; // ['C', 'D']
+  showInteriorAngleArc?: boolean;
+  showSubtendedArcsHighlight?: boolean;
+
+  // 10. Góc có đỉnh bên ngoài đường tròn (Tool 3.3)
+  showExteriorAngle?: boolean;
+  exteriorVertexName?: string; // 'P' hoặc 'E'
+  exteriorSecant1Points?: [string, string]; // ['A', 'B']
+  exteriorSecant2Points?: [string, string]; // ['C', 'D']
+  exteriorType?: 'two-secants' | 'secant-tangent' | 'two-tangents';
+  showExteriorAngleArc?: boolean;
+
+  // 11. Vị trí tương đối của hai đường tròn & Tiếp tuyến chung (Tool 4)
   showSecondCircle?: boolean;
   center2Name?: string; // "O'"
   radius2?: number;
   circle2Style?: GeometrySegmentStyle;
+  twoCirclesRelation?: 'intersecting' | 'tangent-external' | 'tangent-internal' | 'external' | 'inside' | 'concentric';
+  showCommonTangents?: boolean;
+  commonTangentsType?: 'external' | 'internal' | 'both';
+  commonTangentsStyle?: GeometrySegmentStyle;
+  showLineOfCenters?: boolean; // Đoạn thẳng nối tâm O1O2
+  showCommonChord?: boolean;   // Dây chung AB (khi cắt nhau)
   showIntersections?: boolean;
   intersectionNames?: string[]; // ['A', 'B']
 
-  // 9. Tô miền
+  // 12. Tô miền
   fill?: GeometryFillStyle;
   fillType?: 'full' | 'sector' | 'segment'; // Toàn bộ / Hình quạt / Hình viên phân
 
@@ -854,10 +956,152 @@ export interface CircleData {
   tangentPoint?: string;
 }
 
+// ==========================================
+// THIẾT LẬP ĐA GIÁC ĐỀU (NHÓM 2 - CÔNG CỤ 3)
+// ==========================================
+
+export type RegularPolygonType =
+  | 'triangle'   // Tam giác đều (n = 3)
+  | 'equilateral-triangle'
+  | 'square'     // Hình vuông (n = 4)
+  | 'pentagon'   // Ngũ giác đều (n = 5)
+  | 'hexagon'    // Lục giác đều (n = 6)
+  | 'heptagon'   // Thất giác đều (n = 7)
+  | 'octagon'    // Bát giác đều (n = 8)
+  | 'nonagon'    // Cửu giác đều (n = 9)
+  | 'decagon'    // Thập giác đều (n = 10)
+  | 'dodecagon'  // Thập nhị giác đều (n = 12)
+  | 'custom';    // Tùy chỉnh số cạnh n (3..16)
+
+export type PolygonType = RegularPolygonType;
+
+export interface PolygonData {
+  type: RegularPolygonType;
+  sidesCount: number; // Số cạnh n (mặc định 5 hoặc theo type)
+  center: Point2D;    // Tâm O của đa giác đều
+  radius: number;     // Bán kính đường tròn ngoại tiếp R (px)
+  rotationAngle?: number; // Góc xoay ban đầu (độ)
+  points?: Point2D[]; // Toạ độ n đỉnh thực tế [A1, A2, ..., An]
+
+  // Đỉnh & Tên đỉnh
+  vertexNames: string[]; // ['A', 'B', 'C', 'D', 'E'...] hoặc ['A1', 'A2'...]
+  showVertices?: boolean;
+  showLabels?: boolean;
+
+  // Tâm & Bán kính
+  showCenter?: boolean;
+  centerName?: string; // 'O'
+  showRadii?: boolean; // Vẽ các bán kính OA, OB, OC...
+  radiiStyle?: GeometrySegmentStyle;
+
+  // Đường tròn ngoại tiếp (Circumscribed Circle)
+  showCircumcircle?: boolean;
+  circumcircleStyle?: StrokeDashType;
+  circumcircleColor?: string;
+
+  // Đường tròn nội tiếp (Inscribed Circle)
+  showIncircle?: boolean;
+  incircleStyle?: StrokeDashType;
+  incircleColor?: string;
+
+  // Trung đoạn (Apothem - OH vuông góc với cạnh)
+  showApothem?: boolean;
+  apothemName?: string; // 'H'
+  apothemStyle?: GeometrySegmentStyle;
+  showApothemRightAngle?: boolean;
+
+  // Đường chéo
+  showDiagonals?: boolean;
+  diagonalsType?: 'main' | 'all'; // Chỉ đường chéo chính qua tâm hoặc tất cả
+  diagonalsStyle?: GeometrySegmentStyle;
+
+  // Ký hiệu hình học
+  showEqualSidesMarkers?: boolean;
+  equalSidesTickType?: EqualTickMarkType;
+  showEqualAnglesMarkers?: boolean;
+  showSideLengths?: boolean;
+  sideLengthLabel?: string; // e.g. "a", "5 cm"
+
+  // Tô miền & Đường viền
+  fill?: GeometryFillStyle;
+  strokeColor?: string;
+  strokeWidth?: number;
+  strokeStyle?: StrokeDashType;
+  vertexStyles?: { [index: number]: GeometryPointStyle };
+  labelStyles?: { [name: string]: GeometryTextStyle };
+
+  // Đường phụ
+  auxLines?: CustomAuxLine[];
+  auxPoints?: CustomAuxPoint[];
+  rightAngleMarkers?: CustomRightAngleMarker[];
+  parallelMarkers?: CustomParallelMarker[];
+  equalSidesMarkers?: CustomEqualSidesMarker[];
+  equalAnglesMarkers?: CustomEqualAnglesMarker[];
+}
+
+// ==========================================
+// THIẾT LẬP ĐỐI XỨNG TRỤC & ĐỐI XỨNG TÂM (NHÓM 2 - CÔNG CỤ 2)
+// ==========================================
+
+export type SymmetryType = 'axial' | 'central'; // Đối xứng trục | Đối xứng tâm
+export type SymmetryTargetShape = 'point' | 'segment' | 'triangle' | 'quadrilateral' | 'circle';
+
+export interface SymmetryData {
+  type: SymmetryType; // 'axial' (Trục) hoặc 'central' (Tâm)
+  targetShape: SymmetryTargetShape; // Đối tượng: 'point' | 'segment' | 'triangle' | 'quadrilateral' | 'circle'
+
+  // Trục đối xứng d (Dành cho Đối xứng trục): xác định bởi 2 điểm điều khiển [P1, P2]
+  axisPoints?: [Point2D, Point2D];
+  axisLabel?: string; // 'd' hoặc 'xy'
+  axisStyle?: GeometrySegmentStyle;
+  showAxisExtension?: boolean; // Kéo dài trục về 2 phía
+
+  // Tâm đối xứng I (Dành cho Đối xứng tâm)
+  centerPoint?: Point2D;
+  centerName?: string; // 'I' hoặc 'O'
+  centerStyle?: GeometryPointStyle;
+
+  // Toạ độ các điểm của hình gốc:
+  // - 'point': [A]
+  // - 'segment': [A, B]
+  // - 'triangle': [A, B, C]
+  // - 'quadrilateral': [A, B, C, D]
+  // - 'circle': [Tâm O, Điểm bán kính A]
+  originalPoints: Point2D[];
+  originalNames: string[];  // ['A', 'B', 'C'...]
+  reflectedNames: string[]; // ["A'", "B'", "C'"]
+
+  // Bán kính đường tròn (nếu targetShape === 'circle')
+  circleRadius?: number;
+
+  // Hiển thị & Ký hiệu sư phạm
+  showOriginalLabels?: boolean;
+  showReflectedLabels?: boolean;
+  showConnectingDashedLines?: boolean; // Đoạn AA', BB', CC' nối nét đứt
+  connectingLineStyle?: StrokeDashType;
+  showRightAngleMarkers?: boolean;     // Ký hiệu vuông góc AA' ⊥ d (đối xứng trục)
+  showEqualDistanceMarkers?: boolean;  // Ký hiệu AH = A'H hoặc IA = IA'
+  equalDistanceTickType?: EqualTickMarkType;
+
+  // Kiểu vẽ & Tô màu hình gốc và hình đối xứng
+  originalStyle?: GeometrySegmentStyle;
+  reflectedStyle?: GeometrySegmentStyle;
+  originalFill?: GeometryFillStyle;
+  reflectedFill?: GeometryFillStyle;
+
+  // Đường phụ & Ký hiệu
+  auxLines?: CustomAuxLine[];
+  auxPoints?: CustomAuxPoint[];
+  rightAngleMarkers?: CustomRightAngleMarker[];
+  parallelMarkers?: CustomParallelMarker[];
+  equalSidesMarkers?: CustomEqualSidesMarker[];
+  equalAnglesMarkers?: CustomEqualAnglesMarker[];
+}
+
 export interface GeometryData {
-  subType: 'triangle' | 'quadrilateral' | 'circle' | 'angle' | 'line-ray';
+  subType: 'triangle' | 'quadrilateral' | 'circle' | 'angle' | 'line-ray' | 'polygon' | 'symmetry';
   
-  // Tam giác
+  // Tam giác (kèm Định lý Ta-lét MN // BC)
   triangle?: TriangleData;
 
   // Tứ giác
@@ -871,6 +1115,12 @@ export interface GeometryData {
 
   // Đoạn thẳng / Tia / Đường thẳng / Song song / Vuông góc
   lineRay?: LineRayData;
+
+  // Đa giác đều (Tam giác đều, Vuông, Ngũ giác, Lục giác, Bát giác, n-giác)
+  polygon?: PolygonData;
+
+  // Đối xứng trục & Đối xứng tâm
+  symmetry?: SymmetryData;
 
   // Đường phụ & Ký hiệu dùng chung cấp Geometry
   auxLines?: CustomAuxLine[];
@@ -954,7 +1204,7 @@ export interface NumberLineData {
   };
 }
 
-// 11. Hình học không gian (3D Spatial Geometry - Toán 7-8-9 CT GDPT mới)
+// 11. Hình học không gian (3D Spatial Geometry & Hình khai triển phẳng - Toán 7-8-9 CT GDPT mới)
 export type SpatialShapeType =
   | 'box'                 // Hình hộp chữ nhật (ABCD.A'B'C'D')
   | 'cube'                // Hình lập phương (ABCD.A'B'C'D')
@@ -964,19 +1214,39 @@ export type SpatialShapeType =
   | 'quad-pyramid'        // Hình chóp tứ giác đều (S.ABCD)
   | 'pyramid-altitude'    // Hình chóp có đường cao vuông góc đáy (S.ABCD, SA ⊥ đáy)
   | 'cylinder'            // Hình trụ (O, O')
-  | 'cone';               // Hình nón (S, O)
+  | 'cone'                // Hình nón (S, O)
+  | 'net-box'             // Hình khai triển hình hộp chữ nhật (Unfolded Net)
+  | 'net-cube'            // Hình khai triển hình lập phương
+  | 'net-triangular-prism'// Hình khai triển hình lăng trụ đứng tam giác
+  | 'net-cylinder'        // Hình khai triển hình trụ
+  | 'net-cone';           // Hình khai triển hình nón
 
 export interface SpatialDimensionConfig {
   showDimensions: boolean;
   length?: string; // e.g. "a", "6 cm"
   width?: string;  // e.g. "b", "4 cm"
   height?: string; // e.g. "h", "5 cm"
-  slantHeight?: string; // e.g. "d" (trung đoạn hình chóp)
+  slantHeight?: string; // e.g. "d" hoặc "l" (đường sinh hình nón, trung đoạn hình chóp)
   radius?: string; // e.g. "r", "3 cm"
+  angle?: string;  // e.g. "α", "120°"
+}
+
+export interface SpatialNetConfig {
+  showFoldLines?: boolean;    // Hiển thị đường gấp nét đứt (dashed fold lines)
+  foldLineStyle?: StrokeDashType;
+  showFaceLabels?: boolean;   // Hiển thị tên/nhãn các mặt (Đáy trên, Đáy dưới, Mặt bên...)
+  showTabs?: boolean;         // Hiển thị mép dán (flaps/tabs) để gấp giấy
+  showDimensions?: boolean;   // Hiển thị kích thước các cạnh trên hình phẳng
+  faceColor?: string;         // Màu nền các mặt phẳng
+  tabColor?: string;          // Màu mép dán
 }
 
 export interface SpatialGeometryData {
   shapeType: SpatialShapeType;
+
+  // Chế độ xem phẳng / Khai triển
+  isUnfoldedNet?: boolean;
+  netConfig?: SpatialNetConfig;
   
   // Tên các đỉnh
   vertexNames?: string[]; // e.g. ['A', 'B', 'C', 'D', "A'", "B'", "C'", "D'"] hoặc ['S', 'A', 'B', 'C', 'D']

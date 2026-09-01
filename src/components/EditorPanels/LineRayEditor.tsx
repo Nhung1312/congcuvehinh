@@ -508,9 +508,9 @@ export const LineRayEditor: React.FC<LineRayEditorProps> = ({
               </div>
             )}
 
-            {/* Nếu là Giao điểm */}
+            {/* Nếu là Giao điểm (Tool 5) */}
             {currentType === 'intersection' && (
-              <div className="space-y-2.5">
+              <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-1.5 cursor-pointer font-semibold text-slate-800">
                     <input
@@ -527,16 +527,78 @@ export const LineRayEditor: React.FC<LineRayEditorProps> = ({
                     <span>Hiện điểm giao nhau</span>
                   </label>
 
-                  <input
-                    type="text"
-                    value={lineRay.intersectionName || 'O'}
-                    onChange={(e) =>
-                      onChangeLineRay({ ...lineRay, intersectionName: e.target.value })
-                    }
-                    className="w-12 text-center text-xs font-bold px-1.5 py-0.5 border border-slate-300 rounded bg-white"
-                    placeholder="O"
-                  />
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-slate-500">Tên:</span>
+                    <input
+                      type="text"
+                      value={lineRay.intersectionName || 'O'}
+                      onChange={(e) =>
+                        onChangeLineRay({ ...lineRay, intersectionName: e.target.value })
+                      }
+                      className="w-12 text-center text-xs font-bold px-1.5 py-0.5 border border-slate-300 rounded bg-white"
+                      placeholder="O"
+                    />
+                  </div>
                 </div>
+
+                {/* Chọn loại hình thể cho đường 1 và đường 2 */}
+                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-0.5">
+                      Đối tượng 1 ({name1}{name2})
+                    </label>
+                    <select
+                      value={lineRay.line1Kind || 'line'}
+                      onChange={(e) =>
+                        onChangeLineRay({
+                          ...lineRay,
+                          line1Kind: e.target.value as any,
+                        })
+                      }
+                      className="w-full text-xs px-1.5 py-1 border border-slate-300 rounded bg-white"
+                    >
+                      <option value="line">Đường thẳng ({name1}{name2})</option>
+                      <option value="ray">Tia ({name1}{name2})</option>
+                      <option value="segment">Đoạn thẳng ({name1}{name2})</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-0.5">
+                      Đối tượng 2 ({name3}{name4})
+                    </label>
+                    <select
+                      value={lineRay.line2Kind || 'line'}
+                      onChange={(e) =>
+                        onChangeLineRay({
+                          ...lineRay,
+                          line2Kind: e.target.value as any,
+                        })
+                      }
+                      className="w-full text-xs px-1.5 py-1 border border-slate-300 rounded bg-white"
+                    >
+                      <option value="line">Đường thẳng ({name3}{name4})</option>
+                      <option value="ray">Tia ({name3}{name4})</option>
+                      <option value="segment">Đoạn thẳng ({name3}{name4})</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Tùy chọn kéo dài nét đứt tới giao điểm */}
+                <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-700 pt-1">
+                  <input
+                    type="checkbox"
+                    checked={lineRay.showExtensionLines !== false}
+                    onChange={(e) =>
+                      onChangeLineRay({
+                        ...lineRay,
+                        showExtensionLines: e.target.checked,
+                      })
+                    }
+                    className="rounded text-blue-600"
+                  />
+                  <span>Tự động vẽ nét đứt kéo dài tới giao điểm</span>
+                </label>
               </div>
             )}
 

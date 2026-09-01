@@ -28,6 +28,9 @@ import { PictogramEditor } from './components/EditorPanels/PictogramEditor';
 import { CoordinatePlaneEditor } from './components/EditorPanels/CoordinatePlaneEditor';
 import { FunctionGraphEditor } from './components/EditorPanels/FunctionGraphEditor';
 import { GeometryEditor } from './components/EditorPanels/GeometryEditor';
+import { AIGeometryEditor } from './components/EditorPanels/AIGeometryEditor';
+import { AIGeometryModal } from './components/AIGeometryModal';
+import { SpatialGeometryEditor } from './components/EditorPanels/SpatialGeometryEditor';
 import { FractionBarEditor } from './components/EditorPanels/FractionBarEditor';
 import { NumberLineEditor } from './components/EditorPanels/NumberLineEditor';
 
@@ -143,6 +146,7 @@ export const App: React.FC = () => {
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
   const [showSavedModal, setShowSavedModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
 
   const showToast = (message: string) => {
@@ -182,6 +186,7 @@ export const App: React.FC = () => {
 
   const getInitialTitle = (type: ToolType): string => {
     switch (type) {
+      case 'AI_GEOMETRY': return 'AI TỰ DỰNG HÌNH TOÁN THCS';
       case 'PIE_CHART': return 'TỈ LỆ CÁC THÀNH PHẦN (%)';
       case 'BAR_CHART': return 'BIỂU ĐỒ CỘT THỐNG KÊ';
       case 'DOUBLE_BAR_CHART': return 'BIỂU ĐỒ CỘT KÉP SO SÁNH';
@@ -194,6 +199,7 @@ export const App: React.FC = () => {
       case 'GEOMETRY_TRIANGLE': return 'HÌNH TAM GIÁC';
       case 'GEOMETRY_QUADRILATERAL': return 'HÌNH TỨ GIÁC';
       case 'GEOMETRY_CIRCLE': return 'ĐƯỜNG TRÒN (O)';
+      case 'GEOMETRY_SPATIAL': return 'HÌNH HỌC KHÔNG GIAN';
       case 'FRACTION_BAR': return 'MÔ HÌNH THANH PHÂN SỐ';
       case 'NUMBER_LINE': return 'TRỤC SỐ';
       default: return 'HÌNH VẼ TOÁN THCS';
@@ -202,6 +208,29 @@ export const App: React.FC = () => {
 
   const getInitialDataForType = (type: ToolType) => {
     switch (type) {
+      case 'AI_GEOMETRY':
+        return {
+          geometry: {
+            subType: 'triangle' as const,
+            triangle: {
+              type: 'general' as const, vertexNames: ['A', 'B', 'C'],
+              points: [{ x: 260, y: 110 }, { x: 130, y: 340 }, { x: 430, y: 340 }] as [Point2D, Point2D, Point2D],
+              showVertices: true, showLabels: true,
+              altitudes: [{ fromVertex: 'A' as const, enabled: true, label: 'H', style: 'dashed' as const, showRightAngle: true }],
+              medians: [], bisectors: [], perpBisectors: [], showRightAngleMarker: true, showEqualSidesMarker: true,
+              showSideLengths: false, sideLengthLabels: ['', '', ''],
+            },
+          },
+        };
+      case 'GEOMETRY_SPATIAL':
+        return {
+          spatialGeometry: {
+            shapeType: 'box' as const,
+            vertexNames: ['A', 'B', 'C', 'D', "A'", "B'", "C'", "D'"],
+            showVertices: true,
+            showLabels: true,
+          },
+        };
       case 'PIE_CHART':
         return {
           pie: {
@@ -366,6 +395,75 @@ export const App: React.FC = () => {
             },
           },
         };
+      case 'GEOMETRY_POLYGON':
+        return {
+          geometry: {
+            subType: 'polygon' as const,
+            polygon: {
+              type: 'pentagon' as const,
+              sidesCount: 5,
+              center: { x: 320, y: 240 },
+              radius: 120,
+              rotationAngle: -90,
+              points: [
+                { x: 320, y: 120 },
+                { x: 434.1, y: 202.9 },
+                { x: 390.5, y: 337.1 },
+                { x: 249.5, y: 337.1 },
+                { x: 205.9, y: 202.9 },
+              ],
+              vertexNames: ['A', 'B', 'C', 'D', 'E'],
+              centerName: 'O',
+              showVertices: true,
+              showLabels: true,
+              showCenter: true,
+              showCircumcircle: false,
+              showIncircle: false,
+              showApothem: false,
+              apothemName: 'H',
+              showRadii: false,
+              showDiagonals: false,
+              showEqualSidesMarkers: true,
+              showEqualAnglesMarkers: true,
+              fill: { enabled: false, color: '#3b82f6', opacity: 0.2 },
+              strokeColor: '#000000',
+              strokeWidth: 1.8,
+              strokeStyle: 'solid' as const,
+            },
+          },
+        };
+      case 'GEOMETRY_SYMMETRY':
+        return {
+          geometry: {
+            subType: 'symmetry' as const,
+            symmetry: {
+              type: 'axial' as const,
+              targetShape: 'triangle' as const,
+              axisP1: { x: 320, y: 60 },
+              axisP2: { x: 320, y: 420 },
+              axisLabel: 'd',
+              centerPoint: { x: 320, y: 240 },
+              centerName: 'I',
+              originalPoints: [
+                { x: 180, y: 130 },
+                { x: 130, y: 330 },
+                { x: 260, y: 300 },
+              ],
+              reflectedPoints: [
+                { x: 460, y: 130 },
+                { x: 510, y: 330 },
+                { x: 380, y: 300 },
+              ],
+              originalNames: ['A', 'B', 'C'],
+              reflectedNames: ["A'", "B'", "C'"],
+              showConnectingDashedLines: true,
+              showRightAngleMarkers: true,
+              showEqualDistanceMarkers: true,
+              showOriginalLabels: true,
+              showReflectedLabels: true,
+            },
+          },
+        };
       case 'FRACTION_BAR':
         return {
           fractionBar: {
@@ -407,6 +505,18 @@ export const App: React.FC = () => {
       if(geo.lineRay?.points) geo.lineRay.points = geo.lineRay.points.map((p:any) => ({x: p.x + dx, y: p.y + dy}));
       if(geo.angle?.points) geo.angle.points = geo.angle.points.map((p:any) => ({x: p.x + dx, y: p.y + dy}));
       if(geo.circle?.points) geo.circle.points = geo.circle.points.map((p:any) => ({x: p.x + dx, y: p.y + dy}));
+      if(geo.polygon) {
+        if(geo.polygon.center) geo.polygon.center = { x: geo.polygon.center.x + dx, y: geo.polygon.center.y + dy };
+        if(geo.polygon.points) geo.polygon.points = geo.polygon.points.map((p:any) => ({x: p.x + dx, y: p.y + dy}));
+      }
+      if(geo.symmetry) {
+        if(geo.symmetry.axisP1) geo.symmetry.axisP1 = { x: geo.symmetry.axisP1.x + dx, y: geo.symmetry.axisP1.y + dy };
+        if(geo.symmetry.axisP2) geo.symmetry.axisP2 = { x: geo.symmetry.axisP2.x + dx, y: geo.symmetry.axisP2.y + dy };
+        if(geo.symmetry.centerPoint) geo.symmetry.centerPoint = { x: geo.symmetry.centerPoint.x + dx, y: geo.symmetry.centerPoint.y + dy };
+        if(geo.symmetry.originalPoints) geo.symmetry.originalPoints = geo.symmetry.originalPoints.map((p:any) => ({x: p.x + dx, y: p.y + dy}));
+        if(geo.symmetry.reflectedPoints) geo.symmetry.reflectedPoints = geo.symmetry.reflectedPoints.map((p:any) => ({x: p.x + dx, y: p.y + dy}));
+        if(geo.symmetry.circleCenter) geo.symmetry.circleCenter = { x: geo.symmetry.circleCenter.x + dx, y: geo.symmetry.circleCenter.y + dy };
+      }
       
       return {...prev, data: newData};
     });
@@ -519,6 +629,37 @@ export const App: React.FC = () => {
     const { type, data, settings } = currentDoc;
 
     switch (type) {
+      case 'AI_GEOMETRY':
+        return (
+          <AIGeometryEditor
+            currentDoc={currentDoc}
+            onApplyDoc={(doc) => setCurrentDoc(doc)}
+            onSwitchToManualTool={(t) => handleSelectTool(t)}
+          />
+        );
+      case 'GEOMETRY_SPATIAL':
+        return (
+          <SpatialGeometryEditor
+            data={
+              data.spatialGeometry || {
+                shapeType: 'box',
+                vertexNames: ['A', 'B', 'C', 'D', "A'", "B'", "C'", "D'"],
+                showVertices: true,
+                showLabels: true,
+              }
+            }
+            settings={settings}
+            onChangeData={(spatialGeometry) =>
+              setCurrentDoc((prev) => ({
+                ...prev,
+                data: { ...prev.data, spatialGeometry },
+              }))
+            }
+            onChangeSettings={(st) =>
+              setCurrentDoc((prev) => ({ ...prev, settings: st }))
+            }
+          />
+        );
       case 'PIE_CHART':
         return (
           <PieChartEditor
@@ -587,9 +728,28 @@ export const App: React.FC = () => {
       case 'GEOMETRY_TRIANGLE':
       case 'GEOMETRY_QUADRILATERAL':
       case 'GEOMETRY_CIRCLE':
+      case 'GEOMETRY_POLYGON':
+      case 'GEOMETRY_SYMMETRY':
         return (
           <GeometryEditor
-            data={data.geometry || { subType: type === 'GEOMETRY_LINE_RAY' ? 'line-ray' : type === 'GEOMETRY_ANGLE' ? 'angle' : type === 'GEOMETRY_TRIANGLE' ? 'triangle' : type === 'GEOMETRY_QUADRILATERAL' ? 'quadrilateral' : 'circle' }}
+            data={
+              data.geometry || {
+                subType:
+                  type === 'GEOMETRY_LINE_RAY'
+                    ? 'line-ray'
+                    : type === 'GEOMETRY_ANGLE'
+                    ? 'angle'
+                    : type === 'GEOMETRY_TRIANGLE'
+                    ? 'triangle'
+                    : type === 'GEOMETRY_QUADRILATERAL'
+                    ? 'quadrilateral'
+                    : type === 'GEOMETRY_CIRCLE'
+                    ? 'circle'
+                    : type === 'GEOMETRY_POLYGON'
+                    ? 'polygon'
+                    : 'symmetry',
+              }
+            }
             settings={settings}
             onChangeData={(geometry) => setCurrentDoc((prev) => ({ ...prev, data: { ...prev.data, geometry } }))}
             onChangeSettings={(st) => setCurrentDoc((prev) => ({ ...prev, settings: st }))}
@@ -733,6 +893,7 @@ export const App: React.FC = () => {
         onOpenTemplates={() => setShowTemplatesModal(true)}
         onOpenDataTable={() => setShowDataTableModal(true)}
         onOpenHelp={() => setShowHelpModal(true)}
+        onOpenAIModal={() => setShowAIModal(true)}
         onCopyImage={handleCopyImage}
         onCopySvg={handleCopySvg}
         onCopyTikz={handleCopyTikz}
@@ -862,6 +1023,14 @@ export const App: React.FC = () => {
       <HelpModal
         isOpen={showHelpModal}
         onClose={() => setShowHelpModal(false)}
+      />
+
+      <AIGeometryModal
+        isOpen={showAIModal}
+        onClose={() => setShowAIModal(false)}
+        currentDoc={currentDoc}
+        onApplyDoc={(doc) => setCurrentDoc(doc)}
+        onSwitchToManualTool={(t) => handleSelectTool(t)}
       />
     </div>
   );

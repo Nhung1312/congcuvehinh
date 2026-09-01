@@ -7,6 +7,8 @@ import {
   LineRayData,
   AngleData,
   CircleData,
+  PolygonData,
+  SymmetryData,
 } from '../../types';
 import { CommonStyleEditor } from './CommonStyleEditor';
 import { TriangleEditor } from './TriangleEditor';
@@ -14,11 +16,16 @@ import { QuadEditor } from './QuadEditor';
 import { LineRayEditor } from './LineRayEditor';
 import { AngleEditor } from './AngleEditor';
 import { CircleEditor } from './CircleEditor';
+import { RegularPolygonEditor } from './RegularPolygonEditor';
+import { SymmetryEditor } from './SymmetryEditor';
 import {
   getQuadPresetPoints,
   getLineRayPresetPoints,
   getAnglePresetPoints,
   getCirclePresetPoints,
+  getRegularPolygonPresetPoints,
+  getSymmetryPresetPoints,
+  getDefaultPolygonVertexNames,
 } from '../../utils/geometryMath';
 
 interface GeometryEditorProps {
@@ -199,6 +206,60 @@ export const GeometryEditor: React.FC<GeometryEditorProps> = ({
     ...(data.circle || {}),
   };
 
+  const defaultPolygonType = data.polygon?.type || 'pentagon';
+  const polygonSides = data.polygon?.sidesCount || 5;
+  const currentPolygon: PolygonData = {
+    type: defaultPolygonType,
+    sidesCount: polygonSides,
+    center: data.polygon?.center || { x: (settings.width || 640) / 2, y: (settings.height || 480) / 2 },
+    radius: data.polygon?.radius || 120,
+    rotationAngle: data.polygon?.rotationAngle ?? -90,
+    points:
+      data.polygon?.points ||
+      getRegularPolygonPresetPoints(
+        defaultPolygonType,
+        data.polygon?.center || { x: (settings.width || 640) / 2, y: (settings.height || 480) / 2 },
+        data.polygon?.radius || 120,
+        data.polygon?.rotationAngle ?? -90,
+        polygonSides
+      ),
+    vertexNames: data.polygon?.vertexNames || getDefaultPolygonVertexNames(polygonSides),
+    centerName: data.polygon?.centerName || 'O',
+    showVertices: data.polygon?.showVertices !== false,
+    showLabels: data.polygon?.showLabels !== false,
+    showCenter: data.polygon?.showCenter !== false,
+    showCircumcircle: data.polygon?.showCircumcircle || false,
+    showIncircle: data.polygon?.showIncircle || false,
+    showApothem: data.polygon?.showApothem || false,
+    apothemName: data.polygon?.apothemName || 'H',
+    showRadii: data.polygon?.showRadii || false,
+    showDiagonals: data.polygon?.showDiagonals || false,
+    showEqualSidesMarkers: data.polygon?.showEqualSidesMarkers || false,
+    showEqualAnglesMarkers: data.polygon?.showEqualAnglesMarkers || false,
+    fill: data.polygon?.fill || { enabled: false, color: '#3b82f6', opacity: 0.2 },
+    strokeColor: data.polygon?.strokeColor || '#000000',
+    strokeWidth: data.polygon?.strokeWidth || 1.8,
+    strokeStyle: data.polygon?.strokeStyle || 'solid',
+    ...(data.polygon || {}),
+  };
+
+  const defaultSymmetryType = data.symmetry?.type || 'axial';
+  const defaultSymmetryShape = data.symmetry?.targetShape || 'triangle';
+  const currentSymmetry: SymmetryData = {
+    type: defaultSymmetryType,
+    targetShape: defaultSymmetryShape,
+    axisLabel: data.symmetry?.axisLabel || 'd',
+    centerName: data.symmetry?.centerName || 'I',
+    circleRadius: data.symmetry?.circleRadius || 50,
+    showConnectingDashedLines: data.symmetry?.showConnectingDashedLines !== false,
+    showRightAngleMarkers: data.symmetry?.showRightAngleMarkers !== false,
+    showEqualDistanceMarkers: data.symmetry?.showEqualDistanceMarkers !== false,
+    showOriginalLabels: data.symmetry?.showOriginalLabels !== false,
+    showReflectedLabels: data.symmetry?.showReflectedLabels !== false,
+    ...getSymmetryPresetPoints(defaultSymmetryType, defaultSymmetryShape),
+    ...(data.symmetry || {}),
+  };
+
   return (
     <div className="space-y-4">
       {/* 1. Tiêu đề & Kiểu font SGK */}
@@ -218,6 +279,10 @@ export const GeometryEditor: React.FC<GeometryEditorProps> = ({
             ? 'Thiết lập Đường thẳng & Đoạn thẳng'
             : subType === 'circle'
             ? 'Thiết lập Đường tròn SGK'
+            : subType === 'polygon'
+            ? 'Thiết lập Đa giác đều SGK'
+            : subType === 'symmetry'
+            ? 'Thiết lập Phép đối xứng SGK'
             : 'Thiết lập Góc & Phân giác'}
         </h4>
 
@@ -285,8 +350,33 @@ export const GeometryEditor: React.FC<GeometryEditorProps> = ({
             }
           />
         )}
+
+        {/* 6. Đa giác đều (Nhóm 2 - Công cụ 3) */}
+        {subType === 'polygon' && (
+          <RegularPolygonEditor
+            polygon={currentPolygon}
+            onChangePolygon={(newPolygon) =>
+              onChangeData({
+                ...data,
+                polygon: newPolygon,
+              })
+            }
+          />
+        )}
+
+        {/* 7. Đối xứng trục & Đối xứng tâm (Nhóm 2 - Công cụ 2) */}
+        {subType === 'symmetry' && (
+          <SymmetryEditor
+            symmetry={currentSymmetry}
+            onChangeSymmetry={(newSymmetry) =>
+              onChangeData({
+                ...data,
+                symmetry: newSymmetry,
+              })
+            }
+          />
+        )}
       </div>
     </div>
   );
 };
-

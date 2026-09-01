@@ -20,6 +20,7 @@ import {
   Sparkles,
   Palette,
   Paintbrush,
+  Circle,
 } from 'lucide-react';
 
 interface QuadEditorProps {
@@ -59,14 +60,14 @@ export const QuadEditor: React.FC<QuadEditorProps> = ({ quad, onChangeQuad }) =>
 
   // State mở/đóng các nhóm công cụ
   const [openSection, setOpenSection] = useState<
-    'presets' | 'fill' | 'edges' | 'vertices' | 'diagonals' | 'altitudes' | 'symbols' | null
+    'presets' | 'fill' | 'edges' | 'vertices' | 'diagonals' | 'altitudes' | 'circumcircle' | 'symbols' | null
   >('presets');
 
   // Tab chọn cạnh đang chỉnh sửa: 'AB' | 'BC' | 'CD' | 'DA' | 'ALL'
   const [selectedEdgeTab, setSelectedEdgeTab] = useState<'AB' | 'BC' | 'CD' | 'DA' | 'ALL'>('AB');
 
   const toggleSection = (
-    sec: 'presets' | 'fill' | 'edges' | 'vertices' | 'diagonals' | 'altitudes' | 'symbols'
+    sec: 'presets' | 'fill' | 'edges' | 'vertices' | 'diagonals' | 'altitudes' | 'circumcircle' | 'symbols'
   ) => {
     setOpenSection((prev) => (prev === sec ? null : sec));
   };
@@ -77,6 +78,7 @@ export const QuadEditor: React.FC<QuadEditorProps> = ({ quad, onChangeQuad }) =>
       ...quad,
       type: newType,
       points: newPoints,
+      showCircumcircle: newType === 'cyclic' ? true : quad.showCircumcircle,
       showRightAngleMarkers:
         newType === 'rectangle' || newType === 'square' || newType === 'right-trapezoid',
       showEqualSidesMarkers:
@@ -277,6 +279,7 @@ export const QuadEditor: React.FC<QuadEditorProps> = ({ quad, onChangeQuad }) =>
             <div className="grid grid-cols-2 gap-1.5">
               {[
                 { id: 'general', label: 'Tứ giác thường', desc: '4 đỉnh lồi tự do' },
+                { id: 'cyclic', label: 'Tứ giác nội tiếp', desc: '4 đỉnh thuộc (O)' },
                 { id: 'trapezoid', label: 'Hình thang', desc: 'AB // CD' },
                 { id: 'right-trapezoid', label: 'Hình thang vuông', desc: 'AB // CD, ∠A = 90°' },
                 { id: 'isosceles-trapezoid', label: 'Hình thang cân', desc: 'AB // CD, AD = BC' },
@@ -866,7 +869,80 @@ export const QuadEditor: React.FC<QuadEditorProps> = ({ quad, onChangeQuad }) =>
         )}
       </div>
 
-      {/* 7. Ký hiệu hình học & Nhãn độ dài cạnh */}
+      {/* 7. ĐƯỜNG TRÒN NGOẠI TIẾP (TỨ GIÁC NỘI TIẾP - TOOL 1) */}
+      <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
+        <button
+          type="button"
+          onClick={() => toggleSection('circumcircle')}
+          className="w-full flex items-center justify-between p-2.5 bg-slate-50 hover:bg-slate-100/80 text-left transition"
+        >
+          <div className="flex items-center gap-2">
+            <Circle size={14} className="text-blue-600" />
+            <span className="text-xs font-bold text-slate-800">
+              7. Đường tròn ngoại tiếp {quad.showCircumcircle ? '(Đang bật)' : '(Tắt)'}
+            </span>
+          </div>
+          {openSection === 'circumcircle' ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
+
+        {openSection === 'circumcircle' && (
+          <div className="p-3 space-y-3 border-t border-slate-200">
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-xs font-bold text-blue-900">Vẽ đường tròn ngoại tiếp tứ giác</span>
+              <input
+                type="checkbox"
+                checked={quad.showCircumcircle || false}
+                onChange={(e) =>
+                  onChangeQuad({
+                    ...quad,
+                    showCircumcircle: e.target.checked,
+                    circumcircleCenterLabel: quad.circumcircleCenterLabel || 'O',
+                  })
+                }
+                className="rounded text-blue-600"
+              />
+            </label>
+
+            {quad.showCircumcircle && (
+              <div className="grid grid-cols-2 gap-2 pt-1 border-t border-blue-100">
+                <div>
+                  <label className="block text-[10px] text-slate-500">Tên tâm đường tròn</label>
+                  <input
+                    type="text"
+                    value={quad.circumcircleCenterLabel || 'O'}
+                    onChange={(e) =>
+                      onChangeQuad({
+                        ...quad,
+                        circumcircleCenterLabel: e.target.value,
+                      })
+                    }
+                    className="w-full text-xs font-bold px-1.5 py-0.5 border border-slate-300 rounded text-center bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-slate-500">Kiểu nét</label>
+                  <select
+                    value={quad.circumcircleStyle || 'solid'}
+                    onChange={(e) =>
+                      onChangeQuad({
+                        ...quad,
+                        circumcircleStyle: e.target.value as StrokeDashType,
+                      })
+                    }
+                    className="w-full text-xs px-1 py-0.5 border border-slate-300 rounded bg-white"
+                  >
+                    <option value="solid">Nét liền</option>
+                    <option value="dashed">Nét đứt</option>
+                    <option value="dotted">Nét chấm</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 8. Ký hiệu hình học & Nhãn độ dài cạnh */}
       <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
         <button
           type="button"
@@ -875,7 +951,7 @@ export const QuadEditor: React.FC<QuadEditorProps> = ({ quad, onChangeQuad }) =>
         >
           <div className="flex items-center gap-2">
             <Sparkles size={14} className="text-indigo-600" />
-            <span className="text-xs font-bold text-slate-800">7. Ký hiệu & Độ dài cạnh</span>
+            <span className="text-xs font-bold text-slate-800">8. Ký hiệu & Độ dài cạnh</span>
           </div>
           {openSection === 'symbols' ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>

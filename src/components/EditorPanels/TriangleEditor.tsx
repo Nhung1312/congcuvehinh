@@ -23,6 +23,7 @@ import {
   Palette,
   Paintbrush,
   Eye,
+  Circle,
 } from 'lucide-react';
 
 interface TriangleEditorProps {
@@ -64,14 +65,14 @@ export const TriangleEditor: React.FC<TriangleEditorProps> = ({
 
   // State mở/đóng các nhóm công cụ
   const [openSection, setOpenSection] = useState<
-    'presets' | 'fill' | 'edges' | 'vertices' | 'altitudes' | 'medians' | 'bisectors' | 'perpBisectors' | 'symbols' | null
+    'presets' | 'thales' | 'fill' | 'edges' | 'vertices' | 'altitudes' | 'medians' | 'bisectors' | 'perpBisectors' | 'circles' | 'symbols' | null
   >('presets');
 
   // Tab chọn cạnh đang chỉnh sửa: 'AB' | 'BC' | 'CA' | 'ALL'
   const [selectedEdgeTab, setSelectedEdgeTab] = useState<'AB' | 'BC' | 'CA' | 'ALL'>('AB');
 
   const toggleSection = (
-    sec: 'presets' | 'fill' | 'edges' | 'vertices' | 'altitudes' | 'medians' | 'bisectors' | 'perpBisectors' | 'symbols'
+    sec: 'presets' | 'thales' | 'fill' | 'edges' | 'vertices' | 'altitudes' | 'medians' | 'bisectors' | 'perpBisectors' | 'circles' | 'symbols'
   ) => {
     setOpenSection((prev) => (prev === sec ? null : sec));
   };
@@ -400,7 +401,250 @@ export const TriangleEditor: React.FC<TriangleEditorProps> = ({
         )}
       </div>
 
-      {/* 2. TÔ MIỀN TAM GIÁC (Fill & Opacity) */}
+      {/* 2. ĐỊNH LÝ TA-LÉT (ĐƯỜNG THẲNG SONG SONG CẮT 2 CẠNH - NHÓM 2 CÔNG CỤ 1) */}
+      <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
+        <button
+          type="button"
+          onClick={() => toggleSection('thales')}
+          className="w-full flex items-center justify-between p-2.5 bg-slate-50 hover:bg-slate-100/80 text-left transition"
+        >
+          <div className="flex items-center gap-2">
+            <Sparkles size={14} className="text-blue-600" />
+            <span className="text-xs font-bold text-slate-800">
+              2. Định lý Ta-lét (Song song cắt 2 cạnh) {triangle.thales?.enabled ? '✨ (Đang bật)' : ''}
+            </span>
+          </div>
+          {openSection === 'thales' ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
+
+        {openSection === 'thales' && (
+          <div className="p-3 space-y-3 border-t border-slate-200 text-xs">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={triangle.thales?.enabled || false}
+                  onChange={(e) =>
+                    onChangeTriangle({
+                      ...triangle,
+                      thales: {
+                        ...(triangle.thales || {
+                          cutSide: 'AB-AC',
+                          ratio: 0.4,
+                          pointMName: 'M',
+                          pointNName: 'N',
+                          showParallelMarkers: true,
+                          showDashedExtensions: true,
+                          showFillTriangle: false,
+                          fillColor: '#38bdf8',
+                          fillOpacity: 0.25,
+                          showRatiosText: false,
+                        }),
+                        enabled: e.target.checked,
+                      },
+                    })
+                  }
+                  className="rounded text-blue-600 focus:ring-blue-500"
+                />
+                <span>Dựng đường thẳng song song cắt 2 cạnh tam giác (MN // BC)</span>
+              </label>
+            </div>
+
+            {triangle.thales?.enabled && (
+              <div className="space-y-3 pt-2 border-t border-slate-100">
+                {/* Chọn cặp cạnh bị cắt */}
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Cặp cạnh bị cắt & Cạnh song song:</label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {[
+                      { id: 'AB-AC', label: `${nameA}${nameB} & ${nameA}${nameC}`, desc: `Song song ${nameB}${nameC}` },
+                      { id: 'BC-BA', label: `${nameB}${nameC} & ${nameB}${nameA}`, desc: `Song song ${nameA}${nameC}` },
+                      { id: 'CA-CB', label: `${nameC}${nameA} & ${nameC}${nameB}`, desc: `Song song ${nameA}${nameB}` },
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() =>
+                          onChangeTriangle({
+                            ...triangle,
+                            thales: {
+                              ...triangle.thales,
+                              enabled: true,
+                              cutSide: item.id as any,
+                            },
+                          })
+                        }
+                        className={`p-1.5 rounded border text-left transition ${
+                          (triangle.thales?.cutSide || 'AB-AC') === item.id
+                            ? 'border-blue-600 bg-blue-50/80 font-bold text-blue-900 shadow-xs'
+                            : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50 text-slate-700'
+                        }`}
+                      >
+                        <div className="font-bold text-[11px]">{item.label}</div>
+                        <div className="text-[9px] text-slate-500">{item.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Vị trí điểm M / Tỉ lệ Ta-lét AM/AB */}
+                <div>
+                  <div className="flex items-center justify-between font-semibold text-slate-700 mb-1">
+                    <span>
+                      Vị trí điểm {triangle.thales?.pointMName || 'M'} trên cạnh (Tỉ lệ: {Math.round((triangle.thales?.ratio ?? 0.4) * 100)}%):
+                    </span>
+                    <span className="font-mono text-blue-600 font-bold">
+                      {((triangle.thales?.ratio ?? 0.4)).toFixed(2)}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0.1}
+                    max={0.9}
+                    step={0.02}
+                    value={triangle.thales?.ratio ?? 0.4}
+                    onChange={(e) =>
+                      onChangeTriangle({
+                        ...triangle,
+                        thales: {
+                          ...triangle.thales,
+                          enabled: true,
+                          ratio: parseFloat(e.target.value),
+                        },
+                      })
+                    }
+                    className="w-full accent-blue-600"
+                  />
+                  <p className="text-[10px] text-slate-500 italic mt-0.5">
+                    💡 Bạn cũng có thể dùng chuột bấm kéo trực tiếp điểm {triangle.thales?.pointMName || 'M'} trên hình vẽ!
+                  </p>
+                </div>
+
+                {/* Tên điểm M và N */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-600">Tên điểm 1:</span>
+                    <input
+                      type="text"
+                      value={triangle.thales?.pointMName || 'M'}
+                      onChange={(e) =>
+                        onChangeTriangle({
+                          ...triangle,
+                          thales: {
+                            ...triangle.thales,
+                            enabled: true,
+                            pointMName: e.target.value,
+                          },
+                        })
+                      }
+                      className="w-10 p-1 border rounded text-center font-bold text-blue-700"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-600">Tên điểm 2:</span>
+                    <input
+                      type="text"
+                      value={triangle.thales?.pointNName || 'N'}
+                      onChange={(e) =>
+                        onChangeTriangle({
+                          ...triangle,
+                          thales: {
+                            ...triangle.thales,
+                            enabled: true,
+                            pointNName: e.target.value,
+                          },
+                        })
+                      }
+                      className="w-10 p-1 border rounded text-center font-bold text-blue-700"
+                    />
+                  </div>
+                </div>
+
+                {/* Tùy chọn ký hiệu song song và đường kéo dài */}
+                <div className="space-y-1.5 pt-1">
+                  <label className="flex items-center gap-2 text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={triangle.thales?.showParallelMarkers !== false}
+                      onChange={(e) =>
+                        onChangeTriangle({
+                          ...triangle,
+                          thales: {
+                            ...triangle.thales,
+                            enabled: true,
+                            showParallelMarkers: e.target.checked,
+                          },
+                        })
+                      }
+                      className="rounded text-blue-600"
+                    />
+                    <span>Ký hiệu mũi tên song song (//) trên {triangle.thales?.pointMName || 'M'}{triangle.thales?.pointNName || 'N'} và cạnh đáy</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={triangle.thales?.showDashedExtensions || false}
+                      onChange={(e) =>
+                        onChangeTriangle({
+                          ...triangle,
+                          thales: {
+                            ...triangle.thales,
+                            enabled: true,
+                            showDashedExtensions: e.target.checked,
+                          },
+                        })
+                      }
+                      className="rounded text-blue-600"
+                    />
+                    <span>Đường kéo dài nét đứt hai đầu MN (Mô hình Ta-lét mở rộng)</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={triangle.thales?.showFillTriangle || false}
+                      onChange={(e) =>
+                        onChangeTriangle({
+                          ...triangle,
+                          thales: {
+                            ...triangle.thales,
+                            enabled: true,
+                            showFillTriangle: e.target.checked,
+                          },
+                        })
+                      }
+                      className="rounded text-blue-600"
+                    />
+                    <span>Highlight tô màu tam giác đồng dạng A{triangle.thales?.pointMName || 'M'}{triangle.thales?.pointNName || 'N'}</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={triangle.thales?.showRatiosText || false}
+                      onChange={(e) =>
+                        onChangeTriangle({
+                          ...triangle,
+                          thales: {
+                            ...triangle.thales,
+                            enabled: true,
+                            showRatiosText: e.target.checked,
+                          },
+                        })
+                      }
+                      className="rounded text-blue-600"
+                    />
+                    <span>Hiện bảng hệ thức tỉ lệ Ta-lét sư phạm ở góc hình</span>
+                  </label>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 3. TÔ MIỀN TAM GIÁC (Fill & Opacity) */}
       <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
         <button
           type="button"
@@ -1084,7 +1328,203 @@ export const TriangleEditor: React.FC<TriangleEditorProps> = ({
         )}
       </div>
 
-      {/* 9. Ký hiệu & Độ dài cạnh */}
+      {/* 9. Đường tròn ngoại tiếp & Đường tròn nội tiếp (Tool 2) */}
+      <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
+        <button
+          type="button"
+          onClick={() => toggleSection('circles')}
+          className="w-full flex items-center justify-between p-2.5 bg-slate-50 hover:bg-slate-100/80 text-left transition"
+        >
+          <div className="flex items-center gap-2">
+            <Circle size={14} className="text-blue-600" />
+            <span className="text-xs font-bold text-slate-800">9. Đường tròn Ngoại tiếp & Nội tiếp</span>
+          </div>
+          {openSection === 'circles' ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
+
+        {openSection === 'circles' && (
+          <div className="p-3 space-y-4 border-t border-slate-200">
+            {/* Đường tròn ngoại tiếp */}
+            <div className="p-2.5 border border-blue-100 bg-blue-50/40 rounded-md space-y-2">
+              <label className="flex items-center justify-between cursor-pointer">
+                <span className="text-xs font-bold text-blue-900">Đường tròn ngoại tiếp tam giác</span>
+                <input
+                  type="checkbox"
+                  checked={triangle.circumscribedCircle?.enabled || false}
+                  onChange={(e) =>
+                    onChangeTriangle({
+                      ...triangle,
+                      circumscribedCircle: {
+                        enabled: e.target.checked,
+                        showCenter: true,
+                        centerLabel: 'O',
+                        color: '#2563eb',
+                        strokeWidth: 1.3,
+                        style: 'solid',
+                        showRadii: false,
+                        ...triangle.circumscribedCircle,
+                      },
+                    })
+                  }
+                  className="rounded text-blue-600"
+                />
+              </label>
+
+              {triangle.circumscribedCircle?.enabled && (
+                <div className="grid grid-cols-3 gap-2 pt-1 border-t border-blue-200/60">
+                  <div>
+                    <label className="block text-[10px] text-slate-500">Tên tâm</label>
+                    <input
+                      type="text"
+                      value={triangle.circumscribedCircle.centerLabel || 'O'}
+                      onChange={(e) =>
+                        onChangeTriangle({
+                          ...triangle,
+                          circumscribedCircle: {
+                            ...triangle.circumscribedCircle,
+                            centerLabel: e.target.value,
+                          },
+                        })
+                      }
+                      className="w-full text-xs font-bold px-1.5 py-0.5 border border-slate-300 rounded text-center bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500">Kiểu nét</label>
+                    <select
+                      value={triangle.circumscribedCircle.style || 'solid'}
+                      onChange={(e) =>
+                        onChangeTriangle({
+                          ...triangle,
+                          circumscribedCircle: {
+                            ...triangle.circumscribedCircle,
+                            style: e.target.value as StrokeDashType,
+                          },
+                        })
+                      }
+                      className="w-full text-xs px-1 py-0.5 border border-slate-300 rounded bg-white"
+                    >
+                      <option value="solid">Nét liền</option>
+                      <option value="dashed">Nét đứt</option>
+                      <option value="dotted">Nét chấm</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col justify-end">
+                    <label className="flex items-center gap-1 cursor-pointer text-[10px] text-slate-700 py-1">
+                      <input
+                        type="checkbox"
+                        checked={triangle.circumscribedCircle.showRadii || false}
+                        onChange={(e) =>
+                          onChangeTriangle({
+                            ...triangle,
+                            circumscribedCircle: {
+                              ...triangle.circumscribedCircle,
+                              showRadii: e.target.checked,
+                            },
+                          })
+                        }
+                        className="rounded text-blue-600"
+                      />
+                      <span>Nối bán kính (OA, OB, OC)</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Đường tròn nội tiếp */}
+            <div className="p-2.5 border border-orange-100 bg-orange-50/40 rounded-md space-y-2">
+              <label className="flex items-center justify-between cursor-pointer">
+                <span className="text-xs font-bold text-orange-900">Đường tròn nội tiếp tam giác</span>
+                <input
+                  type="checkbox"
+                  checked={triangle.inscribedCircle?.enabled || false}
+                  onChange={(e) =>
+                    onChangeTriangle({
+                      ...triangle,
+                      inscribedCircle: {
+                        enabled: e.target.checked,
+                        showCenter: true,
+                        centerLabel: 'I',
+                        color: '#ea580c',
+                        strokeWidth: 1.3,
+                        style: 'solid',
+                        showRadii: true,
+                        showContactPoints: true,
+                        ...triangle.inscribedCircle,
+                      },
+                    })
+                  }
+                  className="rounded text-orange-600"
+                />
+              </label>
+
+              {triangle.inscribedCircle?.enabled && (
+                <div className="grid grid-cols-3 gap-2 pt-1 border-t border-orange-200/60">
+                  <div>
+                    <label className="block text-[10px] text-slate-500">Tên tâm</label>
+                    <input
+                      type="text"
+                      value={triangle.inscribedCircle.centerLabel || 'I'}
+                      onChange={(e) =>
+                        onChangeTriangle({
+                          ...triangle,
+                          inscribedCircle: {
+                            ...triangle.inscribedCircle,
+                            centerLabel: e.target.value,
+                          },
+                        })
+                      }
+                      className="w-full text-xs font-bold px-1.5 py-0.5 border border-slate-300 rounded text-center bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500">Kiểu nét</label>
+                    <select
+                      value={triangle.inscribedCircle.style || 'solid'}
+                      onChange={(e) =>
+                        onChangeTriangle({
+                          ...triangle,
+                          inscribedCircle: {
+                            ...triangle.inscribedCircle,
+                            style: e.target.value as StrokeDashType,
+                          },
+                        })
+                      }
+                      className="w-full text-xs px-1 py-0.5 border border-slate-300 rounded bg-white"
+                    >
+                      <option value="solid">Nét liền</option>
+                      <option value="dashed">Nét đứt</option>
+                      <option value="dotted">Nét chấm</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col justify-end">
+                    <label className="flex items-center gap-1 cursor-pointer text-[10px] text-slate-700 py-1">
+                      <input
+                        type="checkbox"
+                        checked={triangle.inscribedCircle.showRadii !== false}
+                        onChange={(e) =>
+                          onChangeTriangle({
+                            ...triangle,
+                            inscribedCircle: {
+                              ...triangle.inscribedCircle,
+                              showRadii: e.target.checked,
+                            },
+                          })
+                        }
+                        className="rounded text-orange-600"
+                      />
+                      <span>Bán kính hạ vuông góc</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 10. Ký hiệu & Độ dài cạnh */}
       <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
         <button
           type="button"
@@ -1093,7 +1533,7 @@ export const TriangleEditor: React.FC<TriangleEditorProps> = ({
         >
           <div className="flex items-center gap-2">
             <Sparkles size={14} className="text-indigo-600" />
-            <span className="text-xs font-bold text-slate-800">9. Ký hiệu & Độ dài cạnh</span>
+            <span className="text-xs font-bold text-slate-800">10. Ký hiệu & Độ dài cạnh</span>
           </div>
           {openSection === 'symbols' ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>

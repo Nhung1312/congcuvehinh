@@ -87,7 +87,7 @@ export const TEXTBOOK_TEMPLATES: ChartDocument[] = [
     title: 'Định lý Ta-lét / Tam giác đồng dạng (Toán 8)',
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    settings: { title: 'Định lý Ta-lét (MN // BC)', fontFamily: 'Times New Roman', titleFontSize: 18, labelFontSize: 14, strokeWidth: 1.5, examMode: false, width: 640, height: 480, showLegend: false, backgroundColor: '#ffffff' },
+    settings: { title: 'Định lý Ta-lét (MN // BC)', fontFamily: 'Times New Roman', titleFontSize: 18, labelFontSize: 14, strokeWidth: 1.5, examMode: false, width: 640, height: 480, showLegend: false, legendPosition: 'none', backgroundColor: '#ffffff' },
     data: {
       geometry: {
         subType: 'triangle',
@@ -115,7 +115,7 @@ export const TEXTBOOK_TEMPLATES: ChartDocument[] = [
     title: 'Tứ giác nội tiếp đường tròn (Toán 9)',
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    settings: { title: 'Tứ giác ABCD nội tiếp (O)', fontFamily: 'Times New Roman', titleFontSize: 18, labelFontSize: 14, strokeWidth: 1.5, examMode: false, width: 640, height: 480, showLegend: false, backgroundColor: '#ffffff' },
+    settings: { title: 'Tứ giác ABCD nội tiếp (O)', fontFamily: 'Times New Roman', titleFontSize: 18, labelFontSize: 14, strokeWidth: 1.5, examMode: false, width: 640, height: 480, showLegend: false, legendPosition: 'none', backgroundColor: '#ffffff' },
     data: {
       geometry: {
         subType: 'circle',
@@ -147,7 +147,7 @@ export const TEXTBOOK_TEMPLATES: ChartDocument[] = [
     title: 'Tương giao 2 đồ thị hàm số (Toán 9)',
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    settings: { title: 'Giao điểm của d1 và d2', fontFamily: 'Times New Roman', titleFontSize: 18, labelFontSize: 14, strokeWidth: 1.5, examMode: false, width: 640, height: 480, showLegend: false, backgroundColor: '#ffffff' },
+    settings: { title: 'Giao điểm của d1 và d2', fontFamily: 'Times New Roman', titleFontSize: 18, labelFontSize: 14, strokeWidth: 1.5, examMode: false, width: 640, height: 480, showLegend: false, legendPosition: 'none', backgroundColor: '#ffffff' },
     data: {
       functionGraph: {
         functionType: 'linear', a: 2, b: -2, xMin: -3, xMax: 4, yMin: -4, yMax: 5, showEquation: true, showGrid: true,

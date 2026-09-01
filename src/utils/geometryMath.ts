@@ -118,6 +118,79 @@ export const perpendicularBisectorSegment = (
   };
 };
 
+// 4.1. Đường tròn ngoại tiếp tam giác (Tâm O là giao 3 đường trung trực)
+export const getTriangleCircumcircle = (
+  a: Point2D,
+  b: Point2D,
+  c: Point2D
+): { center: Point2D; radius: number } => {
+  const d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+  if (Math.abs(d) < 1e-6) {
+    const mid = midpoint(a, b);
+    return { center: mid, radius: Math.max(10, dist(a, mid)) };
+  }
+  const aSq = a.x * a.x + a.y * a.y;
+  const bSq = b.x * b.x + b.y * b.y;
+  const cSq = c.x * c.x + c.y * c.y;
+  const ox = (aSq * (b.y - c.y) + bSq * (c.y - a.y) + cSq * (a.y - b.y)) / d;
+  const oy = (aSq * (c.x - b.x) + bSq * (a.x - c.x) + cSq * (b.x - a.x)) / d;
+  const center = { x: ox, y: oy };
+  const radius = dist(center, a);
+  return { center, radius };
+};
+
+// 4.2. Đường tròn nội tiếp tam giác (Tâm I là giao 3 đường phân giác)
+export const getTriangleIncircle = (
+  a: Point2D,
+  b: Point2D,
+  c: Point2D
+): {
+  center: Point2D;
+  radius: number;
+  contactPoints: { onBC: Point2D; onCA: Point2D; onAB: Point2D };
+} => {
+  const aLen = dist(b, c); // Cạnh BC
+  const bLen = dist(a, c); // Cạnh CA
+  const cLen = dist(a, b); // Cạnh AB
+  const p = aLen + bLen + cLen;
+
+  if (p < 1e-6) {
+    const fallback = midpoint(a, b);
+    return {
+      center: fallback,
+      radius: 20,
+      contactPoints: { onBC: fallback, onCA: fallback, onAB: fallback },
+    };
+  }
+
+  // Tọa độ tâm I = (a*A + b*B + c*C) / (a+b+c)
+  const inCenter: Point2D = {
+    x: (aLen * a.x + bLen * b.x + cLen * c.x) / p,
+    y: (aLen * a.y + bLen * b.y + cLen * c.y) / p,
+  };
+
+  // Nửa chu vi s và diện tích theo công thức Heron
+  const s = p / 2;
+  const areaSq = Math.max(0, s * (s - aLen) * (s - bLen) * (s - cLen));
+  const area = Math.sqrt(areaSq);
+  const radius = s > 0 ? area / s : 20;
+
+  // Tiếp điểm trên 3 cạnh hạ vuông góc từ I
+  const pOnBC = projectPointToLine(inCenter, b, c).point;
+  const pOnCA = projectPointToLine(inCenter, c, a).point;
+  const pOnAB = projectPointToLine(inCenter, a, b).point;
+
+  return {
+    center: inCenter,
+    radius,
+    contactPoints: {
+      onBC: pOnBC,
+      onCA: pOnCA,
+      onAB: pOnAB,
+    },
+  };
+};
+
 // 5. Tính toán vị trí nhãn đỉnh thông minh (không bị cạnh đè lên)
 // Bằng cách lấy vector phân giác ngoài của đỉnh (hướng ra ngoài đa giác)
 export const getSmartVertexLabelPosition = (
@@ -371,6 +444,22 @@ export const getQuadPresetPoints = (
         { x: 380, y: 320 },
         { x: 180, y: 320 },
       ];
+    case 'cyclic': { // Tứ giác nội tiếp đường tròn (4 đỉnh nằm trên 1 đường tròn)
+      const cx = 280, cy = 220, r = 125;
+      const degToPt = (deg: number) => {
+        const rad = (deg * Math.PI) / 180;
+        return {
+          x: Math.round(cx + r * Math.cos(rad)),
+          y: Math.round(cy - r * Math.sin(rad)),
+        };
+      };
+      return [
+        degToPt(125), // Đỉnh A (góc trên bên trái)
+        degToPt(45),  // Đỉnh B (góc trên bên phải)
+        degToPt(325), // Đỉnh C (góc dưới bên phải)
+        degToPt(215), // Đỉnh D (góc dưới bên trái)
+      ];
+    }
     case 'general': // Tứ giác thường ABCD lồi
     default:
       return [
@@ -562,6 +651,26 @@ export const constrainQuadPointDrag = (
       const xMid = (result[0].x + result[1].x) / 2;
       result[3] = newPoint;
       result[2] = { x: 2 * xMid - newPoint.x, y: newPoint.y };
+    }
+    return result;
+  }
+
+  if (type === 'cyclic') {
+    // 4 đỉnh cùng nằm trên 1 đường tròn: lấy 3 đỉnh còn lại để tính tâm O và bán kính R, chiếu đỉnh đang kéo lên đường tròn đó
+    const otherIdxs = [0, 1, 2, 3].filter((i) => i !== dragIdx);
+    const p1 = pts[otherIdxs[0]];
+    const p2 = pts[otherIdxs[1]];
+    const p3 = pts[otherIdxs[2]];
+    const circle = getTriangleCircumcircle(p1, p2, p3);
+    const vec = vecSub(newPoint, circle.center);
+    const len = vecLen(vec);
+    if (len > 1e-4) {
+      result[dragIdx] = {
+        x: circle.center.x + (vec.x / len) * circle.radius,
+        y: circle.center.y + (vec.y / len) * circle.radius,
+      };
+    } else {
+      result[dragIdx] = newPoint;
     }
     return result;
   }
@@ -939,6 +1048,20 @@ export const getCirclePresetPoints = (type: string): Point2D[] => {
         { x: cx + r * Math.cos((-5 * Math.PI) / 6), y: cy + r * Math.sin((-5 * Math.PI) / 6) }, // 2: Điểm B (cuối cung)
       ];
 
+    case 'sector': // Hình quạt tròn AOB
+      return [
+        { x: cx, y: cy }, // 0: Tâm O
+        { x: cx + r * Math.cos(-Math.PI / 6), y: cy + r * Math.sin(-Math.PI / 6) }, // 1: Điểm A (bán kính OA)
+        { x: cx + r * Math.cos((-2 * Math.PI) / 3), y: cy + r * Math.sin((-2 * Math.PI) / 3) }, // 2: Điểm B (bán kính OB)
+      ];
+
+    case 'segment': // Hình viên phân (giới hạn bởi dây AB và cung AB)
+      return [
+        { x: cx, y: cy }, // 0: Tâm O
+        { x: cx + r * Math.cos(-Math.PI / 6), y: cy + r * Math.sin(-Math.PI / 6) }, // 1: Điểm A
+        { x: cx + r * Math.cos((-5 * Math.PI) / 6), y: cy + r * Math.sin((-5 * Math.PI) / 6) }, // 2: Điểm B
+      ];
+
     case 'tangent-point':
       return [
         { x: cx, y: cy }, // 0: Tâm O
@@ -966,12 +1089,37 @@ export const getCirclePresetPoints = (type: string): Point2D[] => {
         { x: cx + r * Math.cos((2 * Math.PI) / 3), y: cy + r * Math.sin((2 * Math.PI) / 3) }, // 3: Điểm P đỉnh góc nội tiếp
       ];
 
+    case 'tangent-chord-angle': // Góc tạo bởi tiếp tuyến và dây cung (Tool 3.1)
+      return [
+        { x: cx, y: cy }, // 0: Tâm O
+        { x: cx + r * Math.cos(Math.PI / 2), y: cy + r * Math.sin(Math.PI / 2) }, // 1: Tiếp điểm A (đáy)
+        { x: cx + r * Math.cos((-Math.PI) / 4), y: cy + r * Math.sin((-Math.PI) / 4) }, // 2: Điểm B (mút dây cung)
+        { x: cx + r * Math.cos((3 * Math.PI) / 4), y: cy + r * Math.sin((3 * Math.PI) / 4) }, // 3: Đỉnh C góc nội tiếp so sánh
+      ];
+
+    case 'interior-angle': // Góc có đỉnh bên trong đường tròn (Tool 3.2)
+      return [
+        { x: cx, y: cy }, // 0: Tâm O
+        { x: cx + r * Math.cos((5 * Math.PI) / 6), y: cy + r * Math.sin((5 * Math.PI) / 6) }, // 1: A (Dây AB)
+        { x: cx + r * Math.cos(-Math.PI / 6), y: cy + r * Math.sin(-Math.PI / 6) }, // 2: B (Dây AB)
+        { x: cx + r * Math.cos((2 * Math.PI) / 3), y: cy + r * Math.sin((2 * Math.PI) / 3) }, // 3: C (Dây CD)
+        { x: cx + r * Math.cos(-Math.PI / 2), y: cy + r * Math.sin(-Math.PI / 2) }, // 4: D (Dây CD)
+      ];
+
+    case 'exterior-angle': // Góc có đỉnh bên ngoài đường tròn (Tool 3.3)
+      return [
+        { x: cx - 40, y: cy }, // 0: Tâm O
+        { x: cx + 180, y: cy }, // 1: Đỉnh ngoài P
+        { x: (cx - 40) + r * Math.cos(-Math.PI / 3), y: cy + r * Math.sin(-Math.PI / 3) }, // 2: Điểm A trên cát tuyến 1
+        { x: (cx - 40) + r * Math.cos(Math.PI / 3), y: cy + r * Math.sin(Math.PI / 3) }, // 3: Điểm C trên cát tuyến 2
+      ];
+
     case 'two-circles':
       return [
-        { x: 210, y: cy }, // 0: Tâm O1
-        { x: 350, y: cy }, // 1: Tâm O2
-        { x: 210 + 105, y: cy }, // 2: Điểm bán kính R1
-        { x: 350 + 80, y: cy },  // 3: Điểm bán kính R2
+        { x: 200, y: cy }, // 0: Tâm O1
+        { x: 360, y: cy }, // 1: Tâm O2
+        { x: 200 + 100, y: cy }, // 2: Điểm bán kính R1
+        { x: 360 + 75, y: cy },  // 3: Điểm bán kính R2
       ];
 
     default:
@@ -1020,7 +1168,21 @@ export const constrainCircleDrag = (
       return result;
     }
 
-    if (type === 'arc' || type === 'inscribed-angle') {
+    if (type === 'arc' || type === 'sector' || type === 'segment') {
+      // Kéo điểm A: thay đổi bán kính r và góc của A, tự động giữ bán kính cho B
+      result[1] = newPoint;
+      const newRadius = dist(center, newPoint);
+      if (points.length >= 3 && newRadius > 5) {
+        const vB = vecNorm(vecSub(points[2], center));
+        result[2] = {
+          x: center.x + vB.x * newRadius,
+          y: center.y + vB.y * newRadius,
+        };
+      }
+      return result;
+    }
+
+    if (type === 'inscribed-angle' || type === 'tangent-chord-angle' || type === 'interior-angle') {
       // Khóa điểm trên đường tròn
       const r = dist(center, points[1]);
       const v = vecNorm(vecSub(newPoint, center));
@@ -1031,8 +1193,8 @@ export const constrainCircleDrag = (
       return result;
     }
 
-    if (type === 'two-tangents') {
-      // Kéo điểm ngoài P (đảm bảo d > r + 15)
+    if (type === 'two-tangents' || type === 'exterior-angle') {
+      // Kéo điểm ngoài P
       result[1] = newPoint;
       return result;
     }
@@ -1044,11 +1206,18 @@ export const constrainCircleDrag = (
     }
   }
 
-  // 3. Kéo các điểm dây cung C, D hoặc điểm cung B, hoặc điểm góc nội tiếp P
+  // 3. Kéo các điểm dây cung C, D hoặc điểm cung B, hoặc điểm góc nội tiếp P, tiếp tuyến...
   if (dragIdx >= 2) {
-    if (type === 'diameter-chord' || type === 'arc' || type === 'inscribed-angle') {
+    if (
+      type === 'diameter-chord' ||
+      type === 'arc' ||
+      type === 'inscribed-angle' ||
+      type === 'tangent-chord-angle' ||
+      type === 'interior-angle' ||
+      type === 'exterior-angle'
+    ) {
       // Khóa điểm nằm trên đường tròn (O, R)
-      const r = dist(center, points[1]);
+      const r = dist(center, points[1]) || 110;
       const v = vecNorm(vecSub(newPoint, center));
       result[dragIdx] = {
         x: center.x + v.x * r,
@@ -1161,6 +1330,190 @@ export const getTwoCirclesIntersections = (
     { x: p2x + rx, y: p2y + ry },
     { x: p2x - rx, y: p2y - ry },
   ];
+};
+
+// ==========================================
+// TIẾP TUYẾN CHUNG CỦA HAI ĐƯỜNG TRÒN (TOOL 4)
+// ==========================================
+
+export interface CommonTangentLine {
+  type: 'external' | 'internal';
+  start: Point2D;
+  end: Point2D;
+  contact1: Point2D;
+  contact2: Point2D;
+}
+
+export const getCommonTangents = (
+  c1: Point2D,
+  r1: number,
+  c2: Point2D,
+  r2: number,
+  extendLength: number = 40
+): { external: CommonTangentLine[]; internal: CommonTangentLine[] } => {
+  const d = dist(c1, c2);
+  const result: { external: CommonTangentLine[]; internal: CommonTangentLine[] } = {
+    external: [],
+    internal: [],
+  };
+
+  if (d < 1e-4) return result;
+
+  const theta = Math.atan2(c2.y - c1.y, c2.x - c1.x);
+
+  // 1. Tiếp tuyến chung ngoài (External tangents)
+  // Tồn tại khi d >= |r1 - r2|
+  const diffR = r1 - r2;
+  if (d >= Math.abs(diffR)) {
+    const ratio = Math.max(-1, Math.min(1, diffR / d));
+    const alpha = Math.asin(ratio);
+
+    // Tiếp tuyến 1
+    const beta1 = theta + Math.PI / 2 - alpha;
+    const p1 = { x: c1.x + r1 * Math.cos(beta1), y: c1.y + r1 * Math.sin(beta1) };
+    const q1 = { x: c2.x + r2 * Math.cos(beta1), y: c2.y + r2 * Math.sin(beta1) };
+    const dir1 = vecNorm(vecSub(q1, p1));
+    result.external.push({
+      type: 'external',
+      contact1: p1,
+      contact2: q1,
+      start: { x: p1.x - dir1.x * extendLength, y: p1.y - dir1.y * extendLength },
+      end: { x: q1.x + dir1.x * extendLength, y: q1.y + dir1.y * extendLength },
+    });
+
+    // Tiếp tuyến 2 (nếu r1 != r2 hoặc d > 0)
+    const beta2 = theta - Math.PI / 2 + alpha;
+    const p2 = { x: c1.x + r1 * Math.cos(beta2), y: c1.y + r1 * Math.sin(beta2) };
+    const q2 = { x: c2.x + r2 * Math.cos(beta2), y: c2.y + r2 * Math.sin(beta2) };
+    const dir2 = vecNorm(vecSub(q2, p2));
+    result.external.push({
+      type: 'external',
+      contact1: p2,
+      contact2: q2,
+      start: { x: p2.x - dir2.x * extendLength, y: p2.y - dir2.y * extendLength },
+      end: { x: q2.x + dir2.x * extendLength, y: q2.y + dir2.y * extendLength },
+    });
+  }
+
+  // 2. Tiếp tuyến chung trong (Internal tangents)
+  // Tồn tại khi d >= r1 + r2
+  const sumR = r1 + r2;
+  if (d >= sumR) {
+    const ratio = Math.max(-1, Math.min(1, sumR / d));
+    const alpha = Math.asin(ratio);
+
+    // Tiếp tuyến 1
+    const gamma1 = theta + Math.PI / 2 - alpha;
+    const p1 = { x: c1.x + r1 * Math.cos(gamma1), y: c1.y + r1 * Math.sin(gamma1) };
+    const q1 = { x: c2.x - r2 * Math.cos(gamma1), y: c2.y - r2 * Math.sin(gamma1) };
+    const dir1 = vecNorm(vecSub(q1, p1));
+    result.internal.push({
+      type: 'internal',
+      contact1: p1,
+      contact2: q1,
+      start: { x: p1.x - dir1.x * extendLength, y: p1.y - dir1.y * extendLength },
+      end: { x: q1.x + dir1.x * extendLength, y: q1.y + dir1.y * extendLength },
+    });
+
+    // Tiếp tuyến 2 (nếu d > sumR)
+    if (d > sumR + 1e-4) {
+      const gamma2 = theta - Math.PI / 2 + alpha;
+      const p2 = { x: c1.x + r1 * Math.cos(gamma2), y: c1.y + r1 * Math.sin(gamma2) };
+      const q2 = { x: c2.x - r2 * Math.cos(gamma2), y: c2.y - r2 * Math.sin(gamma2) };
+      const dir2 = vecNorm(vecSub(q2, p2));
+      result.internal.push({
+        type: 'internal',
+        contact1: p2,
+        contact2: q2,
+        start: { x: p2.x - dir2.x * extendLength, y: p2.y - dir2.y * extendLength },
+        end: { x: q2.x + dir2.x * extendLength, y: q2.y + dir2.y * extendLength },
+      });
+    }
+  }
+
+  return result;
+};
+
+// ==========================================
+// TỰ ĐỘNG BẮT GIAO ĐIỂM ĐƯỜNG THẲNG, TIA, ĐOẠN THẲNG (TOOL 5)
+// ==========================================
+
+export interface IntersectionResult {
+  point: Point2D | null;
+  isValidOnElem1: boolean;
+  isValidOnElem2: boolean;
+  isDirectIntersection: boolean; // Đúng cả 2 miền thực
+  t1: number;
+  t2: number;
+  extension1?: { from: Point2D; to: Point2D };
+  extension2?: { from: Point2D; to: Point2D };
+}
+
+export const findLineRaySegmentIntersection = (
+  p1: Point2D,
+  p2: Point2D,
+  type1: 'line' | 'ray' | 'segment' = 'segment',
+  p3: Point2D,
+  p4: Point2D,
+  type2: 'line' | 'ray' | 'segment' = 'segment'
+): IntersectionResult => {
+  const d1 = vecSub(p2, p1);
+  const d2 = vecSub(p4, p3);
+  const cross = d1.x * d2.y - d1.y * d2.x;
+
+  if (Math.abs(cross) < 1e-6) {
+    return {
+      point: null,
+      isValidOnElem1: false,
+      isValidOnElem2: false,
+      isDirectIntersection: false,
+      t1: 0,
+      t2: 0,
+    };
+  }
+
+  const dx = p3.x - p1.x;
+  const dy = p3.y - p1.y;
+  const t1 = (dx * d2.y - dy * d2.x) / cross;
+  const t2 = (dx * d1.y - dy * d1.x) / cross;
+
+  const interPoint: Point2D = {
+    x: p1.x + t1 * d1.x,
+    y: p1.y + t1 * d1.y,
+  };
+
+  const isTValid = (t: number, type: 'line' | 'ray' | 'segment') => {
+    if (type === 'line') return true;
+    if (type === 'ray') return t >= -1e-4;
+    return t >= -1e-4 && t <= 1 + 1e-4;
+  };
+
+  const valid1 = isTValid(t1, type1);
+  const valid2 = isTValid(t2, type2);
+
+  // Tính đường nét đứt kéo dài nếu điểm giao nằm ngoài miền thật của đoạn/tia
+  let ext1: { from: Point2D; to: Point2D } | undefined;
+  if (!valid1) {
+    const base = t1 < 0 ? p1 : p2;
+    ext1 = { from: base, to: interPoint };
+  }
+
+  let ext2: { from: Point2D; to: Point2D } | undefined;
+  if (!valid2) {
+    const base = t2 < 0 ? p3 : p4;
+    ext2 = { from: base, to: interPoint };
+  }
+
+  return {
+    point: interPoint,
+    isValidOnElem1: valid1,
+    isValidOnElem2: valid2,
+    isDirectIntersection: valid1 && valid2,
+    t1,
+    t2,
+    extension1: ext1,
+    extension2: ext2,
+  };
 };
 
 // Đường dẫn SVG cho Cung tròn (Arc path)
@@ -1536,6 +1889,410 @@ export const fitGeometryPoints = (
 
   const scaled = scaleGeometryPoints(points, scale, { x: bbox.centerX, y: bbox.centerY });
   return centerGeometryPoints(scaled, canvasWidth, canvasHeight, 'both');
+};
+
+// =========================================================================
+// NHÓM 2 - CÔNG CỤ 1: ĐỊNH LÝ TA-LÉT (ĐƯỜNG THẲNG SONG SONG CẮT 2 CẠNH TAM GIÁC)
+// =========================================================================
+
+export interface ThalesPointsResult {
+  M: Point2D;
+  N: Point2D;
+  A: Point2D; // Đỉnh đối diện cạnh song song (Đỉnh chóp của tỉ lệ)
+  B: Point2D; // Đỉnh bên trái
+  C: Point2D; // Đỉnh bên phải
+  topName: string;
+  leftName: string;
+  rightName: string;
+  AM: number;
+  MB: number;
+  AN: number;
+  NC: number;
+  MN: number;
+  BC: number;
+  ratio: number;
+  extensionM?: Point2D;
+  extensionN?: Point2D;
+}
+
+export const getThalesCutVertices = (
+  trianglePoints: [Point2D, Point2D, Point2D],
+  cutSide: 'AB-AC' | 'BA-BC' | 'CA-CB' = 'AB-AC',
+  vertexNames: string[] = ['A', 'B', 'C']
+): { top: Point2D; left: Point2D; right: Point2D; topName: string; leftName: string; rightName: string } => {
+  const [A, B, C] = trianglePoints;
+  const [nA, nB, nC] = [vertexNames[0] || 'A', vertexNames[1] || 'B', vertexNames[2] || 'C'];
+  if (cutSide === 'BA-BC') {
+    return { top: B, left: A, right: C, topName: nB, leftName: nA, rightName: nC };
+  } else if (cutSide === 'CA-CB') {
+    return { top: C, left: A, right: B, topName: nC, leftName: nA, rightName: nB };
+  }
+  return { top: A, left: B, right: C, topName: nA, leftName: nB, rightName: nC };
+};
+
+export const getThalesPoints = (
+  trianglePoints: [Point2D, Point2D, Point2D],
+  ratio: number = 0.4,
+  cutSide: 'AB-AC' | 'BA-BC' | 'CA-CB' = 'AB-AC',
+  vertexNames: string[] = ['A', 'B', 'C']
+): ThalesPointsResult => {
+  const { top, left, right, topName, leftName, rightName } = getThalesCutVertices(trianglePoints, cutSide, vertexNames);
+  const clampedRatio = Math.max(0.05, Math.min(0.95, ratio));
+  const M: Point2D = {
+    x: Math.round(top.x + (left.x - top.x) * clampedRatio),
+    y: Math.round(top.y + (left.y - top.y) * clampedRatio),
+  };
+  const N: Point2D = {
+    x: Math.round(top.x + (right.x - top.x) * clampedRatio),
+    y: Math.round(top.y + (right.y - top.y) * clampedRatio),
+  };
+
+  // Kéo dài đường thẳng MN ra ngoài cạnh tam giác nếu cần
+  const dirMN = vecNorm(vecSub(N, M));
+  const extLen = 35;
+  const extensionM: Point2D = {
+    x: Math.round(M.x - dirMN.x * extLen),
+    y: Math.round(M.y - dirMN.y * extLen),
+  };
+  const extensionN: Point2D = {
+    x: Math.round(N.x + dirMN.x * extLen),
+    y: Math.round(N.y + dirMN.y * extLen),
+  };
+
+  return {
+    M,
+    N,
+    A: top,
+    B: left,
+    C: right,
+    topName,
+    leftName,
+    rightName,
+    AM: dist(top, M),
+    MB: dist(M, left),
+    AN: dist(top, N),
+    NC: dist(N, right),
+    MN: dist(M, N),
+    BC: dist(left, right),
+    ratio: clampedRatio,
+    extensionM,
+    extensionN,
+  };
+};
+
+export const projectPointOntoSegmentRatio = (
+  p: Point2D,
+  segA: Point2D,
+  segB: Point2D
+): number => {
+  const v = vecSub(segB, segA);
+  const lenSq = v.x * v.x + v.y * v.y;
+  if (lenSq < 1e-4) return 0.4;
+  const u = vecSub(p, segA);
+  const t = (u.x * v.x + u.y * v.y) / lenSq;
+  return Math.max(0.05, Math.min(0.95, Math.round(t * 100) / 100));
+};
+
+// =========================================================================
+// NHÓM 2 - CÔNG CỤ 3: ĐA GIÁC ĐỀU (REGULAR POLYGON)
+// =========================================================================
+
+export const getPolygonPresetSides = (type: string): number => {
+  switch (type) {
+    case 'triangle': return 3;
+    case 'square': return 4;
+    case 'pentagon': return 5;
+    case 'hexagon': return 6;
+    case 'heptagon': return 7;
+    case 'octagon': return 8;
+    case 'nonagon': return 9;
+    case 'decagon': return 10;
+    case 'dodecagon': return 12;
+    default: return 5;
+  }
+};
+
+export const getRegularPolygonPresetPoints = (
+  type: string = 'pentagon',
+  center: Point2D = { x: 280, y: 230 },
+  radius: number = 120,
+  rotationAngleDeg: number = -90,
+  customSidesCount?: number
+): Point2D[] => {
+  const n = customSidesCount || getPolygonPresetSides(type);
+  const points: Point2D[] = [];
+  const startRad = (rotationAngleDeg * Math.PI) / 180;
+  for (let i = 0; i < n; i++) {
+    const angle = startRad + (2 * Math.PI * i) / n;
+    points.push({
+      x: Math.round(center.x + radius * Math.cos(angle)),
+      y: Math.round(center.y + radius * Math.sin(angle)),
+    });
+  }
+  return points;
+};
+
+export const getDefaultPolygonVertexNames = (sidesCount: number): string[] => {
+  const defaultAlphabet = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'P', 'Q'];
+  if (sidesCount <= 8) {
+    return defaultAlphabet.slice(0, sidesCount);
+  }
+  // Cho đa giác nhiều cạnh > 8: A1, A2, A3...
+  return Array.from({ length: sidesCount }, (_, i) => `A_{${i + 1}}`);
+};
+
+export const constrainRegularPolygonDrag = (
+  polygon: {
+    type: string;
+    sidesCount: number;
+    center: Point2D;
+    radius: number;
+    rotationAngle?: number;
+    points?: Point2D[];
+  },
+  dragIndex: number, // 0: Tâm O, 1..n: Đỉnh thứ (dragIndex - 1)
+  newPoint: Point2D
+): { center: Point2D; radius: number; rotationAngle: number; points: Point2D[] } => {
+  const n = polygon.sidesCount || getPolygonPresetSides(polygon.type);
+  let center = { ...polygon.center };
+  let radius = polygon.radius || 120;
+  let rotationAngle = polygon.rotationAngle ?? -90;
+
+  if (dragIndex === 0) {
+    // Kéo tâm O -> dịch chuyển toàn bộ đa giác
+    center = newPoint;
+  } else {
+    // Kéo đỉnh P_k (với k = dragIndex - 1)
+    const k = dragIndex - 1;
+    const d = dist(center, newPoint);
+    radius = Math.max(30, Math.min(260, Math.round(d)));
+    // Tính góc của con trỏ so với tâm
+    const currentAngleRad = Math.atan2(newPoint.y - center.y, newPoint.x - center.x);
+    // rotationRad = currentAngleRad - 2*PI*k / n
+    const baseRotationRad = currentAngleRad - (2 * Math.PI * k) / n;
+    rotationAngle = Math.round((baseRotationRad * 180) / Math.PI);
+  }
+
+  const points = getRegularPolygonPresetPoints(polygon.type, center, radius, rotationAngle, n);
+  return { center, radius, rotationAngle, points };
+};
+
+// =========================================================================
+// NHÓM 2 - CÔNG CỤ 2: PHÉP ĐỐI XỨNG TRỤC & ĐỐI XỨNG TÂM (SYMMETRY)
+// =========================================================================
+
+export const reflectPointAxial = (p: Point2D, p1: Point2D, p2: Point2D): Point2D => {
+  const proj = projectPointToLine(p, p1, p2);
+  return {
+    x: Math.round(2 * proj.point.x - p.x),
+    y: Math.round(2 * proj.point.y - p.y),
+  };
+};
+
+export const reflectPointCentral = (p: Point2D, center: Point2D): Point2D => {
+  return {
+    x: Math.round(2 * center.x - p.x),
+    y: Math.round(2 * center.y - p.y),
+  };
+};
+
+export const computeReflectedPoints = (
+  type: 'axial' | 'central',
+  originalPoints: Point2D[],
+  axisPoints?: [Point2D, Point2D],
+  centerPoint?: Point2D
+): Point2D[] => {
+  if (type === 'axial') {
+    const p1 = axisPoints?.[0] || { x: 280, y: 70 };
+    const p2 = axisPoints?.[1] || { x: 280, y: 410 };
+    return originalPoints.map((pt) => reflectPointAxial(pt, p1, p2));
+  } else {
+    const c = centerPoint || { x: 280, y: 240 };
+    return originalPoints.map((pt) => reflectPointCentral(pt, c));
+  }
+};
+
+export const getSymmetryPresetPoints = (
+  type: 'axial' | 'central' = 'axial',
+  targetShape: 'point' | 'segment' | 'triangle' | 'quadrilateral' | 'circle' = 'triangle'
+): {
+  originalPoints: Point2D[];
+  originalNames: string[];
+  reflectedNames: string[];
+  axisPoints: [Point2D, Point2D];
+  centerPoint: Point2D;
+  circleRadius?: number;
+} => {
+  const axisPoints: [Point2D, Point2D] = [
+    { x: 280, y: 70 },
+    { x: 280, y: 410 },
+  ];
+  const centerPoint: Point2D = { x: 280, y: 240 };
+
+  if (type === 'axial') {
+    if (targetShape === 'point') {
+      return {
+        originalPoints: [{ x: 170, y: 220 }],
+        originalNames: ['A'],
+        reflectedNames: ["A'"],
+        axisPoints,
+        centerPoint,
+      };
+    } else if (targetShape === 'segment') {
+      return {
+        originalPoints: [
+          { x: 160, y: 150 },
+          { x: 220, y: 310 },
+        ],
+        originalNames: ['A', 'B'],
+        reflectedNames: ["A'", "B'"],
+        axisPoints,
+        centerPoint,
+      };
+    } else if (targetShape === 'triangle') {
+      return {
+        originalPoints: [
+          { x: 170, y: 130 },
+          { x: 110, y: 310 },
+          { x: 230, y: 280 },
+        ],
+        originalNames: ['A', 'B', 'C'],
+        reflectedNames: ["A'", "B'", "C'"],
+        axisPoints,
+        centerPoint,
+      };
+    } else if (targetShape === 'quadrilateral') {
+      return {
+        originalPoints: [
+          { x: 170, y: 130 },
+          { x: 230, y: 160 },
+          { x: 210, y: 310 },
+          { x: 120, y: 270 },
+        ],
+        originalNames: ['A', 'B', 'C', 'D'],
+        reflectedNames: ["A'", "B'", "C'", "D'"],
+        axisPoints,
+        centerPoint,
+      };
+    } else if (targetShape === 'circle') {
+      return {
+        originalPoints: [
+          { x: 160, y: 240 }, // Tâm O
+          { x: 220, y: 240 }, // Điểm trên đường tròn A
+        ],
+        originalNames: ['O', 'A'],
+        reflectedNames: ["O'", "A'"],
+        axisPoints,
+        centerPoint,
+        circleRadius: 60,
+      };
+    }
+  } else {
+    // Đối xứng tâm
+    if (targetShape === 'point') {
+      return {
+        originalPoints: [{ x: 170, y: 150 }],
+        originalNames: ['A'],
+        reflectedNames: ["A'"],
+        axisPoints,
+        centerPoint,
+      };
+    } else if (targetShape === 'segment') {
+      return {
+        originalPoints: [
+          { x: 160, y: 140 },
+          { x: 220, y: 190 },
+        ],
+        originalNames: ['A', 'B'],
+        reflectedNames: ["A'", "B'"],
+        axisPoints,
+        centerPoint,
+      };
+    } else if (targetShape === 'triangle') {
+      return {
+        originalPoints: [
+          { x: 180, y: 120 },
+          { x: 130, y: 210 },
+          { x: 230, y: 220 },
+        ],
+        originalNames: ['A', 'B', 'C'],
+        reflectedNames: ["A'", "B'", "C'"],
+        axisPoints,
+        centerPoint,
+      };
+    } else if (targetShape === 'quadrilateral') {
+      return {
+        originalPoints: [
+          { x: 170, y: 120 },
+          { x: 230, y: 140 },
+          { x: 210, y: 210 },
+          { x: 140, y: 190 },
+        ],
+        originalNames: ['A', 'B', 'C', 'D'],
+        reflectedNames: ["A'", "B'", "C'", "D'"],
+        axisPoints,
+        centerPoint,
+      };
+    } else if (targetShape === 'circle') {
+      return {
+        originalPoints: [
+          { x: 170, y: 160 }, // Tâm O
+          { x: 220, y: 160 }, // Điểm trên đường tròn A
+        ],
+        originalNames: ['O', 'A'],
+        reflectedNames: ["O'", "A'"],
+        axisPoints,
+        centerPoint,
+        circleRadius: 50,
+      };
+    }
+  }
+
+  return {
+    originalPoints: [{ x: 170, y: 220 }],
+    originalNames: ['A'],
+    reflectedNames: ["A'"],
+    axisPoints,
+    centerPoint,
+  };
+};
+
+export const constrainSymmetryDrag = (
+  symmetry: {
+    type: 'axial' | 'central';
+    originalPoints: Point2D[];
+    axisPoints?: [Point2D, Point2D];
+    centerPoint?: Point2D;
+  },
+  dragTarget: 'original' | 'axis' | 'center',
+  dragIndex: number,
+  newPoint: Point2D
+): {
+  originalPoints: Point2D[];
+  axisPoints: [Point2D, Point2D];
+  centerPoint: Point2D;
+  reflectedPoints: Point2D[];
+} => {
+  const orig = [...symmetry.originalPoints];
+  const axis: [Point2D, Point2D] = symmetry.axisPoints ? [...symmetry.axisPoints] : [{ x: 280, y: 70 }, { x: 280, y: 410 }];
+  let center = symmetry.centerPoint ? { ...symmetry.centerPoint } : { x: 280, y: 240 };
+
+  if (dragTarget === 'original' && orig[dragIndex]) {
+    orig[dragIndex] = newPoint;
+  } else if (dragTarget === 'axis' && (dragIndex === 0 || dragIndex === 1)) {
+    axis[dragIndex] = newPoint;
+  } else if (dragTarget === 'center') {
+    center = newPoint;
+  }
+
+  const reflectedPoints = computeReflectedPoints(symmetry.type, orig, axis, center);
+
+  return {
+    originalPoints: orig,
+    axisPoints: axis,
+    centerPoint: center,
+    reflectedPoints,
+  };
 };
 
 

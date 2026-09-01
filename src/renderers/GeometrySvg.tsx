@@ -7,6 +7,8 @@ import {
   LineRayData,
   AngleData,
   CircleData,
+  PolygonData,
+  SymmetryData,
   Point2D,
   StrokeDashType,
   CustomAuxLine,
@@ -57,28 +59,50 @@ import {
   getAdvancedSegmentTicks,
   getArrowHeadSvg,
   resolvePointCoordinate,
+  getTriangleCircumcircle,
+  getTriangleIncircle,
+  getCommonTangents,
+  findLineRaySegmentIntersection,
+  getThalesCutVertices,
+  getThalesPoints,
+  projectPointOntoSegmentRatio,
+  getPolygonPresetSides,
+  getRegularPolygonPresetPoints,
+  getDefaultPolygonVertexNames,
+  constrainRegularPolygonDrag,
+  reflectPointAxial,
+  reflectPointCentral,
+  computeReflectedPoints,
+  getSymmetryPresetPoints,
+  constrainSymmetryDrag,
 } from '../utils/geometryMath';
 
 interface GeometrySvgProps {
   data: GeometryData;
   settings: BaseChartSettings;
   onUpdateTrianglePoints?: (points: [Point2D, Point2D, Point2D]) => void;
+  onUpdateTriangleData?: (triangle: TriangleData) => void;
   onUpdateQuadPoints?: (points: [Point2D, Point2D, Point2D, Point2D]) => void;
   onUpdateLineRayPoints?: (points: Point2D[]) => void;
   onUpdateAnglePoints?: (points: Point2D[]) => void;
   onUpdateCirclePoints?: (points: Point2D[], radius?: number) => void;
+  onUpdatePolygonData?: (polygon: PolygonData) => void;
+  onUpdateSymmetryData?: (symmetry: SymmetryData) => void;
 }
 
 export const GeometrySvg: React.FC<GeometrySvgProps> = ({
   data,
   settings,
   onUpdateTrianglePoints,
+  onUpdateTriangleData,
   onUpdateQuadPoints,
   onUpdateLineRayPoints,
   onUpdateAnglePoints,
   onUpdateCirclePoints,
+  onUpdatePolygonData,
+  onUpdateSymmetryData,
 }) => {
-  const { subType = 'triangle', triangle, quadrilateral, circle, angle, lineRay } = data;
+  const { subType = 'triangle', triangle, quadrilateral, circle, angle, lineRay, polygon, symmetry } = data;
 
   const width = settings.width || 560;
   const height = settings.height || 440;
@@ -185,10 +209,26 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     newX = Math.max(30, Math.min(width - 30, newX));
     newY = Math.max(35, Math.min(height - 30, newY));
 
-    if (subType === 'triangle' && onUpdateTrianglePoints) {
-      const updatedPoints: [Point2D, Point2D, Point2D] = [...trianglePoints];
-      updatedPoints[draggingVertex] = { x: newX, y: newY };
-      onUpdateTrianglePoints(updatedPoints);
+    if (subType === 'triangle') {
+      if (draggingVertex === 10) {
+        // Kéo điểm M của định lý Ta-lét trên cạnh tam giác
+        if (triangle?.thales?.enabled && onUpdateTriangleData) {
+          const cutSide = triangle.thales.cutSide || 'AB-AC';
+          const { top, left } = getThalesCutVertices(trianglePoints, cutSide);
+          const newRatio = projectPointOntoSegmentRatio({ x: newX, y: newY }, top, left);
+          onUpdateTriangleData({
+            ...triangle,
+            thales: {
+              ...triangle.thales,
+              ratio: newRatio,
+            },
+          });
+        }
+      } else if (onUpdateTrianglePoints && draggingVertex < 3) {
+        const updatedPoints: [Point2D, Point2D, Point2D] = [...trianglePoints];
+        updatedPoints[draggingVertex] = { x: newX, y: newY };
+        onUpdateTrianglePoints(updatedPoints);
+      }
     } else if (subType === 'quadrilateral' && onUpdateQuadPoints) {
       const qType = quadrilateral?.type || 'rectangle';
       const constrainedPoints = constrainQuadPointDrag(qType, quadPoints, draggingVertex, {
@@ -218,6 +258,44 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
       });
       const newRadius = dist(constrainedPoints[0], constrainedPoints[1]);
       onUpdateCirclePoints(constrainedPoints, newRadius);
+    } else if (subType === 'polygon' && onUpdatePolygonData) {
+      const currentPoly: PolygonData = polygon || {
+        type: 'pentagon',
+        sidesCount: 5,
+        center: { x: width / 2, y: height / 2 },
+        radius: 120,
+        vertexNames: ['A', 'B', 'C', 'D', 'E'],
+      };
+      const updated = constrainRegularPolygonDrag(currentPoly, draggingVertex, { x: newX, y: newY });
+      onUpdatePolygonData({
+        ...currentPoly,
+        center: updated.center,
+        radius: updated.radius,
+        rotationAngle: updated.rotationAngle,
+        points: updated.points,
+      });
+    } else if (subType === 'symmetry' && onUpdateSymmetryData) {
+      const currentSym: SymmetryData = symmetry || {
+        type: 'axial',
+        targetShape: 'triangle',
+        ...getSymmetryPresetPoints('axial', 'triangle'),
+      };
+      let dragTarget: 'original' | 'axis' | 'center' = 'original';
+      let dragIdx = draggingVertex;
+      if (draggingVertex >= 100 && draggingVertex < 200) {
+        dragTarget = 'axis';
+        dragIdx = draggingVertex - 100;
+      } else if (draggingVertex >= 200) {
+        dragTarget = 'center';
+        dragIdx = 0;
+      }
+      const updated = constrainSymmetryDrag(currentSym, dragTarget, dragIdx, { x: newX, y: newY });
+      onUpdateSymmetryData({
+        ...currentSym,
+        originalPoints: updated.originalPoints,
+        axisPoints: updated.axisPoints,
+        centerPoint: updated.centerPoint,
+      });
     }
   };
 
@@ -302,6 +380,15 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
         }
       } else if (ap.type === 'free' && ap.freeX !== undefined && ap.freeY !== undefined) {
         pointsMap[ap.name] = { x: ap.freeX, y: ap.freeY };
+      } else if (ap.type === 'on-circle' && ap.angle !== undefined) {
+        const centerName = ap.centerPoint || 'O';
+        const pCenter = resolvePointCoordinate(centerName, pointsMap) || { x: 320, y: 240 };
+        const rad = ap.radius || (circle?.radius) || 140;
+        const angRad = (ap.angle * Math.PI) / 180;
+        pointsMap[ap.name] = {
+          x: pCenter.x + rad * Math.cos(angRad),
+          y: pCenter.y + rad * Math.sin(angRad),
+        };
       }
     });
 
@@ -987,6 +1074,273 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
       </g>
     );
 
+    // ==========================================
+    // 7. ĐƯỜNG TRÒN NGOẠI TIẾP VÀ NỘI TIẾP TAM GIÁC (TOOL 2)
+    // ==========================================
+    const circumcircleData = getTriangleCircumcircle(pA, pB, pC);
+    const pCircumO = circumcircleData.center;
+    const circumR = circumcircleData.radius;
+    let circumcircleSvg: React.ReactNode = null;
+
+    if (t.circumscribedCircle?.enabled) {
+      const cColor = t.circumscribedCircle.color || '#2563eb';
+      const cDash = getDashArray(t.circumscribedCircle.style || 'solid');
+      const cWidth = (t.circumscribedCircle as any)?.strokeWidth || 1.3;
+      const centerName = t.circumscribedCircle.centerName || 'O';
+      const oLabelPos = getSmartVertexLabelPosition(pCircumO, pA, pB, 15);
+      const showRadii = t.circumscribedCircle.showRadii;
+
+      circumcircleSvg = (
+        <g id="triangle-circumscribed-circle">
+          <circle
+            cx={pCircumO.x}
+            cy={pCircumO.y}
+            r={circumR}
+            fill="none"
+            stroke={cColor}
+            strokeWidth={cWidth}
+            strokeDasharray={cDash}
+          />
+          {t.circumscribedCircle.showCenter !== false && (
+            <g>
+              <circle cx={pCircumO.x} cy={pCircumO.y} r={3} fill={cColor} />
+              {showLabels && (
+                <text
+                  x={oLabelPos.x}
+                  y={oLabelPos.y}
+                  textAnchor={oLabelPos.textAnchor}
+                  dominantBaseline={oLabelPos.dominantBaseline}
+                  fontSize={fontSize - 1}
+                  fontStyle="italic"
+                  fontWeight="bold"
+                  fill={cColor}
+                  fontFamily={fontFamily}
+                >
+                  {centerName}
+                </text>
+              )}
+            </g>
+          )}
+          {showRadii && (
+            <g stroke={cColor} strokeWidth={1} strokeDasharray="3 3">
+              <line x1={pCircumO.x} y1={pCircumO.y} x2={pA.x} y2={pA.y} />
+              <line x1={pCircumO.x} y1={pCircumO.y} x2={pB.x} y2={pB.y} />
+              <line x1={pCircumO.x} y1={pCircumO.y} x2={pC.x} y2={pC.y} />
+            </g>
+          )}
+        </g>
+      );
+    }
+
+    const incircleData = getTriangleIncircle(pA, pB, pC);
+    const pIncenterI = incircleData.center;
+    const inR = incircleData.radius;
+    const { onBC: pD_incircle, onCA: pE_incircle, onAB: pF_incircle } = incircleData.contactPoints;
+    let incircleSvg: React.ReactNode = null;
+
+    if (t.inscribedCircle?.enabled) {
+      const iColor = t.inscribedCircle.color || '#ea580c';
+      const iDash = getDashArray(t.inscribedCircle.style || 'solid');
+      const iWidth = (t.inscribedCircle as any)?.strokeWidth || 1.3;
+      const centerName = t.inscribedCircle.centerName || 'I';
+      const iLabelPos = getSmartVertexLabelPosition(pIncenterI, pA, pB, 15);
+      const showRadii = t.inscribedCircle.showRadii !== false;
+      const showContactLabels = (t.inscribedCircle as any)?.showContactPoints !== false;
+
+      const raD = getRightAngleMarkerPath(pD_incircle, pIncenterI, pC, 8);
+      const raE = getRightAngleMarkerPath(pE_incircle, pIncenterI, pA, 8);
+      const raF = getRightAngleMarkerPath(pF_incircle, pIncenterI, pB, 8);
+
+      incircleSvg = (
+        <g id="triangle-inscribed-circle">
+          <circle
+            cx={pIncenterI.x}
+            cy={pIncenterI.y}
+            r={inR}
+            fill="none"
+            stroke={iColor}
+            strokeWidth={iWidth}
+            strokeDasharray={iDash}
+          />
+          {t.inscribedCircle.showCenter !== false && (
+            <g>
+              <circle cx={pIncenterI.x} cy={pIncenterI.y} r={3} fill={iColor} />
+              {showLabels && (
+                <text
+                  x={iLabelPos.x}
+                  y={iLabelPos.y}
+                  textAnchor={iLabelPos.textAnchor}
+                  dominantBaseline={iLabelPos.dominantBaseline}
+                  fontSize={fontSize - 1}
+                  fontStyle="italic"
+                  fontWeight="bold"
+                  fill={iColor}
+                  fontFamily={fontFamily}
+                >
+                  {centerName}
+                </text>
+              )}
+            </g>
+          )}
+          {showRadii && (
+            <g>
+              <line x1={pIncenterI.x} y1={pIncenterI.y} x2={pD_incircle.x} y2={pD_incircle.y} stroke={iColor} strokeWidth={1.1} strokeDasharray="3 3" />
+              <line x1={pIncenterI.x} y1={pIncenterI.y} x2={pE_incircle.x} y2={pE_incircle.y} stroke={iColor} strokeWidth={1.1} strokeDasharray="3 3" />
+              <line x1={pIncenterI.x} y1={pIncenterI.y} x2={pF_incircle.x} y2={pF_incircle.y} stroke={iColor} strokeWidth={1.1} strokeDasharray="3 3" />
+              <path d={raD} fill="none" stroke={iColor} strokeWidth={1} />
+              <path d={raE} fill="none" stroke={iColor} strokeWidth={1} />
+              <path d={raF} fill="none" stroke={iColor} strokeWidth={1} />
+            </g>
+          )}
+          {showContactLabels && (
+            <g>
+              <circle cx={pD_incircle.x} cy={pD_incircle.y} r={2.5} fill={iColor} />
+              <circle cx={pE_incircle.x} cy={pE_incircle.y} r={2.5} fill={iColor} />
+              <circle cx={pF_incircle.x} cy={pF_incircle.y} r={2.5} fill={iColor} />
+              <text x={pD_incircle.x - 4} y={pD_incircle.y + 14} fontSize={fontSize - 2} fontStyle="italic" fontWeight="bold" fill={iColor} fontFamily={fontFamily}>D</text>
+              <text x={pE_incircle.x + 8} y={pE_incircle.y} fontSize={fontSize - 2} fontStyle="italic" fontWeight="bold" fill={iColor} fontFamily={fontFamily}>E</text>
+              <text x={pF_incircle.x - 14} y={pF_incircle.y} fontSize={fontSize - 2} fontStyle="italic" fontWeight="bold" fill={iColor} fontFamily={fontFamily}>F</text>
+            </g>
+          )}
+        </g>
+      );
+    }
+
+    // ==========================================
+    // 8. NHÓM 2 - CÔNG CỤ 1: ĐỊNH LÝ TA-LÉT (ĐƯỜNG THẲNG SONG SONG CẮT 2 CẠNH)
+    // ==========================================
+    let thalesSvg: React.ReactNode = null;
+    let pM_thales: Point2D | undefined;
+    let pN_thales: Point2D | undefined;
+
+    if (t.thales?.enabled) {
+      const thalesConfig = t.thales;
+      const cutSide = thalesConfig.cutSide || 'AB-AC';
+      const thalesResult = getThalesPoints(trianglePoints, thalesConfig.ratio ?? 0.4, cutSide, vNames);
+      const { M, N, A: topV, B: leftV, C: rightV, ratio: thalesRatio, extensionM, extensionN } = thalesResult;
+      pM_thales = M;
+      pN_thales = N;
+      const mName = thalesConfig.pointMName || 'M';
+      const nName = thalesConfig.pointNName || 'N';
+
+      const thalesLineColor = thalesConfig.lineStyle?.strokeColor || '#2563eb';
+      const thalesLineWidth = thalesConfig.lineStyle?.strokeWidth || 1.6;
+      const thalesDash = getDashArray(thalesConfig.lineStyle?.strokeStyle || 'solid');
+
+      const mLabelPos = getSmartVertexLabelPosition(M, leftV, topV, 16);
+      const nLabelPos = getSmartVertexLabelPosition(N, rightV, topV, 16);
+
+      // Ký hiệu song song mũi tên trên MN và BC
+      const arrowCount = thalesConfig.parallelMarkerType === 2 ? 2 : 1;
+      const arrowsMN = getParallelArrowsPath(M, N, arrowCount, 8);
+      const arrowsBC = getParallelArrowsPath(leftV, rightV, arrowCount, 8);
+
+      thalesSvg = (
+        <g id="thales-parallel-cut">
+          {/* Highlight tam giác đồng dạng AMN */}
+          {thalesConfig.showFillTriangle && (
+            <polygon
+              points={`${topV.x},${topV.y} ${M.x},${M.y} ${N.x},${N.y}`}
+              fill={thalesConfig.fillColor || '#38bdf8'}
+              fillOpacity={thalesConfig.fillOpacity ?? 0.25}
+              stroke="none"
+            />
+          )}
+
+          {/* Đường kéo dài nét đứt qua M và N */}
+          {thalesConfig.showDashedExtensions && extensionM && extensionN && (
+            <line
+              x1={extensionM.x}
+              y1={extensionM.y}
+              x2={extensionN.x}
+              y2={extensionN.y}
+              stroke={thalesLineColor}
+              strokeWidth={1}
+              strokeDasharray="4 3"
+            />
+          )}
+
+          {/* Đoạn thẳng song song MN */}
+          <line
+            x1={M.x}
+            y1={M.y}
+            x2={N.x}
+            y2={N.y}
+            stroke={thalesLineColor}
+            strokeWidth={thalesLineWidth}
+            strokeDasharray={thalesDash}
+            strokeLinecap="round"
+          />
+
+          {/* Ký hiệu mũi tên song song MN // BC */}
+          {thalesConfig.showParallelMarkers !== false && (
+            <g stroke={thalesLineColor} strokeWidth={1.3} fill="none">
+              <path d={arrowsMN} />
+              <path d={arrowsBC} />
+            </g>
+          )}
+
+          {/* Điểm N (tính tự động theo tỉ lệ Ta-lét) */}
+          {thalesConfig.showPoints !== false && (
+            <circle cx={N.x} cy={N.y} r={3} fill={thalesLineColor} />
+          )}
+
+          {/* Điểm M (Có thể kéo trượt mượt mà trên cạnh) */}
+          {thalesConfig.showPoints !== false && (
+            <g className="cursor-grab active:cursor-grabbing" title="Kéo điểm M trượt trên cạnh tam giác">
+              <circle
+                cx={M.x}
+                cy={M.y}
+                r={14}
+                fill="transparent"
+                onPointerDown={(e) => handlePointerDown(10, e)}
+              />
+              <circle cx={M.x} cy={M.y} r={draggingVertex === 10 ? 4.5 : 3.5} fill={thalesLineColor} />
+            </g>
+          )}
+
+          {/* Nhãn điểm M và N */}
+          {thalesConfig.showLabels !== false && showLabels && (
+            <g fontStyle="italic" fontWeight="bold" fontSize={fontSize - 1} fill={thalesLineColor} fontFamily={fontFamily}>
+              <text x={mLabelPos.x} y={mLabelPos.y} textAnchor={mLabelPos.textAnchor} dominantBaseline={mLabelPos.dominantBaseline}>
+                {mName}
+              </text>
+              <text x={nLabelPos.x} y={nLabelPos.y} textAnchor={nLabelPos.textAnchor} dominantBaseline={nLabelPos.dominantBaseline}>
+                {nName}
+              </text>
+            </g>
+          )}
+
+          {/* Bảng tỉ lệ Ta-lét sư phạm (tùy chọn) */}
+          {thalesConfig.showRatiosText && (
+            <g id="thales-ratio-badge">
+              <rect
+                x={20}
+                y={height - 48}
+                width={270}
+                height={34}
+                rx={6}
+                fill="#f8fafc"
+                stroke="#cbd5e1"
+                strokeWidth={1}
+              />
+              <text
+                x={155}
+                y={height - 26}
+                textAnchor="middle"
+                fontSize={fontSize - 2}
+                fontWeight="semibold"
+                fill="#1e293b"
+                fontFamily={fontFamily}
+              >
+                {`Ta-lét: ${mName}${nameA}/${nameA}${nameB} = ${nName}${nameA}/${nameA}${nameC} = ${mName}${nName}/${nameB}${nameC}`}
+              </text>
+            </g>
+          )}
+        </g>
+      );
+    }
+
     return (
       <g id="triangle-group">
         {/* 0. TÔ MIỀN BÊN TRONG TAM GIÁC (Tùy chỉnh độc lập) */}
@@ -1000,7 +1354,10 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
           />
         )}
 
-        {/* 1. Các đường phụ (vẽ dưới cạnh chính) */}
+        {/* 1. Các đường phụ và đường tròn ngoại tiếp/nội tiếp (vẽ dưới cạnh chính) */}
+        {circumcircleSvg}
+        {incircleSvg}
+        {thalesSvg}
         {renderedAltitudes}
         {renderedMedians}
         {renderedBisectors}
@@ -1138,6 +1495,13 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
             [nameA]: pA,
             [nameB]: pB,
             [nameC]: pC,
+            O: pCircumO,
+            I: pIncenterI,
+            D: pD_incircle,
+            E: pE_incircle,
+            F: pF_incircle,
+            M: pM_thales || midpoint(pA, pB),
+            N: pN_thales || midpoint(pA, pC),
             AB: midpoint(pA, pB),
             BC: midpoint(pB, pC),
             CA: midpoint(pC, pA),
@@ -1153,6 +1517,13 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
             [nameA]: pA,
             [nameB]: pB,
             [nameC]: pC,
+            O: pCircumO,
+            I: pIncenterI,
+            D: pD_incircle,
+            E: pE_incircle,
+            F: pF_incircle,
+            M: pM_thales || midpoint(pA, pB),
+            N: pN_thales || midpoint(pA, pC),
             AB: midpoint(pA, pB),
             BC: midpoint(pB, pC),
             CA: midpoint(pC, pA),
@@ -1454,6 +1825,67 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     const sideLabels = q.sideLengthLabels || ['', '', '', ''];
     const showSideLengths = q.showSideLengths && sideLabels.some((l) => l.trim() !== '');
 
+    // ==========================================
+    // 8. ĐƯỜNG TRÒN NGOẠI TIẾP TỨ GIÁC NỘI TIẾP (TOOL 1)
+    // ==========================================
+    const isCyclic = q.type === 'cyclic';
+    const showCircumcircle = isCyclic || q.showCircumcircle;
+    let circumcircleNode: React.ReactNode = null;
+    let circumCenterP: Point2D | null = null;
+
+    if (showCircumcircle) {
+      const circum = getTriangleCircumcircle(pA, pB, pC);
+      circumCenterP = circum.center;
+      const cR = circum.radius;
+      const cColor = q.circumcircleColor || '#2563eb';
+      const cDash = getDashArray(q.circumcircleStyle || 'dashed');
+      const cWidth = q.circumcircleStrokeWidth || 1.3;
+      const cName = q.circumcircleCenterName || 'O';
+      const oLabelPos = getSmartVertexLabelPosition(circumCenterP, pA, pB, 15);
+
+      circumcircleNode = (
+        <g id="quad-circumcircle">
+          <circle
+            cx={circumCenterP.x}
+            cy={circumCenterP.y}
+            r={cR}
+            fill="none"
+            stroke={cColor}
+            strokeWidth={cWidth}
+            strokeDasharray={cDash}
+          />
+          {q.showCircumcircleCenter !== false && (
+            <g>
+              <circle cx={circumCenterP.x} cy={circumCenterP.y} r={3} fill={cColor} />
+              {showLabels && (
+                <text
+                  x={oLabelPos.x}
+                  y={oLabelPos.y}
+                  textAnchor={oLabelPos.textAnchor}
+                  dominantBaseline={oLabelPos.dominantBaseline}
+                  fontSize={fontSize - 1}
+                  fontStyle="italic"
+                  fontWeight="bold"
+                  fill={cColor}
+                  fontFamily={fontFamily}
+                >
+                  {cName}
+                </text>
+              )}
+            </g>
+          )}
+          {q.showCircumcircleRadii && (
+            <g stroke={cColor} strokeWidth={1} strokeDasharray="3 3">
+              <line x1={circumCenterP.x} y1={circumCenterP.y} x2={pA.x} y2={pA.y} />
+              <line x1={circumCenterP.x} y1={circumCenterP.y} x2={pB.x} y2={pB.y} />
+              <line x1={circumCenterP.x} y1={circumCenterP.y} x2={pC.x} y2={pC.y} />
+              <line x1={circumCenterP.x} y1={circumCenterP.y} x2={pD.x} y2={pD.y} />
+            </g>
+          )}
+        </g>
+      );
+    }
+
     return (
       <g id="quadrilateral-group">
         {/* A. Miền bên trong (Tô màu & Độ trong suốt) */}
@@ -1466,7 +1898,10 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
           />
         )}
 
-        {/* B. Đường cao đáy */}
+        {/* B. Đường tròn ngoại tiếp tứ giác nội tiếp */}
+        {circumcircleNode}
+
+        {/* C. Đường cao đáy */}
         {renderedAltitudes}
 
         {/* C. Đường chéo AC, BD */}
@@ -1787,7 +2222,8 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
             [nameB]: pB,
             [nameC]: pC,
             [nameD]: pD,
-            O: diagInter || midpoint(pA, pC),
+            O: circumCenterP || diagInter || midpoint(pA, pC),
+            [q.circumcircleCenterName || 'O']: circumCenterP || diagInter || midpoint(pA, pC),
             AB: midpoint(pA, pB),
             BC: midpoint(pB, pC),
             CD: midpoint(pC, pD),
@@ -2605,7 +3041,258 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
         )}
 
         {/* ========================================== */}
-        {/* 10. ĐIỂM ĐIỀU KHIỂN KÉO THẢ (DRAG HANDLERS) */}
+        {/* 10. GÓC TẠO BỞI TIẾP TUYẾN VÀ DÂY CUNG (TOOL 3.1) */}
+        {/* ========================================== */}
+        {(c.presetType === 'tangent-chord-angle' || c.showTangentChordAngle) && (() => {
+          const pTanA = pts[1] || { x: pCenter.x, y: pCenter.y + r };
+          const pChordB = pts[2] || { x: pCenter.x + r * Math.cos(-Math.PI / 4), y: pCenter.y + r * Math.sin(-Math.PI / 4) };
+          const pInscC = pts[3] || { x: pCenter.x + r * Math.cos((3 * Math.PI) / 4), y: pCenter.y + r * Math.sin((3 * Math.PI) / 4) };
+
+          const u = vecNorm(vecSub(pTanA, pCenter));
+          const perp = { x: -u.y, y: u.x };
+          const tRayX = { x: pTanA.x + perp.x * 120, y: pTanA.y + perp.y * 120 };
+          const tRayY = { x: pTanA.x - perp.x * 70, y: pTanA.y - perp.y * 70 };
+
+          const arcTangentChord = getAngleArcAndFill(pTanA, tRayX, pChordB, 28, false);
+          const arcInscribed = getAngleArcAndFill(pInscC, pTanA, pChordB, 24, false);
+
+          return (
+            <g id="tangent-chord-angle-group">
+              {/* Tiếp tuyến xy qua A */}
+              <line x1={tRayY.x} y1={tRayY.y} x2={tRayX.x} y2={tRayX.y} stroke="#059669" strokeWidth={1.8} strokeLinecap="round" />
+              {/* Dây cung AB */}
+              <line x1={pTanA.x} y1={pTanA.y} x2={pChordB.x} y2={pChordB.y} stroke="#2563eb" strokeWidth={1.8} strokeLinecap="round" />
+              {/* Bán kính OA hạ vuông góc với tiếp tuyến */}
+              <line x1={pCenter.x} y1={pCenter.y} x2={pTanA.x} y2={pTanA.y} stroke="#64748b" strokeWidth={1.2} strokeDasharray="3 3" />
+              <path d={getRightAngleMarkerPath(pCenter, pTanA, tRayX, 9)} stroke="#64748b" strokeWidth={1} fill="none" />
+
+              {/* Cung góc tạo bởi tiếp tuyến và dây cung BAx */}
+              <path d={arcTangentChord.arcPath} stroke="#059669" strokeWidth={1.5} fill="none" />
+
+              {/* Góc nội tiếp so sánh ACB (cùng chắn cung AB) */}
+              {c.showInscribedCompareAngle !== false && (
+                <g id="inscribed-compare-angle">
+                  <line x1={pInscC.x} y1={pInscC.y} x2={pTanA.x} y2={pTanA.y} stroke="#7c3aed" strokeWidth={1.4} strokeDasharray="4 3" />
+                  <line x1={pInscC.x} y1={pInscC.y} x2={pChordB.x} y2={pChordB.y} stroke="#7c3aed" strokeWidth={1.4} strokeDasharray="4 3" />
+                  <path d={arcInscribed.arcPath} stroke="#7c3aed" strokeWidth={1.5} fill="none" />
+                  <circle cx={pInscC.x} cy={pInscC.y} r={2.8} fill="#7c3aed" />
+                  <text x={pInscC.x - 14} y={pInscC.y - 6} fontSize={fontSize} fontWeight="bold" fontStyle="italic" fill="#7c3aed">
+                    {c.compareVertexName || 'C'}
+                  </text>
+                </g>
+              )}
+
+              {/* Điểm A, B và nhãn */}
+              <circle cx={pTanA.x} cy={pTanA.y} r={3} fill="#059669" />
+              <circle cx={pChordB.x} cy={pChordB.y} r={3} fill="#2563eb" />
+              <text x={pTanA.x + 8} y={pTanA.y + 16} fontSize={fontSize} fontWeight="bold" fontStyle="italic" fill="#059669">
+                {c.tangentChordPointName || c.tangentPointName || 'A'}
+              </text>
+              <text x={pChordB.x + 8} y={pChordB.y - 6} fontSize={fontSize} fontWeight="bold" fontStyle="italic" fill="#2563eb">
+                {c.chordTargetPointName || 'B'}
+              </text>
+              <text x={tRayX.x + 6} y={tRayX.y + 4} fontSize={fontSize} fontStyle="italic" fill="#059669">
+                {c.tangentRayName || 'x'}
+              </text>
+            </g>
+          );
+        })()}
+
+        {/* ========================================== */}
+        {/* 11. GÓC CÓ ĐỈNH Ở BÊN TRONG ĐƯỜNG TRÒN (TOOL 3.2) */}
+        {/* ========================================== */}
+        {(c.presetType === 'interior-angle' || c.showInteriorAngle) && (() => {
+          const pA_in = pts[1] || { x: pCenter.x + r * Math.cos((5 * Math.PI) / 6), y: pCenter.y + r * Math.sin((5 * Math.PI) / 6) };
+          const pB_in = pts[2] || { x: pCenter.x + r * Math.cos(-Math.PI / 6), y: pCenter.y + r * Math.sin(-Math.PI / 6) };
+          const pC_in = pts[3] || { x: pCenter.x + r * Math.cos((2 * Math.PI) / 3), y: pCenter.y + r * Math.sin((2 * Math.PI) / 3) };
+          const pD_in = pts[4] || { x: pCenter.x + r * Math.cos(-Math.PI / 2), y: pCenter.y + r * Math.sin(-Math.PI / 2) };
+
+          const pE_in = lineIntersection(pA_in, pB_in, pC_in, pD_in) || midpoint(pA_in, pB_in);
+          const arcBEC = getAngleArcAndFill(pE_in, pB_in, pC_in, 22, false);
+          const arcAED = getAngleArcAndFill(pE_in, pA_in, pD_in, 22, false);
+
+          return (
+            <g id="interior-angle-group">
+              {/* Dây AB và CD cắt nhau tại E */}
+              <line x1={pA_in.x} y1={pA_in.y} x2={pB_in.x} y2={pB_in.y} stroke="#2563eb" strokeWidth={1.8} />
+              <line x1={pC_in.x} y1={pC_in.y} x2={pD_in.x} y2={pD_in.y} stroke="#059669" strokeWidth={1.8} />
+
+              {/* Ký hiệu 2 góc đối đỉnh tại E */}
+              <path d={arcBEC.arcPath} stroke="#dc2626" strokeWidth={1.6} fill="none" />
+              <path d={arcAED.arcPath} stroke="#dc2626" strokeWidth={1.6} fill="none" />
+
+              {/* Các điểm A, B, C, D, E */}
+              <circle cx={pE_in.x} cy={pE_in.y} r={3.2} fill="#dc2626" />
+              <circle cx={pA_in.x} cy={pA_in.y} r={2.8} fill="#000000" />
+              <circle cx={pB_in.x} cy={pB_in.y} r={2.8} fill="#000000" />
+              <circle cx={pC_in.x} cy={pC_in.y} r={2.8} fill="#000000" />
+              <circle cx={pD_in.x} cy={pD_in.y} r={2.8} fill="#000000" />
+
+              <text x={pE_in.x + 6} y={pE_in.y - 6} fontSize={fontSize} fontWeight="bold" fontStyle="italic" fill="#dc2626">
+                {c.interiorIntersectionName || 'E'}
+              </text>
+              <text x={pA_in.x - 14} y={pA_in.y + 6} fontSize={fontSize} fontWeight="bold" fontStyle="italic">A</text>
+              <text x={pB_in.x + 8} y={pB_in.y + 6} fontSize={fontSize} fontWeight="bold" fontStyle="italic">B</text>
+              <text x={pC_in.x - 14} y={pC_in.y - 6} fontSize={fontSize} fontWeight="bold" fontStyle="italic">C</text>
+              <text x={pD_in.x + 6} y={pD_in.y + 14} fontSize={fontSize} fontWeight="bold" fontStyle="italic">D</text>
+            </g>
+          );
+        })()}
+
+        {/* ========================================== */}
+        {/* 12. GÓC CÓ ĐỈNH Ở BÊN NGOÀI ĐƯỜNG TRÒN (TOOL 3.3) */}
+        {/* ========================================== */}
+        {(c.presetType === 'exterior-angle' || c.showExteriorAngle) && (() => {
+          const pExtVertex = pts[1] || { x: pCenter.x + 180, y: pCenter.y };
+          const pSecA = pts[2] || { x: pCenter.x + r * Math.cos(-Math.PI / 3), y: pCenter.y + r * Math.sin(-Math.PI / 3) };
+          const pSecC = pts[3] || { x: pCenter.x + r * Math.cos(Math.PI / 3), y: pCenter.y + r * Math.sin(Math.PI / 3) };
+
+          const inter1 = getLineCircleIntersections(pCenter, r, pExtVertex, pSecA);
+          const inter2 = getLineCircleIntersections(pCenter, r, pExtVertex, pSecC);
+
+          const pA_out = inter1[0] || pSecA;
+          const pB_out = inter1[1] || pSecA;
+          const pC_out = inter2[0] || pSecC;
+          const pD_out = inter2[1] || pSecC;
+
+          const arcExt = getAngleArcAndFill(pExtVertex, pSecA, pSecC, 30, false);
+
+          return (
+            <g id="exterior-angle-group">
+              {/* 2 cát tuyến xuất phát từ đỉnh ngoài P */}
+              <line x1={pExtVertex.x} y1={pExtVertex.y} x2={pB_out.x - 30} y2={pB_out.y - 15} stroke="#2563eb" strokeWidth={1.6} />
+              <line x1={pExtVertex.x} y1={pExtVertex.y} x2={pD_out.x - 30} y2={pD_out.y + 15} stroke="#2563eb" strokeWidth={1.6} />
+
+              {/* Cung góc tại đỉnh ngoài P */}
+              <path d={arcExt.arcPath} stroke="#dc2626" strokeWidth={1.6} fill="none" />
+
+              {/* Các điểm P, A, B, C, D */}
+              <circle cx={pExtVertex.x} cy={pExtVertex.y} r={3.2} fill="#dc2626" />
+              <circle cx={pA_out.x} cy={pA_out.y} r={2.8} fill="#000000" />
+              <circle cx={pB_out.x} cy={pB_out.y} r={2.8} fill="#000000" />
+              <circle cx={pC_out.x} cy={pC_out.y} r={2.8} fill="#000000" />
+              <circle cx={pD_out.x} cy={pD_out.y} r={2.8} fill="#000000" />
+
+              <text x={pExtVertex.x + 8} y={pExtVertex.y + 4} fontSize={fontSize} fontWeight="bold" fontStyle="italic" fill="#dc2626">
+                {c.exteriorVertexName || 'P'}
+              </text>
+              <text x={pA_out.x + 6} y={pA_out.y - 8} fontSize={fontSize} fontWeight="bold" fontStyle="italic">A</text>
+              <text x={pB_out.x - 14} y={pB_out.y - 8} fontSize={fontSize} fontWeight="bold" fontStyle="italic">B</text>
+              <text x={pC_out.x + 6} y={pC_out.y + 14} fontSize={fontSize} fontWeight="bold" fontStyle="italic">C</text>
+              <text x={pD_out.x - 14} y={pD_out.y + 14} fontSize={fontSize} fontWeight="bold" fontStyle="italic">D</text>
+            </g>
+          );
+        })()}
+
+        {/* ========================================== */}
+        {/* 13. HAI ĐƯỜNG TRÒN VÀ TIẾP TUYẾN CHUNG (TOOL 4) */}
+        {/* ========================================== */}
+        {(c.presetType === 'two-circles' || c.showSecondCircle) && (() => {
+          const c2Center = pCenter2;
+          const c2Radius = r2;
+          const distCenters = dist(pCenter, c2Center);
+          const tangents = getCommonTangents(pCenter, r, c2Center, c2Radius, 45);
+
+          // Xác định vị trí tương đối
+          let relationText = '';
+          if (distCenters > r + c2Radius) relationText = 'Ngoài nhau';
+          else if (Math.abs(distCenters - (r + c2Radius)) < 1.5) relationText = 'Tiếp xúc ngoài';
+          else if (distCenters > Math.abs(r - c2Radius) && distCenters < r + c2Radius) relationText = 'Cắt nhau';
+          else if (Math.abs(distCenters - Math.abs(r - c2Radius)) < 1.5) relationText = 'Tiếp xúc trong';
+          else relationText = 'Đựng nhau';
+
+          const showCommonTan = c.showCommonTangents !== false;
+          const showExtTan = c.commonTangentsType === 'both' || c.commonTangentsType === 'external' || !c.commonTangentsType;
+          const showIntTan = c.commonTangentsType === 'both' || c.commonTangentsType === 'internal';
+
+          return (
+            <g id="two-circles-full-group">
+              {/* Đường tròn thứ hai (O2, R2) */}
+              <circle
+                cx={c2Center.x}
+                cy={c2Center.y}
+                r={c2Radius}
+                fill="none"
+                stroke={cStrokeColor}
+                strokeWidth={cStrokeWidth}
+                strokeDasharray={cDash}
+              />
+              <circle cx={c2Center.x} cy={c2Center.y} r={3} fill="#000000" />
+              <text x={c2Center.x + 8} y={c2Center.y + 14} fontSize={fontSize} fontWeight="bold" fontStyle="italic">
+                {c.center2Name || "O'"}
+              </text>
+
+              {/* Đường nối tâm O1O2 */}
+              {c.showLineOfCenters !== false && (
+                <line
+                  x1={pCenter.x}
+                  y1={pCenter.y}
+                  x2={c2Center.x}
+                  y2={c2Center.y}
+                  stroke="#475569"
+                  strokeWidth={1.3}
+                  strokeDasharray="4 3"
+                />
+              )}
+
+              {/* Giao điểm 2 đường tròn và dây chung */}
+              {twoCircleInters.length === 2 && (
+                <g id="common-chord-group">
+                  <line
+                    x1={twoCircleInters[0].x}
+                    y1={twoCircleInters[0].y}
+                    x2={twoCircleInters[1].x}
+                    y2={twoCircleInters[1].y}
+                    stroke="#dc2626"
+                    strokeWidth={1.5}
+                  />
+                  <circle cx={twoCircleInters[0].x} cy={twoCircleInters[0].y} r={2.8} fill="#dc2626" />
+                  <circle cx={twoCircleInters[1].x} cy={twoCircleInters[1].y} r={2.8} fill="#dc2626" />
+                  <text x={twoCircleInters[0].x + 6} y={twoCircleInters[0].y - 6} fontSize={fontSize} fontWeight="bold" fontStyle="italic" fill="#dc2626">A</text>
+                  <text x={twoCircleInters[1].x + 6} y={twoCircleInters[1].y + 14} fontSize={fontSize} fontWeight="bold" fontStyle="italic" fill="#dc2626">B</text>
+                </g>
+              )}
+
+              {/* Tiếp tuyến chung ngoài và trong */}
+              {showCommonTan && (
+                <g id="common-tangents-layer">
+                  {showExtTan &&
+                    tangents.external.map((tan, i) => (
+                      <g key={`ext-tan-${i}`}>
+                        <line x1={tan.start.x} y1={tan.start.y} x2={tan.end.x} y2={tan.end.y} stroke="#059669" strokeWidth={1.6} />
+                        <circle cx={tan.contact1.x} cy={tan.contact1.y} r={2.5} fill="#059669" />
+                        <circle cx={tan.contact2.x} cy={tan.contact2.y} r={2.5} fill="#059669" />
+                        {/* Bán kính vuông góc tại tiếp điểm */}
+                        <line x1={pCenter.x} y1={pCenter.y} x2={tan.contact1.x} y2={tan.contact1.y} stroke="#059669" strokeWidth={1} strokeDasharray="3 3" />
+                        <line x1={c2Center.x} y1={c2Center.y} x2={tan.contact2.x} y2={tan.contact2.y} stroke="#059669" strokeWidth={1} strokeDasharray="3 3" />
+                      </g>
+                    ))}
+                  {showIntTan &&
+                    tangents.internal.map((tan, i) => (
+                      <g key={`int-tan-${i}`}>
+                        <line x1={tan.start.x} y1={tan.start.y} x2={tan.end.x} y2={tan.end.y} stroke="#ea580c" strokeWidth={1.6} />
+                        <circle cx={tan.contact1.x} cy={tan.contact1.y} r={2.5} fill="#ea580c" />
+                        <circle cx={tan.contact2.x} cy={tan.contact2.y} r={2.5} fill="#ea580c" />
+                        {/* Bán kính vuông góc tại tiếp điểm */}
+                        <line x1={pCenter.x} y1={pCenter.y} x2={tan.contact1.x} y2={tan.contact1.y} stroke="#ea580c" strokeWidth={1} strokeDasharray="3 3" />
+                        <line x1={c2Center.x} y1={c2Center.y} x2={tan.contact2.x} y2={tan.contact2.y} stroke="#ea580c" strokeWidth={1} strokeDasharray="3 3" />
+                      </g>
+                    ))}
+                </g>
+              )}
+
+              {/* Nhãn vị trí tương đối nếu được bật */}
+              {((c as any).showRelationLabel || c.twoCirclesRelation) && (
+                <text x={(pCenter.x + c2Center.x) / 2} y={Math.max(pCenter.y, c2Center.y) + Math.max(r, c2Radius) + 24} textAnchor="middle" fontSize={fontSize} fontStyle="italic" fill="#475569">
+                  {relationText}
+                </text>
+              )}
+            </g>
+          );
+        })()}
+
+        {/* ========================================== */}
+        {/* 14. ĐIỂM ĐIỀU KHIỂN KÉO THẢ (DRAG HANDLERS) */}
         {/* ========================================== */}
         {!examMode && (
           <g id="circle-drag-handles">
@@ -2637,32 +3324,27 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
         )}
 
         {/* Các đường phụ và ký hiệu hình học tự do (Giai đoạn 3.2) */}
-        {renderAuxiliaryElements(
-          {
+        {(() => {
+          const circleMap = {
             O: pCenter,
             [c.centerName || 'O']: pCenter,
+            "O'": pCenter2,
+            [c.center2Name || "O'"]: pCenter2,
             A: pRadius,
             B: pDiamB,
             C: pChordC,
             D: pChordD,
             H: pChordH,
             P: pExtP,
-          },
-          c
-        )}
-        {renderAuxiliaryElements(
-          {
-            O: pCenter,
-            [c.centerName || 'O']: pCenter,
-            A: pRadius,
-            B: pDiamB,
-            C: pChordC,
-            D: pChordD,
-            H: pChordH,
-            P: pExtP,
-          },
-          data
-        )}
+            E: pts[4] ? (lineIntersection(pts[1], pts[2], pts[3], pts[4]) || midpoint(pts[1], pts[2])) : midpoint(pChordC, pChordD),
+          };
+          return (
+            <>
+              {renderAuxiliaryElements(circleMap, c)}
+              {renderAuxiliaryElements(circleMap, data)}
+            </>
+          );
+        })()}
       </g>
     );
   };
@@ -2966,44 +3648,102 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
           );
         })()}
 
-        {/* 6. HAI ĐƯỜNG CẮT NHAU */}
+        {/* 6. HAI ĐƯỜNG / TIA / ĐOẠN CẮT NHAU (TOOL 5) */}
         {type === 'intersection' && (() => {
-          const l1Ext = extendLine(p1, p2, 40, 40);
-          const l2Ext = extendLine(p3, p4, 40, 40);
-          const inter = lineIntersection(p1, p2, p3, p4);
+          const l1Kind = lr.line1Kind || 'line';
+          const l2Kind = lr.line2Kind || 'line';
+
+          // Tính đường vẽ chính
+          let l1DrawStart = p1;
+          let l1DrawEnd = p2;
+          if (l1Kind === 'line') {
+            const ext = extendLine(p1, p2, 40, 40);
+            l1DrawStart = ext.start;
+            l1DrawEnd = ext.end;
+          } else if (l1Kind === 'ray') {
+            const norm = vecNorm(vecSub(p2, p1));
+            l1DrawEnd = vecAdd(p1, vecScale(norm, dist(p1, p2) + 50));
+          }
+
+          let l2DrawStart = p3;
+          let l2DrawEnd = p4;
+          if (l2Kind === 'line') {
+            const ext = extendLine(p3, p4, 40, 40);
+            l2DrawStart = ext.start;
+            l2DrawEnd = ext.end;
+          } else if (l2Kind === 'ray') {
+            const norm = vecNorm(vecSub(p4, p3));
+            l2DrawEnd = vecAdd(p3, vecScale(norm, dist(p3, p4) + 50));
+          }
+
+          const interResult = findLineRaySegmentIntersection(p1, p2, l1Kind, p3, p4, l2Kind);
+          const interPt = interResult.point;
+          const showExt = lr.showExtensionLines !== false;
 
           return (
             <g id="intersection-subgroup">
+              {/* Đường/Tia/Đoạn 1 */}
               <line
-                x1={l1Ext.start.x}
-                y1={l1Ext.start.y}
-                x2={l1Ext.end.x}
-                y2={l1Ext.end.y}
+                x1={l1DrawStart.x}
+                y1={l1DrawStart.y}
+                x2={l1DrawEnd.x}
+                y2={l1DrawEnd.y}
                 stroke={l1Color}
                 strokeWidth={l1Width}
                 strokeDasharray={l1Dash}
+                markerEnd={l1Kind === 'ray' && lr.showArrows !== false ? 'url(#math-arrow-sm)' : undefined}
               />
+              {/* Đường/Tia/Đoạn 2 */}
               <line
-                x1={l2Ext.start.x}
-                y1={l2Ext.start.y}
-                x2={l2Ext.end.x}
-                y2={l2Ext.end.y}
+                x1={l2DrawStart.x}
+                y1={l2DrawStart.y}
+                x2={l2DrawEnd.x}
+                y2={l2DrawEnd.y}
                 stroke={l2Color}
                 strokeWidth={l2Width}
                 strokeDasharray={l2Dash}
+                markerEnd={l2Kind === 'ray' && lr.showArrows !== false ? 'url(#math-arrow-sm)' : undefined}
               />
 
-              {/* Giao điểm O */}
-              {inter && lr.showIntersectionPoint !== false && (
+              {/* Đường nét đứt kéo dài nếu giao điểm nằm ngoài đoạn/tia */}
+              {interPt && showExt && (
+                <g id="extension-lines-group">
+                  {interResult.extension1 && (
+                    <line
+                      x1={interResult.extension1.from.x}
+                      y1={interResult.extension1.from.y}
+                      x2={interResult.extension1.to.x}
+                      y2={interResult.extension1.to.y}
+                      stroke={l1Color}
+                      strokeWidth={1.2}
+                      strokeDasharray="4 3"
+                    />
+                  )}
+                  {interResult.extension2 && (
+                    <line
+                      x1={interResult.extension2.from.x}
+                      y1={interResult.extension2.from.y}
+                      x2={interResult.extension2.to.x}
+                      y2={interResult.extension2.to.y}
+                      stroke={l2Color}
+                      strokeWidth={1.2}
+                      strokeDasharray="4 3"
+                    />
+                  )}
+                </g>
+              )}
+
+              {/* Giao điểm O và nhãn giao điểm */}
+              {interPt && lr.showIntersectionPoint !== false && (
                 <g id="intersection-point">
-                  <circle cx={inter.x} cy={inter.y} r={3} fill="#000000" />
+                  <circle cx={interPt.x} cy={interPt.y} r={3.2} fill="#dc2626" />
                   <text
-                    x={inter.x - 14}
-                    y={inter.y - 8}
+                    x={interPt.x + 8}
+                    y={interPt.y - 8}
                     fontSize={fontSize}
                     fontWeight="bold"
                     fontStyle="italic"
-                    fill="#000000"
+                    fill="#dc2626"
                   >
                     {lr.intersectionName || 'O'}
                   </text>
@@ -3556,6 +4296,716 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     );
   };
 
+  // =========================================================================
+  // RENDER ĐA GIÁC ĐỀU (NHÓM 2 - CÔNG CỤ 3)
+  // =========================================================================
+  const renderRegularPolygon = () => {
+    const defaultSides = getPolygonPresetSides(polygon?.type || 'pentagon');
+    const sidesCount = polygon?.sidesCount || defaultSides;
+    const center = polygon?.center || { x: width / 2, y: height / 2 };
+    const radius = polygon?.radius || 120;
+    const rotDeg = polygon?.rotationAngle ?? -90;
+
+    const points =
+      polygon?.points && polygon.points.length === sidesCount
+        ? polygon.points
+        : getRegularPolygonPresetPoints(polygon?.type || 'pentagon', center, radius, rotDeg, sidesCount);
+
+    const defaultNames = getDefaultPolygonVertexNames(sidesCount);
+    const vertexNames =
+      polygon?.vertexNames && polygon.vertexNames.length === sidesCount
+        ? polygon.vertexNames
+        : defaultNames;
+
+    const showVertices = polygon?.showVertices !== false;
+    const showLabels = polygon?.showLabels !== false;
+    const showCenter = polygon?.showCenter !== false;
+    const centerName = polygon?.centerName || 'O';
+
+    const pFill = polygon?.fill || { enabled: false, color: '#3b82f6', opacity: 0.2 };
+    const pStroke = polygon?.strokeColor || strokeColor;
+    const pWidth = polygon?.strokeWidth || strokeWidth;
+    const pDash = getDashArray(polygon?.strokeStyle);
+
+    const pointsString = points.map((p) => `${p.x},${p.y}`).join(' ');
+
+    // 1. Đường tròn ngoại tiếp (Circumcircle)
+    let circumcircleSvg: React.ReactNode = null;
+    if (polygon?.showCircumcircle) {
+      const cDash = getDashArray(polygon.circumcircleStyle || 'dashed');
+      const cColor = polygon.circumcircleColor || '#2563eb';
+      circumcircleSvg = (
+        <circle
+          cx={center.x}
+          cy={center.y}
+          r={radius}
+          fill="none"
+          stroke={cColor}
+          strokeWidth={1.3}
+          strokeDasharray={cDash}
+        />
+      );
+    }
+
+    // 2. Đường tròn nội tiếp (Incircle) - Bán kính r = R * cos(pi / n)
+    let incircleSvg: React.ReactNode = null;
+    const inRadius = radius * Math.cos(Math.PI / sidesCount);
+    if (polygon?.showIncircle) {
+      const iDash = getDashArray(polygon.incircleStyle || 'dashed');
+      const iColor = polygon.incircleColor || '#16a34a';
+      incircleSvg = (
+        <circle
+          cx={center.x}
+          cy={center.y}
+          r={inRadius}
+          fill="none"
+          stroke={iColor}
+          strokeWidth={1.3}
+          strokeDasharray={iDash}
+        />
+      );
+    }
+
+    // 3. Trung đoạn (Apothem OH ⊥ AB)
+    let apothemSvg: React.ReactNode = null;
+    if (polygon?.showApothem && points.length >= 2) {
+      const p0 = points[0];
+      const p1 = points[1];
+      const midEdge = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+      const apName = polygon.apothemName || 'H';
+      const raPath = getRightAngleMarkerPath(midEdge, center, p0, 9);
+      const apColor = polygon.apothemStyle?.strokeColor || '#dc2626';
+      const apDash = getDashArray(polygon.apothemStyle?.strokeStyle || 'dashed');
+      const hPos = getSmartVertexLabelPosition(midEdge, p0, center, 14);
+
+      apothemSvg = (
+        <g id="polygon-apothem">
+          <line
+            x1={center.x}
+            y1={center.y}
+            x2={midEdge.x}
+            y2={midEdge.y}
+            stroke={apColor}
+            strokeWidth={1.4}
+            strokeDasharray={apDash}
+          />
+          {polygon.showApothemRightAngle !== false && (
+            <path d={raPath} fill="none" stroke={apColor} strokeWidth={1} />
+          )}
+          <circle cx={midEdge.x} cy={midEdge.y} r={2.5} fill={apColor} />
+          {showLabels && (
+            <text
+              x={hPos.x}
+              y={hPos.y}
+              textAnchor={hPos.textAnchor}
+              dominantBaseline={hPos.dominantBaseline}
+              fontSize={fontSize - 2}
+              fontStyle="italic"
+              fontWeight="bold"
+              fill={apColor}
+              fontFamily={fontFamily}
+            >
+              {apName}
+            </text>
+          )}
+        </g>
+      );
+    }
+
+    // 4. Bán kính OA, OB, OC...
+    let radiiSvg: React.ReactNode = null;
+    if (polygon?.showRadii) {
+      const rColor = polygon.radiiStyle?.strokeColor || '#64748b';
+      const rDash = getDashArray(polygon.radiiStyle?.strokeStyle || 'dashed');
+      radiiSvg = (
+        <g id="polygon-radii">
+          {points.map((p, i) => (
+            <line
+              key={`rad-${i}`}
+              x1={center.x}
+              y1={center.y}
+              x2={p.x}
+              y2={p.y}
+              stroke={rColor}
+              strokeWidth={1.1}
+              strokeDasharray={rDash}
+            />
+          ))}
+        </g>
+      );
+    }
+
+    // 5. Đường chéo (Diagonals)
+    let diagonalsSvg: React.ReactNode = null;
+    if (polygon?.showDiagonals) {
+      const dColor = polygon.diagonalsStyle?.strokeColor || '#94a3b8';
+      const dDash = getDashArray(polygon.diagonalsStyle?.strokeStyle || 'dashed');
+      const diagLines: { x1: number; y1: number; x2: number; y2: number }[] = [];
+
+      if (polygon.diagonalsType === 'all') {
+        for (let i = 0; i < points.length; i++) {
+          for (let j = i + 2; j < points.length; j++) {
+            if (i === 0 && j === points.length - 1) continue;
+            diagLines.push({
+              x1: points[i].x,
+              y1: points[i].y,
+              x2: points[j].x,
+              y2: points[j].y,
+            });
+          }
+        }
+      } else {
+        if (sidesCount % 2 === 0) {
+          const half = sidesCount / 2;
+          for (let i = 0; i < half; i++) {
+            diagLines.push({
+              x1: points[i].x,
+              y1: points[i].y,
+              x2: points[i + half].x,
+              y2: points[i + half].y,
+            });
+          }
+        } else {
+          for (let i = 0; i < points.length; i++) {
+            const opp1 = (i + Math.floor(sidesCount / 2)) % sidesCount;
+            diagLines.push({
+              x1: points[i].x,
+              y1: points[i].y,
+              x2: points[opp1].x,
+              y2: points[opp1].y,
+            });
+          }
+        }
+      }
+
+      diagonalsSvg = (
+        <g id="polygon-diagonals">
+          {diagLines.map((d, i) => (
+            <line
+              key={`diag-${i}`}
+              x1={d.x1}
+              y1={d.y1}
+              x2={d.x2}
+              y2={d.y2}
+              stroke={dColor}
+              strokeWidth={1.1}
+              strokeDasharray={dDash}
+            />
+          ))}
+        </g>
+      );
+    }
+
+    // 6. Ký hiệu các cạnh bằng nhau
+    let equalSidesSvg: React.ReactNode = null;
+    if (polygon?.showEqualSidesMarkers) {
+      equalSidesSvg = (
+        <g id="polygon-equal-sides" stroke={pStroke} strokeWidth={1.2}>
+          {points.map((p, i) => {
+            const nextP = points[(i + 1) % points.length];
+            const ticks = getSegmentTickMarks(p, nextP, 1, 8, 3);
+            return (
+              <React.Fragment key={`eq-side-${i}`}>
+                {Array.isArray(ticks) &&
+                  ticks.map((t, ti) => (
+                    <line key={`t-${ti}`} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} />
+                  ))}
+              </React.Fragment>
+            );
+          })}
+        </g>
+      );
+    }
+
+    // 7. Ký hiệu các góc bằng nhau
+    let equalAnglesSvg: React.ReactNode = null;
+    if (polygon?.showEqualAnglesMarkers) {
+      equalAnglesSvg = (
+        <g id="polygon-equal-angles" stroke={pStroke} strokeWidth={1.1} fill="none">
+          {points.map((p, i) => {
+            const prevP = points[(i - 1 + points.length) % points.length];
+            const nextP = points[(i + 1) % points.length];
+            const arc = getEqualAngleArcPath(p, prevP, nextP, 18);
+            return <path key={`eq-ang-${i}`} d={arc.path} />;
+          })}
+        </g>
+      );
+    }
+
+    // 8. Nhãn độ dài cạnh (e.g. "a")
+    let sideLengthSvg: React.ReactNode = null;
+    if (polygon?.showSideLengths && points.length >= 2) {
+      const p0 = points[0];
+      const p1 = points[1];
+      const midEdge = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+      const labelPos = getSmartVertexLabelPosition(midEdge, center, p0, 16);
+      sideLengthSvg = (
+        <text
+          x={labelPos.x}
+          y={labelPos.y}
+          textAnchor={labelPos.textAnchor}
+          dominantBaseline={labelPos.dominantBaseline}
+          fontSize={fontSize - 2}
+          fontStyle="italic"
+          fill="#334155"
+          fontFamily={fontFamily}
+        >
+          {polygon.sideLengthLabel || 'a'}
+        </text>
+      );
+    }
+
+    const namedPolyPoints: Record<string, Point2D> = {
+      [centerName]: center,
+      O: center,
+    };
+    points.forEach((p, idx) => {
+      const name = vertexNames[idx] || `A${idx + 1}`;
+      namedPolyPoints[name] = p;
+    });
+
+    return (
+      <g id="regular-polygon-group">
+        {/* Tô miền */}
+        {pFill.enabled && (
+          <polygon
+            points={pointsString}
+            fill={pFill.color || '#3b82f6'}
+            fillOpacity={pFill.opacity ?? 0.25}
+            stroke="none"
+          />
+        )}
+
+        {/* Các yếu tố hình học bên trong */}
+        {circumcircleSvg}
+        {incircleSvg}
+        {diagonalsSvg}
+        {radiiSvg}
+        {apothemSvg}
+        {equalAnglesSvg}
+
+        {/* Các cạnh của đa giác */}
+        <polygon
+          points={pointsString}
+          fill="none"
+          stroke={pStroke}
+          strokeWidth={pWidth}
+          strokeDasharray={pDash}
+          strokeLinejoin="round"
+        />
+
+        {equalSidesSvg}
+        {sideLengthSvg}
+
+        {/* Tâm O */}
+        {showCenter && (
+          <g id="polygon-center" className="cursor-grab active:cursor-grabbing">
+            <circle
+              cx={center.x}
+              cy={center.y}
+              r={14}
+              fill="transparent"
+              onPointerDown={(e) => handlePointerDown(0, e)}
+            />
+            <circle cx={center.x} cy={center.y} r={3.5} fill={pStroke} />
+            {showLabels && (
+              <text
+                x={center.x + 8}
+                y={center.y - 8}
+                fontSize={fontSize}
+                fontStyle="italic"
+                fontWeight="bold"
+                fill={pStroke}
+                fontFamily={fontFamily}
+              >
+                {centerName}
+              </text>
+            )}
+          </g>
+        )}
+
+        {/* Đỉnh và nhãn đỉnh */}
+        {showVertices && (
+          <g id="polygon-vertices">
+            {points.map((p, i) => {
+              const vName = vertexNames[i] || `A_{${i + 1}}`;
+              const labelPos = getSmartVertexLabelPosition(p, center, points[(i + 1) % points.length], 18);
+              return (
+                <g key={`poly-v-${i}`} className="cursor-grab active:cursor-grabbing">
+                  {/* Vùng cảm ứng kéo đỉnh */}
+                  <circle
+                    cx={p.x}
+                    cy={p.y}
+                    r={14}
+                    fill="transparent"
+                    onPointerDown={(e) => handlePointerDown(i + 1, e)}
+                  />
+                  <circle cx={p.x} cy={p.y} r={draggingVertex === i + 1 ? 4.5 : 3} fill={pStroke} />
+                  {showLabels && (
+                    <text
+                      x={labelPos.x}
+                      y={labelPos.y}
+                      textAnchor={labelPos.textAnchor}
+                      dominantBaseline={labelPos.dominantBaseline}
+                      fontSize={fontSize}
+                      fontStyle="italic"
+                      fontWeight="bold"
+                      fill={pStroke}
+                      fontFamily={fontFamily}
+                    >
+                      {vName}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+          </g>
+        )}
+
+        {/* Các đường phụ tự do */}
+        {renderAuxiliaryElements(namedPolyPoints, polygon || {})}
+        {renderAuxiliaryElements(namedPolyPoints, data)}
+      </g>
+    );
+  };
+
+  // =========================================================================
+  // RENDER PHÉP ĐỐI XỨNG TRỤC & ĐỐI XỨNG TÂM (NHÓM 2 - CÔNG CỤ 2)
+  // =========================================================================
+  const renderSymmetry = () => {
+    const sym: SymmetryData = symmetry || {
+      type: 'axial',
+      targetShape: 'triangle',
+      ...getSymmetryPresetPoints('axial', 'triangle'),
+    };
+
+    const symType = sym.type || 'axial';
+    const targetShape = sym.targetShape || 'triangle';
+    const origPoints =
+      sym.originalPoints && sym.originalPoints.length > 0
+        ? sym.originalPoints
+        : getSymmetryPresetPoints(symType, targetShape).originalPoints;
+
+    const axisPoints: [Point2D, Point2D] =
+      sym.axisPoints && sym.axisPoints.length === 2
+        ? sym.axisPoints
+        : [
+            { x: width / 2, y: 50 },
+            { x: width / 2, y: height - 50 },
+          ];
+
+    const centerPoint = sym.centerPoint || { x: width / 2, y: height / 2 };
+    const centerName = sym.centerName || 'I';
+
+    const origNames = sym.originalNames || ['A', 'B', 'C', 'D'];
+    const reflNames = sym.reflectedNames || ["A'", "B'", "C'", "D'"];
+
+    // Tính các điểm đối xứng chính xác
+    const reflPoints = computeReflectedPoints(symType, origPoints, axisPoints, centerPoint);
+
+    const origColor = sym.originalStyle?.strokeColor || '#2563eb';
+    const origWidth = sym.originalStyle?.strokeWidth || strokeWidth;
+    const origDash = getDashArray(sym.originalStyle?.strokeStyle || 'solid');
+
+    const reflColor = sym.reflectedStyle?.strokeColor || '#dc2626';
+    const reflWidth = sym.reflectedStyle?.strokeWidth || strokeWidth;
+    const reflDash = getDashArray(sym.reflectedStyle?.strokeStyle || 'solid');
+
+    const axisColor = sym.axisStyle?.strokeColor || '#475569';
+    const axisDash = getDashArray(sym.axisStyle?.strokeStyle || 'dashed');
+
+    const showOrigLabels = sym.showOriginalLabels !== false;
+    const showReflLabels = sym.showReflectedLabels !== false;
+    const showConnecting = sym.showConnectingDashedLines !== false;
+    const showRightAngles = sym.showRightAngleMarkers !== false && symType === 'axial';
+    const showEqualDist = sym.showEqualDistanceMarkers !== false;
+
+    // Helper render shape geometry
+    const renderShapeGeometry = (pts: Point2D[], color: string, width: number, dash?: string, fill?: any) => {
+      if (targetShape === 'point' && pts.length >= 1) {
+        return <circle cx={pts[0].x} cy={pts[0].y} r={3.5} fill={color} />;
+      } else if (targetShape === 'segment' && pts.length >= 2) {
+        return (
+          <line
+            x1={pts[0].x}
+            y1={pts[0].y}
+            x2={pts[1].x}
+            y2={pts[1].y}
+            stroke={color}
+            strokeWidth={width}
+            strokeDasharray={dash}
+            strokeLinecap="round"
+          />
+        );
+      } else if (targetShape === 'circle' && pts.length >= 2) {
+        const r = sym.circleRadius || dist(pts[0], pts[1]);
+        return (
+          <g>
+            {fill?.enabled && (
+              <circle cx={pts[0].x} cy={pts[0].y} r={r} fill={fill.color || color} fillOpacity={fill.opacity ?? 0.2} />
+            )}
+            <circle cx={pts[0].x} cy={pts[0].y} r={r} fill="none" stroke={color} strokeWidth={width} strokeDasharray={dash} />
+            <circle cx={pts[0].x} cy={pts[0].y} r={2.8} fill={color} />
+          </g>
+        );
+      } else if ((targetShape === 'triangle' || targetShape === 'quadrilateral') && pts.length >= 3) {
+        const ptsStr = pts.map((p) => `${p.x},${p.y}`).join(' ');
+        return (
+          <g>
+            {fill?.enabled && (
+              <polygon points={ptsStr} fill={fill.color || color} fillOpacity={fill.opacity ?? 0.2} stroke="none" />
+            )}
+            <polygon points={ptsStr} fill="none" stroke={color} strokeWidth={width} strokeDasharray={dash} strokeLinejoin="round" />
+          </g>
+        );
+      }
+      return null;
+    };
+
+    // 1. Render Trục đối xứng d (nếu symType === 'axial')
+    let axisSvg: React.ReactNode = null;
+    if (symType === 'axial') {
+      const [ax1, ax2] = axisPoints;
+      const ext = extendLine(ax1, ax2, 80, 80);
+      const axisLabel = sym.axisLabel || 'd';
+      axisSvg = (
+        <g id="symmetry-axis">
+          <line
+            x1={ext.start.x}
+            y1={ext.start.y}
+            x2={ext.end.x}
+            y2={ext.end.y}
+            stroke={axisColor}
+            strokeWidth={1.5}
+            strokeDasharray={axisDash}
+          />
+          <text
+            x={ext.end.x + 8}
+            y={ext.end.y}
+            fontSize={fontSize}
+            fontStyle="italic"
+            fontWeight="bold"
+            fill={axisColor}
+            fontFamily={fontFamily}
+          >
+            {axisLabel}
+          </text>
+          {/* Draggable control handles cho trục */}
+          <g className="cursor-grab active:cursor-grabbing">
+            <circle
+              cx={ax1.x}
+              cy={ax1.y}
+              r={14}
+              fill="transparent"
+              onPointerDown={(e) => handlePointerDown(100, e)}
+            />
+            <circle cx={ax1.x} cy={ax1.y} r={3} fill={axisColor} opacity={0.6} />
+          </g>
+          <g className="cursor-grab active:cursor-grabbing">
+            <circle
+              cx={ax2.x}
+              cy={ax2.y}
+              r={14}
+              fill="transparent"
+              onPointerDown={(e) => handlePointerDown(101, e)}
+            />
+            <circle cx={ax2.x} cy={ax2.y} r={3} fill={axisColor} opacity={0.6} />
+          </g>
+        </g>
+      );
+    }
+
+    // 2. Render Tâm đối xứng I (nếu symType === 'central')
+    let centerSvg: React.ReactNode = null;
+    if (symType === 'central') {
+      centerSvg = (
+        <g id="symmetry-center" className="cursor-grab active:cursor-grabbing">
+          <circle
+            cx={centerPoint.x}
+            cy={centerPoint.y}
+            r={14}
+            fill="transparent"
+            onPointerDown={(e) => handlePointerDown(200, e)}
+          />
+          <circle cx={centerPoint.x} cy={centerPoint.y} r={3.8} fill="#0f172a" />
+          <text
+            x={centerPoint.x + 8}
+            y={centerPoint.y - 8}
+            fontSize={fontSize}
+            fontStyle="italic"
+            fontWeight="bold"
+            fill="#0f172a"
+            fontFamily={fontFamily}
+          >
+            {centerName}
+          </text>
+        </g>
+      );
+    }
+
+    // 3. Render các đường dóng đối xứng (Connecting lines AA', BB'...)
+    const connectingElementsSvg = origPoints.map((pOrig, idx) => {
+      const pRefl = reflPoints[idx];
+      if (!pRefl) return null;
+
+      if (symType === 'axial') {
+        const [ax1, ax2] = axisPoints;
+        const proj = projectPointToLine(pOrig, ax1, ax2);
+        const foot = proj.point;
+        const raPath = getRightAngleMarkerPath(foot, pOrig, ax1, 9);
+        const tick1 = getSegmentTickMarks(pOrig, foot, 1, 7, 2.5);
+        const tick2 = getSegmentTickMarks(foot, pRefl, 1, 7, 2.5);
+
+        return (
+          <g key={`sym-conn-${idx}`} id={`connecting-line-${idx}`}>
+            {showConnecting && (
+              <line
+                x1={pOrig.x}
+                y1={pOrig.y}
+                x2={pRefl.x}
+                y2={pRefl.y}
+                stroke="#64748b"
+                strokeWidth={1.1}
+                strokeDasharray="4 3"
+              />
+            )}
+            {showRightAngles && (
+              <path d={raPath} fill="none" stroke="#64748b" strokeWidth={1} />
+            )}
+            {showEqualDist && (
+              <g stroke="#64748b" strokeWidth={1.1}>
+                {Array.isArray(tick1) &&
+                  tick1.map((t, ti) => <line key={`t1-${ti}`} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} />)}
+                {Array.isArray(tick2) &&
+                  tick2.map((t, ti) => <line key={`t2-${ti}`} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} />)}
+              </g>
+            )}
+            <circle cx={foot.x} cy={foot.y} r={2} fill="#64748b" />
+          </g>
+        );
+      } else {
+        const tick1 = getSegmentTickMarks(pOrig, centerPoint, 1, 7, 2.5);
+        const tick2 = getSegmentTickMarks(centerPoint, pRefl, 1, 7, 2.5);
+        return (
+          <g key={`sym-conn-c-${idx}`} id={`connecting-center-line-${idx}`}>
+            {showConnecting && (
+              <line
+                x1={pOrig.x}
+                y1={pOrig.y}
+                x2={pRefl.x}
+                y2={pRefl.y}
+                stroke="#64748b"
+                strokeWidth={1.1}
+                strokeDasharray="4 3"
+              />
+            )}
+            {showEqualDist && (
+              <g stroke="#64748b" strokeWidth={1.1}>
+                {Array.isArray(tick1) &&
+                  tick1.map((t, ti) => <line key={`tc1-${ti}`} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} />)}
+                {Array.isArray(tick2) &&
+                  tick2.map((t, ti) => <line key={`tc2-${ti}`} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} />)}
+              </g>
+            )}
+          </g>
+        );
+      }
+    });
+
+    const namedSymPoints: Record<string, Point2D> = {
+      [centerName]: centerPoint,
+      I: centerPoint,
+    };
+    origPoints.forEach((p, idx) => {
+      namedSymPoints[origNames[idx] || `A${idx + 1}`] = p;
+    });
+    reflPoints.forEach((p, idx) => {
+      namedSymPoints[reflNames[idx] || `A'${idx + 1}`] = p;
+    });
+
+    return (
+      <g id="symmetry-group">
+        {/* Đường nối và ký hiệu vuông góc/bằng nhau */}
+        {connectingElementsSvg}
+
+        {/* Trục / Tâm */}
+        {axisSvg}
+        {centerSvg}
+
+        {/* Hình gốc */}
+        <g id="symmetry-original-shape">
+          {renderShapeGeometry(origPoints, origColor, origWidth, origDash, sym.originalFill)}
+        </g>
+
+        {/* Hình đối xứng */}
+        <g id="symmetry-reflected-shape">
+          {renderShapeGeometry(reflPoints, reflColor, reflWidth, reflDash, sym.reflectedFill)}
+        </g>
+
+        {/* Điểm & Nhãn hình gốc (Draggable) */}
+        <g id="original-vertices">
+          {origPoints.map((p, idx) => {
+            const name = origNames[idx] || `A${idx + 1}`;
+            return (
+              <g key={`orig-v-${idx}`} className="cursor-grab active:cursor-grabbing">
+                <circle
+                  cx={p.x}
+                  cy={p.y}
+                  r={14}
+                  fill="transparent"
+                  onPointerDown={(e) => handlePointerDown(idx, e)}
+                />
+                <circle cx={p.x} cy={p.y} r={draggingVertex === idx ? 4.5 : 3} fill={origColor} />
+                {showOrigLabels && (
+                  <text
+                    x={p.x - 10}
+                    y={p.y - 10}
+                    fontSize={fontSize}
+                    fontStyle="italic"
+                    fontWeight="bold"
+                    fill={origColor}
+                    fontFamily={fontFamily}
+                  >
+                    {name}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </g>
+
+        {/* Điểm & Nhãn hình đối xứng */}
+        <g id="reflected-vertices">
+          {reflPoints.map((p, idx) => {
+            const name = reflNames[idx] || `A'${idx + 1}`;
+            return (
+              <g key={`refl-v-${idx}`}>
+                <circle cx={p.x} cy={p.y} r={3} fill={reflColor} />
+                {showReflLabels && (
+                  <text
+                    x={p.x + 10}
+                    y={p.y - 10}
+                    fontSize={fontSize}
+                    fontStyle="italic"
+                    fontWeight="bold"
+                    fill={reflColor}
+                    fontFamily={fontFamily}
+                  >
+                    {name}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </g>
+
+        {/* Các đường phụ tự do */}
+        {renderAuxiliaryElements(namedSymPoints, sym || {})}
+        {renderAuxiliaryElements(namedSymPoints, data)}
+      </g>
+    );
+  };
+
   return (
     <svg
       ref={svgRef}
@@ -3595,6 +5045,8 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
       {subType === 'line-ray' && renderLineRay()}
       {subType === 'circle' && renderCircle()}
       {subType === 'angle' && renderAngle()}
+      {subType === 'polygon' && renderRegularPolygon()}
+      {subType === 'symmetry' && renderSymmetry()}
     </svg>
   );
 };

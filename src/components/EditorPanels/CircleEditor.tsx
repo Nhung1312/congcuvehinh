@@ -59,10 +59,10 @@ const PRESET_OPTIONS: { type: CirclePresetType; label: string; icon: string; des
     desc: 'Từ P kẻ PA, PB tiếp xúc (O), nối OP',
   },
   {
-    type: 'secant',
-    label: 'Cát tuyến',
-    icon: '↗️',
-    desc: 'Đường thẳng PCD cắt đường tròn tại C, D',
+    type: 'tangent-chord-angle',
+    label: 'Tiếp tuyến & Dây cung',
+    icon: '📐',
+    desc: 'Góc ∠BAx giữa tiếp tuyến Ax và dây cung AB',
   },
   {
     type: 'inscribed-angle',
@@ -71,10 +71,28 @@ const PRESET_OPTIONS: { type: CirclePresetType; label: string; icon: string; des
     desc: 'Góc ∠APB nội tiếp và góc ∠AOB ở tâm',
   },
   {
+    type: 'interior-angle',
+    label: 'Góc đỉnh bên trong (O)',
+    icon: '✖️',
+    desc: 'Góc ∠BEC của hai dây cung AB và CD cắt nhau tại E',
+  },
+  {
+    type: 'exterior-angle',
+    label: 'Góc đỉnh bên ngoài (O)',
+    icon: '🔺',
+    desc: 'Góc ∠P của 2 cát tuyến hoặc tiếp tuyến cắt nhau ngoài (O)',
+  },
+  {
+    type: 'secant',
+    label: 'Cát tuyến',
+    icon: '↗️',
+    desc: 'Đường thẳng PCD cắt đường tròn tại C, D',
+  },
+  {
     type: 'two-circles',
-    label: 'Hai đường tròn',
+    label: 'Hai đường tròn & Tiếp tuyến',
     icon: '♾️',
-    desc: 'Hai đường tròn (O1, R1) và (O2, R2) cắt nhau',
+    desc: 'Vị trí tương đối và các tiếp tuyến chung',
   },
 ];
 
@@ -113,13 +131,15 @@ export const CircleEditor: React.FC<CircleEditorProps> = ({ circle, onChangeCirc
       points: newPoints,
       showRadius: newPreset === 'basic' || newPreset === 'tangent-point' || newPreset === 'inscribed-angle',
       showDiameter: newPreset === 'diameter-chord',
-      showChord: newPreset === 'diameter-chord',
+      showChord: newPreset === 'diameter-chord' || newPreset === 'tangent-chord-angle' || newPreset === 'interior-angle',
       showArc: newPreset === 'arc',
-      showTangent: newPreset === 'tangent-point' || newPreset === 'two-tangents',
+      showTangent: newPreset === 'tangent-point' || newPreset === 'two-tangents' || newPreset === 'tangent-chord-angle',
       tangentType: newPreset === 'two-tangents' ? 'two-tangents' : 'at-point',
-      showSecant: newPreset === 'secant',
+      showSecant: newPreset === 'secant' || newPreset === 'exterior-angle',
       showInscribedAngle: newPreset === 'inscribed-angle',
       showSecondCircle: newPreset === 'two-circles',
+      twoCirclesRelativePos: newPreset === 'two-circles' ? (circle.twoCirclesRelativePos || 'intersecting') : undefined,
+      commonTangentType: newPreset === 'two-circles' ? (circle.commonTangentType || 'outer') : undefined,
     });
   };
 
@@ -668,6 +688,149 @@ export const CircleEditor: React.FC<CircleEditorProps> = ({ circle, onChangeCirc
                 }
                 className="w-full px-2 py-1 border border-slate-300 rounded text-center text-xs font-bold"
               />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 7. Vị trí tương đối 2 đường tròn & Tiếp tuyến chung (Tool 4) */}
+      <div className="p-3 bg-white rounded-lg border border-slate-200 space-y-3 shadow-xs">
+        <span className="font-bold text-[11px] text-slate-700 uppercase tracking-wide flex items-center gap-1.5 pb-1 border-b border-slate-100">
+          <Circle className="w-3.5 h-3.5 text-indigo-600" />
+          Hai đường tròn & Tiếp tuyến chung
+        </span>
+
+        <label className="flex items-center gap-1.5 cursor-pointer font-semibold text-slate-700 text-xs">
+          <input
+            type="checkbox"
+            checked={circle.showSecondCircle || false}
+            onChange={(e) =>
+              onChangeCircle({
+                ...circle,
+                showSecondCircle: e.target.checked,
+                twoCirclesRelativePos: circle.twoCirclesRelativePos || 'intersecting',
+                commonTangentType: circle.commonTangentType || 'outer',
+              })
+            }
+            className="rounded text-indigo-600"
+          />
+          <span>Bật đường tròn thứ hai (O', R')</span>
+        </label>
+
+        {circle.showSecondCircle && (
+          <div className="space-y-3 pl-4 pt-1 border-t border-slate-100">
+            {/* Vị trí tương đối */}
+            <div>
+              <label className="block text-[10px] text-slate-500 mb-1 font-bold">Vị trí tương đối</label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  { id: 'intersecting', label: 'Cắt nhau (2 điểm)', desc: 'R - r < OO\' < R + r' },
+                  { id: 'tangent-external', label: 'Tiếp xúc ngoài', desc: 'OO\' = R + r' },
+                  { id: 'tangent-internal', label: 'Tiếp xúc trong', desc: 'OO\' = R - r' },
+                  { id: 'external', label: 'Ở ngoài nhau', desc: 'OO\' > R + r' },
+                  { id: 'internal', label: 'Đựng nhau', desc: 'OO\' < R - r' },
+                  { id: 'concentric', label: 'Đồng tâm (O ≡ O\')', desc: 'OO\' = 0' },
+                ].map((pos) => {
+                  const isSel = (circle.twoCirclesRelativePos || 'intersecting') === pos.id;
+                  return (
+                    <button
+                      key={pos.id}
+                      type="button"
+                      onClick={() => {
+                        const newPts = [...(circle.points || getCirclePresetPoints('two-circles'))];
+                        const center = newPts[0] || { x: 220, y: 220 };
+                        const r1 = circle.radius || 100;
+                        const r2 = circle.secondRadius || 65;
+                        if (pos.id === 'tangent-external') {
+                          newPts[1] = { x: center.x + r1 + r2, y: center.y };
+                        } else if (pos.id === 'tangent-internal') {
+                          newPts[1] = { x: center.x + Math.max(20, r1 - r2), y: center.y };
+                        } else if (pos.id === 'external') {
+                          newPts[1] = { x: center.x + r1 + r2 + 40, y: center.y };
+                        } else if (pos.id === 'internal') {
+                          newPts[1] = { x: center.x + 25, y: center.y };
+                        } else if (pos.id === 'concentric') {
+                          newPts[1] = { x: center.x, y: center.y };
+                        } else {
+                          newPts[1] = { x: center.x + (r1 + r2) * 0.75, y: center.y };
+                        }
+
+                        onChangeCircle({
+                          ...circle,
+                          twoCirclesRelativePos: pos.id as any,
+                          points: newPts,
+                        });
+                      }}
+                      className={`p-1.5 text-left rounded border transition ${
+                        isSel
+                          ? 'border-indigo-600 bg-indigo-50/80 font-bold text-indigo-900'
+                          : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <div className="text-[11px]">{pos.label}</div>
+                      <div className="text-[9px] text-slate-400 font-normal">{pos.desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Tiếp tuyến chung */}
+            <div>
+              <label className="block text-[10px] text-slate-500 mb-1 font-bold">Tiếp tuyến chung</label>
+              <div className="grid grid-cols-4 gap-1">
+                {[
+                  { id: 'none', label: 'Không vẽ' },
+                  { id: 'outer', label: 'Tiếp tuyến ngoài' },
+                  { id: 'inner', label: 'Tiếp tuyến trong' },
+                  { id: 'both', label: 'Tất cả' },
+                ].map((tan) => (
+                  <button
+                    key={tan.id}
+                    type="button"
+                    onClick={() =>
+                      onChangeCircle({
+                        ...circle,
+                        commonTangentType: tan.id as any,
+                      })
+                    }
+                    className={`px-1 py-1 text-[10px] rounded border transition text-center ${
+                      (circle.commonTangentType || 'none') === tan.id
+                        ? 'border-indigo-600 bg-indigo-50 font-bold text-indigo-900'
+                        : 'border-slate-200 bg-white text-slate-600'
+                    }`}
+                  >
+                    {tan.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Bán kính & Tên tâm đường tròn 2 */}
+            <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+              <div>
+                <label className="block text-[10px] text-slate-500 mb-1">Tên tâm đường tròn 2</label>
+                <input
+                  type="text"
+                  value={circle.secondCenterName || "O'"}
+                  onChange={(e) => onChangeCircle({ ...circle, secondCenterName: e.target.value })}
+                  className="w-full px-2 py-1 border border-slate-300 rounded font-bold text-center text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-slate-500 mb-1">
+                  Bán kính R' ({circle.secondRadius || 65}px)
+                </label>
+                <input
+                  type="range"
+                  min={30}
+                  max={140}
+                  step={2}
+                  value={circle.secondRadius || 65}
+                  onChange={(e) => onChangeCircle({ ...circle, secondRadius: Number(e.target.value) })}
+                  className="w-full accent-indigo-600 mt-1"
+                />
+              </div>
             </div>
           </div>
         )}

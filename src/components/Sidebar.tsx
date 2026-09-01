@@ -14,6 +14,10 @@ import {
   Activity,
   Layers,
   MoveHorizontal,
+  Sparkles,
+  Box,
+  Hexagon,
+  Repeat,
 } from 'lucide-react';
 import { ToolCategory, ToolType } from '../types';
 
@@ -28,68 +32,22 @@ interface ToolItem {
   category: ToolCategory;
   icon: React.ReactNode;
   badge?: string;
+  isSpecial?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentType, onSelectTool }) => {
   const categories: { id: ToolCategory; title: string; items: ToolItem[] }[] = [
     {
-      id: 'statistics',
-      title: 'THỐNG KÊ – BIỂU ĐỒ',
+      id: 'ai',
+      title: '🤖 TRỢ LÝ AI TOÁN HỌC',
       items: [
         {
-          type: 'PIE_CHART',
-          label: 'Biểu đồ quạt tròn',
-          category: 'statistics',
-          icon: <PieIcon className="w-4 h-4 text-emerald-600" />,
-          badge: 'Toán 7',
-        },
-        {
-          type: 'BAR_CHART',
-          label: 'Biểu đồ cột',
-          category: 'statistics',
-          icon: <BarChart3 className="w-4 h-4 text-blue-600" />,
-          badge: 'Toán 6',
-        },
-        {
-          type: 'DOUBLE_BAR_CHART',
-          label: 'Biểu đồ cột kép',
-          category: 'statistics',
-          icon: <BarChart2 className="w-4 h-4 text-indigo-600" />,
-          badge: 'Toán 6',
-        },
-        {
-          type: 'LINE_CHART',
-          label: 'Biểu đồ đoạn thẳng',
-          category: 'statistics',
-          icon: <LineIcon className="w-4 h-4 text-purple-600" />,
-          badge: 'Toán 7',
-        },
-        {
-          type: 'PICTOGRAM',
-          label: 'Biểu đồ tranh',
-          category: 'statistics',
-          icon: <Smile className="w-4 h-4 text-amber-600" />,
-          badge: 'Toán 6',
-        },
-      ],
-    },
-    {
-      id: 'coordinates',
-      title: 'TỌA ĐỘ – ĐỒ THỊ',
-      items: [
-        {
-          type: 'COORDINATE_PLANE',
-          label: 'Mặt phẳng tọa độ Oxy',
-          category: 'coordinates',
-          icon: <Compass className="w-4 h-4 text-rose-600" />,
-          badge: 'Toán 7-8',
-        },
-        {
-          type: 'FUNCTION_GRAPH',
-          label: 'Đồ thị hàm số',
-          category: 'coordinates',
-          icon: <TrendingUp className="w-4 h-4 text-cyan-600" />,
-          badge: 'Toán 8-9',
+          type: 'AI_GEOMETRY',
+          label: 'AI Tự Dựng Hình',
+          category: 'ai',
+          icon: <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />,
+          badge: 'Mới ✨',
+          isSpecial: true,
         },
       ],
     },
@@ -129,6 +87,94 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentType, onSelectTool }) =
           category: 'geometry',
           icon: <Circle className="w-4 h-4 text-indigo-600" />,
           badge: 'Toán 9',
+        },
+        {
+          type: 'GEOMETRY_POLYGON',
+          label: 'Đa giác đều (3, 4, 5, 6, 8)',
+          category: 'geometry',
+          icon: <Hexagon className="w-4 h-4 text-emerald-600" />,
+          badge: 'Toán 6, 9',
+        },
+        {
+          type: 'GEOMETRY_SYMMETRY',
+          label: 'Đối xứng trục & Đối xứng tâm',
+          category: 'geometry',
+          icon: <Repeat className="w-4 h-4 text-blue-600" />,
+          badge: 'Toán 6, 8',
+        },
+      ],
+    },
+    {
+      id: 'spatial',
+      title: 'HÌNH HỌC KHÔNG GIAN',
+      items: [
+        {
+          type: 'GEOMETRY_SPATIAL',
+          label: 'Khối hộp, Lăng trụ, Chóp',
+          category: 'spatial',
+          icon: <Box className="w-4 h-4 text-violet-600" />,
+          badge: 'Toán 7-8-9',
+        },
+      ],
+    },
+    {
+      id: 'coordinates',
+      title: 'TỌA ĐỘ – ĐỒ THỊ',
+      items: [
+        {
+          type: 'COORDINATE_PLANE',
+          label: 'Mặt phẳng tọa độ Oxy',
+          category: 'coordinates',
+          icon: <Compass className="w-4 h-4 text-rose-600" />,
+          badge: 'Toán 7-8',
+        },
+        {
+          type: 'FUNCTION_GRAPH',
+          label: 'Đồ thị hàm số',
+          category: 'coordinates',
+          icon: <TrendingUp className="w-4 h-4 text-cyan-600" />,
+          badge: 'Toán 8-9',
+        },
+      ],
+    },
+    {
+      id: 'statistics',
+      title: 'THỐNG KÊ – BIỂU ĐỒ',
+      items: [
+        {
+          type: 'PIE_CHART',
+          label: 'Biểu đồ quạt tròn',
+          category: 'statistics',
+          icon: <PieIcon className="w-4 h-4 text-emerald-600" />,
+          badge: 'Toán 7',
+        },
+        {
+          type: 'BAR_CHART',
+          label: 'Biểu đồ cột',
+          category: 'statistics',
+          icon: <BarChart3 className="w-4 h-4 text-blue-600" />,
+          badge: 'Toán 6',
+        },
+        {
+          type: 'DOUBLE_BAR_CHART',
+          label: 'Biểu đồ cột kép',
+          category: 'statistics',
+          icon: <BarChart2 className="w-4 h-4 text-indigo-600" />,
+          badge: 'Toán 6',
+        },
+        {
+          type: 'LINE_CHART',
+          label: 'Biểu đồ đoạn thẳng',
+          category: 'statistics',
+          icon: <LineIcon className="w-4 h-4 text-purple-600" />,
+          badge: 'Toán 7',
+        },
+        {
+          type: 'PICTOGRAM',
+          label: 'Biểu đồ tranh',
+          category: 'statistics',
+          icon: <Smile className="w-4 h-4 text-amber-600" />,
+          badge: 'Toán 6',
         },
       ],
     },
