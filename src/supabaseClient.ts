@@ -1,7 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js';
 
-// Cấp đường link ảo tạm thời để tránh lỗi trắng trang khi chưa làm Database
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://tamthoi.supabase.co'
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'ma-khoa-tam-thoi'
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ktcadtrsjzfmidtsyeyp.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_kiNVIP_UEIOu5rIT5ENwLw_G119RzPk';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
