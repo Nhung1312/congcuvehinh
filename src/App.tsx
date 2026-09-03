@@ -33,80 +33,63 @@ import { AIGeometryModal } from './components/AIGeometryModal';
 import { SpatialGeometryEditor } from './components/EditorPanels/SpatialGeometryEditor';
 import { FractionBarEditor } from './components/EditorPanels/FractionBarEditor';
 import { NumberLineEditor } from './components/EditorPanels/NumberLineEditor';
+import { authService, UserProfile, TrialStatus } from './storage/authService';
+import { cloudStorage } from './storage/cloudStorageService';
+import { AuthModal } from './components/AuthModal';
+import { SubscriptionModal } from './components/SubscriptionModal';
+import { Crown, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 export const App: React.FC = () => {
-  // Trạng thái quản lý bản quyền
-  const [isLicensed, setIsLicensed] = useState(false);
-  const [showActivationModal, setShowActivationModal] = useState(false);
-  const [licenseKey, setLicenseKey] = useState('');
-  const [email, setEmail] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
+  // Trạng thái Tài khoản & Bản quyền 15 ngày / VIP
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => authService.getCurrentUser());
+  const [trialStatus, setTrialStatus] = useState<TrialStatus>(() => authService.getTrialStatus(authService.getCurrentUser()));
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
 
-  // Kiểm tra xem máy này đã kích hoạt bản quyền từ trước chưa
-  useEffect(() => {
-    const savedEmail = localStorage.getItem('user_licensed_email');
-    if (savedEmail) {
-      setIsLicensed(true);
-    }
-  }, []);
-
-  // Hàm xử lý kích hoạt bản quyền
-  const handleActivate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg('');
-    setSuccessMsg('');
-
-    if (!licenseKey || !email) {
-      setErrorMsg('Vui lòng nhập đầy đủ Email và Mã bản quyền!');
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('licenses')
-        .select('*')
-        .eq('license_key', licenseKey.trim())
-        .single();
-
-      if (error || !data) {
-        setErrorMsg('Mã bản quyền không tồn tại!');
-        return;
-      }
-
-      if (data.is_activated) {
-        setErrorMsg('Mã bản quyền này đã được kích hoạt ở thiết bị khác!');
-        return;
-      }
-
-      const { error: updateError } = await supabase
-        .from('licenses')
-        .update({ is_activated: true, owner_email: email.trim() })
-        .eq('license_key', licenseKey.trim());
-
-      if (updateError) {
-        setErrorMsg('Có lỗi xảy ra, vui lòng thử lại!');
-        return;
-      }
-
-      localStorage.setItem('user_licensed_email', email.trim());
-      setIsLicensed(true);
-      setSuccessMsg('Kích hoạt thành công! Cảm ơn bạn đã mua bản quyền.');
-      setTimeout(() => setShowActivationModal(false), 2000);
-
-    } catch (err) {
-      setErrorMsg('Lỗi kết nối hệ thống!');
-    }
+  // Làm mới trạng thái tài khoản & ngày dùng thử
+  const refreshAuthAndTrial = () => {
+    const user = authService.getCurrentUser();
+    setCurrentUser(user);
+    const status = authService.getTrialStatus(user);
+    setTrialStatus(status);
   };
 
-  // Quản lý Lịch sử (Undo/Redo) với giới hạn 50 bước
-  const [historyState, setHistoryState] = useState({
-    past: [] as ChartDocument[],
-    present: TEXTBOOK_TEMPLATES[0] as ChartDocument,
-    future: [] as ChartDocument[]
+  useEffect(() => {
+    refreshAuthAndTrial();
+  }, []);
+
+  // Quản lý Lịch sử (Undo/Redo) với giới hạn 50 bước, tự động khôi phục bản nháp nếu có
+  const [historyState, setHistoryState] = useState(() => {
+    try {
+      const savedDraft = localStorage.getItem('toan_thcs_current_draft');
+      if (savedDraft) {
+        const parsed = JSON.parse(savedDraft);
+        if (parsed && parsed.type && parsed.data) {
+          return {
+            past: [] as ChartDocument[],
+            present: parsed as ChartDocument,
+            future: [] as ChartDocument[],
+          };
+        }
+      }
+    } catch {}
+    return {
+      past: [] as ChartDocument[],
+      present: TEXTBOOK_TEMPLATES[0] as ChartDocument,
+      future: [] as ChartDocument[],
+    };
   });
   
   const currentDoc = historyState.present;
+
+  // Tự động lưu bản vẽ nháp hiện tại vào localStorage để tránh mất dữ liệu khi F5
+  useEffect(() => {
+    try {
+      if (historyState.present) {
+        localStorage.setItem('toan_thcs_current_draft', JSON.stringify(historyState.present));
+      }
+    } catch {}
+  }, [historyState.present]);
 
   const setCurrentDoc = (value: React.SetStateAction<ChartDocument>) => {
     setHistoryState((prev) => {
@@ -522,6 +505,16 @@ export const App: React.FC = () => {
     });
   };
 
+  const handleSaveDoc = async () => {
+    await storage.save(currentDoc);
+    if (currentUser) {
+      await cloudStorage.saveToCloud(currentDoc, currentUser.id);
+      showToast('Đã lưu vào máy & tự động đồng bộ lên Đám mây!');
+    } else {
+      showToast('Đã lưu hình vào máy! (Đăng nhập để tự động lưu Đám mây)');
+    }
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
@@ -535,6 +528,11 @@ export const App: React.FC = () => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
         e.preventDefault();
         handleRedo();
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleSaveDoc();
       }
 
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
@@ -553,7 +551,7 @@ export const App: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentDoc]);
+  }, [currentDoc, currentUser]);
 
   const handleToggleExamMode = () => {
     setCurrentDoc((prev) => ({
@@ -565,9 +563,13 @@ export const App: React.FC = () => {
     }));
   };
 
-  const handleSaveDoc = async () => {
-    await storage.save(currentDoc);
-    showToast('Đã lưu hình vẽ vào bộ nhớ máy thành công!');
+  const handleSaveToCloud = async () => {
+    if (!currentUser) {
+      setShowAuthModal(true);
+      return;
+    }
+    await cloudStorage.saveToCloud(currentDoc, currentUser.id);
+    showToast('Đã lưu hình vẽ lên Đám mây cá nhân!');
   };
 
   const getSvgElement = (): SVGSVGElement | null => {
@@ -877,23 +879,61 @@ export const App: React.FC = () => {
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-100 text-slate-900 font-sans">
       
-      {/* THANH THÔNG BÁO TRẢI NGHIỆM MIỄN PHÍ */}
-      <div className="bg-blue-50 text-blue-800 px-4 py-2.5 text-center text-sm font-medium border-b border-blue-200 flex items-center justify-center shrink-0">
-        <span>
-          🎉 Chào mừng thầy cô trải nghiệm miễn phí <b>Công cụ Vẽ hình Toán THCS</b>. Mọi góp ý hoặc cần hỗ trợ vui lòng liên hệ Zalo: <b>0775172026</b>
-        </span>
-      </div>
+      {/* THANH THÔNG BÁO BẢN QUYỀN & 15 NGÀY DÙNG THỬ */}
+      {trialStatus.isVip ? (
+        <div className="bg-gradient-to-r from-amber-500/15 via-emerald-500/15 to-blue-500/15 text-slate-800 px-4 py-2 text-center text-xs font-medium border-b border-amber-200 flex items-center justify-center gap-2 shrink-0">
+          <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>
+            ✨ <b>Bản quyền VIP Trọn Đời:</b> Không giới hạn tính năng vẽ hình, AI Dựng hình & Lưu trữ Đám mây. Hỗ trợ Zalo: <b>0775172026</b>
+          </span>
+        </div>
+      ) : trialStatus.isExpired ? (
+        <div className="bg-rose-500 text-white px-4 py-2.5 text-center text-xs font-bold border-b border-rose-600 flex items-center justify-between gap-3 shrink-0 shadow-md">
+          <div className="flex items-center gap-2 mx-auto sm:mx-0">
+            <AlertTriangle className="w-4 h-4 text-amber-300 shrink-0 animate-bounce" />
+            <span>
+              ⚠️ <b>Đã hết hạn 15 ngày dùng thử miễn phí!</b> Vui lòng nâng cấp bản quyền để tiếp tục sử dụng trọn đời mọi công cụ và dữ liệu đám mây.
+            </span>
+          </div>
+          <button
+            onClick={() => setShowSubscriptionModal(true)}
+            className="px-3 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded text-xs shadow-xs uppercase tracking-wide transition shrink-0"
+          >
+            Chuyển khoản / Kích hoạt ngay
+          </button>
+        </div>
+      ) : (
+        <div className="bg-blue-50 text-blue-900 px-4 py-2 text-center text-xs font-medium border-b border-blue-200 flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2 mx-auto sm:mx-0">
+            <Crown className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              🎉 Thầy/Cô đang dùng bản trải nghiệm miễn phí <b>15 ngày</b> (Còn <b>{trialStatus.daysRemaining} ngày</b>). Hãy nâng cấp Vip để tiếp tục dùng trọn đời.
+            </span>
+          </div>
+          <button
+            onClick={() => setShowSubscriptionModal(true)}
+            className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-[11px] shadow-xs transition shrink-0"
+          >
+            <span>Nâng cấp VIP</span>
+          </button>
+        </div>
+      )}
 
       {/* 1. Header trên cùng */}
       <Header
         currentDoc={currentDoc}
         onNewDoc={() => handleSelectTool('PIE_CHART')}
         onSaveDoc={handleSaveDoc}
+        onSaveToCloud={handleSaveToCloud}
         onOpenSaved={() => setShowSavedModal(true)}
         onOpenTemplates={() => setShowTemplatesModal(true)}
         onOpenDataTable={() => setShowDataTableModal(true)}
         onOpenHelp={() => setShowHelpModal(true)}
         onOpenAIModal={() => setShowAIModal(true)}
+        onOpenAuthModal={() => setShowAuthModal(true)}
+        onOpenSubscriptionModal={() => setShowSubscriptionModal(true)}
+        currentUser={currentUser}
+        trialStatus={trialStatus}
         onCopyImage={handleCopyImage}
         onCopySvg={handleCopySvg}
         onCopyTikz={handleCopyTikz}
@@ -946,62 +986,41 @@ export const App: React.FC = () => {
         </main>
       </div>
 
-      {/* 3. Modal Kích hoạt bản quyền */}
-      {showActivationModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-2xl relative">
-            <button 
-              onClick={() => setShowActivationModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 font-bold"
-            >
-              ✕
-            </button>
-            
-            <h3 className="text-lg font-bold text-slate-800 text-center mb-1">Kích Hoạt Bản Quyền</h3>
-            <p className="text-xs text-slate-500 text-center mb-5">Mở khóa vĩnh viễn mọi tính năng (Giá: 299.000đ)</p>
-            
-            <form onSubmit={handleActivate} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Email của bạn:</label>
-                <input 
-                  type="email" 
-                  value={email} 
-                  onChange={(e) => setEmail(e.target.value)} 
-                  placeholder="nguyenvana@gmail.com"
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+      {/* 3. Modal Đăng nhập & Đăng ký Lưu trữ Đám mây (15 ngày dùng thử) */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        currentUser={currentUser}
+        trialStatus={trialStatus}
+        onAuthSuccess={(user) => {
+          refreshAuthAndTrial();
+          showToast(`Đăng nhập thành công! Chào mừng ${user.fullName}.`);
+        }}
+        onLogout={() => {
+          authService.logout();
+          refreshAuthAndTrial();
+          showToast('Đã đăng xuất tài khoản.');
+        }}
+        onOpenSubscriptionModal={() => {
+          setShowAuthModal(false);
+          setShowSubscriptionModal(true);
+        }}
+      />
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Mã bản quyền (License Key):</label>
-                <input 
-                  type="text" 
-                  value={licenseKey} 
-                  onChange={(e) => setLicenseKey(e.target.value)} 
-                  placeholder="Nhập mã nhận được từ tác giả..."
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+      {/* 4. Modal Kích hoạt bản quyền VIP & Hướng dẫn chuyển khoản Agribank */}
+      <SubscriptionModal
+        isOpen={showSubscriptionModal}
+        onClose={() => setShowSubscriptionModal(false)}
+        currentUser={currentUser}
+        trialStatus={trialStatus}
+        onActivateSuccess={() => {
+          refreshAuthAndTrial();
+          showToast('Kích hoạt bản quyền VIP thành công!');
+        }}
+        forcedExpired={trialStatus.isExpired}
+      />
 
-              {errorMsg && <p className="text-red-500 text-xs">{errorMsg}</p>}
-              {successMsg && <p className="text-emerald-600 text-xs font-medium">{successMsg}</p>}
-
-              <button 
-                type="submit" 
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-sm transition shadow-md"
-              >
-                Xác Nhận Kích Hoạt
-              </button>
-            </form>
-
-            <div className="mt-4 pt-4 border-t border-slate-100 text-center text-xs text-slate-400">
-              Cần hỗ trợ mua mã? Liên hệ Zalo: 0775172026
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 4. Các Dialog Modals khác */}
+      {/* 5. Các Dialog Modals khác */}
       <DataTableModal
         isOpen={showDataTableModal}
         onClose={() => setShowDataTableModal(false)}
@@ -1018,6 +1037,12 @@ export const App: React.FC = () => {
         isOpen={showSavedModal}
         onClose={() => setShowSavedModal(false)}
         onSelectDoc={(doc) => setCurrentDoc(doc)}
+        currentUser={currentUser}
+        onOpenAuthModal={() => {
+          setShowSavedModal(false);
+          setShowAuthModal(true);
+        }}
+        onShowToast={(msg) => showToast(msg)}
       />
 
       <HelpModal

@@ -16,18 +16,29 @@ import {
   Download,
   Upload,
   Settings as SettingsIcon,
+  Crown,
+  User,
+  Cloud,
+  Clock,
+  LogOut,
 } from 'lucide-react';
 import { ChartDocument } from '../types';
+import { UserProfile, TrialStatus } from '../storage/authService';
 
 interface HeaderProps {
   currentDoc: ChartDocument;
   onNewDoc: () => void;
   onSaveDoc: () => void;
+  onSaveToCloud?: () => void;
   onOpenSaved: () => void;
   onOpenTemplates: () => void;
   onOpenDataTable: () => void;
   onOpenHelp: () => void;
   onOpenAIModal?: () => void;
+  onOpenAuthModal?: () => void;
+  onOpenSubscriptionModal?: () => void;
+  currentUser?: UserProfile | null;
+  trialStatus?: TrialStatus;
   onCopyImage: () => void;
   onCopySvg: () => void;
   onCopyTikz: () => void; // Thêm prop onCopyTikz
@@ -48,11 +59,16 @@ export const Header: React.FC<HeaderProps> = ({
   currentDoc,
   onNewDoc,
   onSaveDoc,
+  onSaveToCloud,
   onOpenSaved,
   onOpenTemplates,
   onOpenDataTable,
   onOpenHelp,
   onOpenAIModal,
+  onOpenAuthModal,
+  onOpenSubscriptionModal,
+  currentUser,
+  trialStatus,
   onCopyImage,
   onCopySvg,
   onCopyTikz, // Lấy prop từ App.tsx
@@ -326,6 +342,53 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
         </div>
+
+        {/* Trial & VIP Status Badge + Subscription Action */}
+        {trialStatus && onOpenSubscriptionModal && (
+          <button
+            onClick={onOpenSubscriptionModal}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-bold transition border shadow-xs ${
+              trialStatus.isVip
+                ? 'bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-300 border-amber-500/40 hover:from-amber-500/30'
+                : trialStatus.isExpired
+                ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 hover:bg-rose-500/30 animate-pulse'
+                : 'bg-blue-500/20 text-blue-300 border-blue-500/40 hover:bg-blue-500/30'
+            }`}
+            title={trialStatus.isVip ? 'Bản quyền VIP Trọn đời' : 'Click để xem thông tin chuyển khoản Agribank / nhập mã kích hoạt'}
+          >
+            {trialStatus.isVip ? (
+              <Crown className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+            ) : trialStatus.isExpired ? (
+              <Clock className="w-3.5 h-3.5 text-rose-400" />
+            ) : (
+              <Clock className="w-3.5 h-3.5 text-blue-400" />
+            )}
+            <span className="hidden xl:inline">
+              {trialStatus.isVip ? 'VIP Trọn Đời' : trialStatus.isExpired ? 'Hết hạn 15 ngày' : `Dùng thử: Còn ${trialStatus.daysRemaining} ngày`}
+            </span>
+            {!trialStatus.isVip && (
+              <span className="bg-amber-400 text-slate-950 text-[10px] px-1.5 py-0.2 rounded font-extrabold ml-0.5">
+                Nâng cấp
+              </span>
+            )}
+          </button>
+        )}
+
+        {/* User Account / Cloud Sync Button */}
+        {onOpenAuthModal && (
+          <button
+            onClick={onOpenAuthModal}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+            title="Đăng nhập tài khoản & Lưu trữ Đám mây"
+          >
+            <div className="w-5 h-5 rounded-full bg-blue-600/30 text-blue-400 flex items-center justify-center text-[10px] font-bold">
+              {currentUser ? currentUser.fullName.charAt(0).toUpperCase() : <User className="w-3 h-3" />}
+            </div>
+            <span className="hidden md:inline max-w-[90px] truncate">
+              {currentUser ? currentUser.fullName : 'Đăng nhập'}
+            </span>
+          </button>
+        )}
 
         {/* Nút Hướng dẫn */}
         <button
