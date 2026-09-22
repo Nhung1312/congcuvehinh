@@ -33,7 +33,7 @@ import { AIGeometryModal } from './components/AIGeometryModal';
 import { SpatialGeometryEditor } from './components/EditorPanels/SpatialGeometryEditor';
 import { FractionBarEditor } from './components/EditorPanels/FractionBarEditor';
 import { NumberLineEditor } from './components/EditorPanels/NumberLineEditor';
-import { authService, UserProfile, TrialStatus } from './storage/authService';
+import { authService, UserProfile, TrialStatus, ENABLE_TRIAL_LIMIT } from './storage/authService';
 import { cloudStorage } from './storage/cloudStorageService';
 import { AuthModal } from './components/AuthModal';
 import { SubscriptionModal } from './components/SubscriptionModal';
@@ -879,44 +879,56 @@ export const App: React.FC = () => {
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-100 text-slate-900 font-sans">
       
-      {/* THANH THÔNG BÁO BẢN QUYỀN & 15 NGÀY DÙNG THỬ */}
-      {trialStatus.isVip ? (
-        <div className="bg-gradient-to-r from-amber-500/15 via-emerald-500/15 to-blue-500/15 text-slate-800 px-4 py-2 text-center text-xs font-medium border-b border-amber-200 flex items-center justify-center gap-2 shrink-0">
-          <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>
-            ✨ <b>Bản quyền VIP Trọn Đời:</b> Không giới hạn tính năng vẽ hình, AI Dựng hình & Lưu trữ Đám mây. Hỗ trợ Zalo: <b>0775172026</b>
-          </span>
-        </div>
-      ) : trialStatus.isExpired ? (
-        <div className="bg-rose-500 text-white px-4 py-2.5 text-center text-xs font-bold border-b border-rose-600 flex items-center justify-between gap-3 shrink-0 shadow-md">
-          <div className="flex items-center gap-2 mx-auto sm:mx-0">
-            <AlertTriangle className="w-4 h-4 text-amber-300 shrink-0 animate-bounce" />
+      {/* THANH THÔNG BÁO BẢN QUYỀN & DÙNG THỬ */}
+      {ENABLE_TRIAL_LIMIT ? (
+        trialStatus.isVip ? (
+          <div className="bg-gradient-to-r from-amber-500/15 via-emerald-500/15 to-blue-500/15 text-slate-800 px-4 py-2 text-center text-xs font-medium border-b border-amber-200 flex items-center justify-center gap-2 shrink-0">
+            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>
-              ⚠️ <b>Đã hết hạn 15 ngày dùng thử miễn phí!</b> Vui lòng nâng cấp bản quyền để tiếp tục sử dụng trọn đời mọi công cụ và dữ liệu đám mây.
+              ✨ <b>Bản quyền VIP Trọn Đời:</b> Không giới hạn tính năng vẽ hình, AI Dựng hình & Lưu trữ Đám mây. Hỗ trợ Zalo: <b>0775172026</b>
             </span>
           </div>
-          <button
-            onClick={() => setShowSubscriptionModal(true)}
-            className="px-3 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded text-xs shadow-xs uppercase tracking-wide transition shrink-0"
-          >
-            Chuyển khoản / Kích hoạt ngay
-          </button>
-        </div>
+        ) : trialStatus.isExpired ? (
+          <div className="bg-rose-500 text-white px-4 py-2.5 text-center text-xs font-bold border-b border-rose-600 flex items-center justify-between gap-3 shrink-0 shadow-md">
+            <div className="flex items-center gap-2 mx-auto sm:mx-0">
+              <AlertTriangle className="w-4 h-4 text-amber-300 shrink-0 animate-bounce" />
+              <span>
+                ⚠️ <b>Đã hết hạn {trialStatus.totalDays} ngày dùng thử miễn phí!</b> Vui lòng nâng cấp bản quyền để tiếp tục sử dụng trọn đời mọi công cụ và dữ liệu đám mây.
+              </span>
+            </div>
+            <button
+              onClick={() => setShowSubscriptionModal(true)}
+              className="px-3 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded text-xs shadow-xs uppercase tracking-wide transition shrink-0"
+            >
+              Chuyển khoản / Kích hoạt ngay
+            </button>
+          </div>
+        ) : (
+          <div className="bg-blue-50 text-blue-900 px-4 py-2 text-center text-xs font-medium border-b border-blue-200 flex items-center justify-between gap-3 shrink-0">
+            <div className="flex items-center gap-2 mx-auto sm:mx-0">
+              <Crown className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>
+                🎉 Thầy/Cô đang dùng bản trải nghiệm miễn phí <b>{trialStatus.totalDays} ngày</b> (Còn <b>{trialStatus.daysRemaining} ngày</b>). Hãy nâng cấp Vip để tiếp tục dùng trọn đời.
+              </span>
+            </div>
+            <button
+              onClick={() => setShowSubscriptionModal(true)}
+              className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-[11px] shadow-xs transition shrink-0"
+            >
+              <span>Nâng cấp VIP</span>
+            </button>
+          </div>
+        )
       ) : (
-        <div className="bg-blue-50 text-blue-900 px-4 py-2 text-center text-xs font-medium border-b border-blue-200 flex items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-2 mx-auto sm:mx-0">
-            <Crown className="w-4 h-4 text-amber-600 shrink-0" />
+        /* KHI TẠM THỜI TẮT GIỚI HẠN TRIAL: Không hiển thị bất kỳ cảnh báo hết hạn hay đếm ngược trial */
+        trialStatus.isVip ? (
+          <div className="bg-gradient-to-r from-amber-500/15 via-emerald-500/15 to-blue-500/15 text-slate-800 px-4 py-1.5 text-center text-xs font-medium border-b border-amber-200 flex items-center justify-center gap-2 shrink-0">
+            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>
-              🎉 Thầy/Cô đang dùng bản trải nghiệm miễn phí <b>15 ngày</b> (Còn <b>{trialStatus.daysRemaining} ngày</b>). Hãy nâng cấp Vip để tiếp tục dùng trọn đời.
+              ✨ <b>Bản quyền VIP Trọn Đời:</b> Không giới hạn tính năng vẽ hình, AI Dựng hình & Lưu trữ Đám mây. Hỗ trợ Zalo: <b>0775172026</b>
             </span>
           </div>
-          <button
-            onClick={() => setShowSubscriptionModal(true)}
-            className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-[11px] shadow-xs transition shrink-0"
-          >
-            <span>Nâng cấp VIP</span>
-          </button>
-        </div>
+        ) : null
       )}
 
       {/* 1. Header trên cùng */}
@@ -1017,7 +1029,7 @@ export const App: React.FC = () => {
           refreshAuthAndTrial();
           showToast('Kích hoạt bản quyền VIP thành công!');
         }}
-        forcedExpired={trialStatus.isExpired}
+        forcedExpired={ENABLE_TRIAL_LIMIT ? trialStatus.isExpired : false}
       />
 
       {/* 5. Các Dialog Modals khác */}

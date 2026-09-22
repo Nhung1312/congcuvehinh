@@ -16,7 +16,7 @@ import {
   ArrowRight,
   ShieldCheck,
 } from 'lucide-react';
-import { authService, UserProfile, TrialStatus } from '../storage/authService';
+import { authService, UserProfile, TrialStatus, ENABLE_TRIAL_LIMIT } from '../storage/authService';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -111,55 +111,88 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
 
             {/* Thẻ trạng thái Bản quyền / Dùng thử */}
-            <div
-              className={`p-4 rounded-xl border ${
-                trialStatus.isVip
-                  ? 'bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 text-amber-900'
-                  : trialStatus.isExpired
-                  ? 'bg-rose-50 border-rose-200 text-rose-800'
-                  : 'bg-blue-50 border-blue-200 text-blue-900'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  {trialStatus.isVip ? (
-                    <Crown className="w-5 h-5 text-amber-600" />
-                  ) : (
-                    <Clock className="w-5 h-5 text-blue-600" />
-                  )}
-                  <span className="font-bold text-sm">
-                    {trialStatus.isVip ? 'Tài Khoản VIP Trọn Đời' : 'Gói Trải Nghiệm Dùng Thử'}
+            {ENABLE_TRIAL_LIMIT ? (
+              <div
+                className={`p-4 rounded-xl border ${
+                  trialStatus.isVip
+                    ? 'bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 text-amber-900'
+                    : trialStatus.isExpired
+                    ? 'bg-rose-50 border-rose-200 text-rose-800'
+                    : 'bg-blue-50 border-blue-200 text-blue-900'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {trialStatus.isVip ? (
+                      <Crown className="w-5 h-5 text-amber-600" />
+                    ) : (
+                      <Clock className="w-5 h-5 text-blue-600" />
+                    )}
+                    <span className="font-bold text-sm">
+                      {trialStatus.isVip ? 'Tài Khoản VIP Trọn Đời' : 'Gói Trải Nghiệm Dùng Thử'}
+                    </span>
+                  </div>
+                  <span
+                    className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
+                      trialStatus.isVip
+                        ? 'bg-amber-200/80 text-amber-900'
+                        : trialStatus.isExpired
+                        ? 'bg-rose-200 text-rose-800'
+                        : 'bg-blue-200 text-blue-800'
+                    }`}
+                  >
+                    {trialStatus.statusText}
                   </span>
                 </div>
-                <span
-                  className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
-                    trialStatus.isVip
-                      ? 'bg-amber-200/80 text-amber-900'
-                      : trialStatus.isExpired
-                      ? 'bg-rose-200 text-rose-800'
-                      : 'bg-blue-200 text-blue-800'
-                  }`}
-                >
-                  {trialStatus.statusText}
-                </span>
-              </div>
 
-              {!trialStatus.isVip && (
-                <div className="mt-3 pt-3 border-t border-blue-200/60 text-xs flex items-center justify-between">
-                  <span>Thời hạn dùng thử: 15 ngày</span>
-                  <button
-                    onClick={() => {
-                      onClose();
-                      onOpenSubscriptionModal();
-                    }}
-                    className="font-bold text-blue-700 hover:text-blue-900 flex items-center gap-1 underline"
+                {!trialStatus.isVip && (
+                  <div className="mt-3 pt-3 border-t border-blue-200/60 text-xs flex items-center justify-between">
+                    <span>Thời hạn dùng thử: {trialStatus.totalDays} ngày</span>
+                    <button
+                      onClick={() => {
+                        onClose();
+                        onOpenSubscriptionModal();
+                      }}
+                      className="font-bold text-blue-700 hover:text-blue-900 flex items-center gap-1 underline"
+                    >
+                      <span>Nâng cấp VIP</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Khi TẮT trial limit: Hiển thị trạng thái tài khoản đầy đủ, miễn phí hoàn toàn */
+              <div
+                className={`p-4 rounded-xl border ${
+                  trialStatus.isVip
+                    ? 'bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 text-amber-900'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {trialStatus.isVip ? (
+                      <Crown className="w-5 h-5 text-amber-600" />
+                    ) : (
+                      <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                    )}
+                    <span className="font-bold text-sm">
+                      {trialStatus.isVip ? 'Tài Khoản VIP Trọn Đời' : 'Tài Khoản Giáo Viên'}
+                    </span>
+                  </div>
+                  <span
+                    className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
+                      trialStatus.isVip
+                        ? 'bg-amber-200/80 text-amber-900'
+                        : 'bg-emerald-200 text-emerald-800'
+                    }`}
                   >
-                    <span>Nâng cấp VIP</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
+                    {trialStatus.isVip ? 'Bản Quyền VIP' : 'Miễn Phí Đầy Đủ'}
+                  </span>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Tính năng đám mây */}
             <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200/80 space-y-2 text-xs text-slate-600">
@@ -316,22 +349,34 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       onClick={() => setTab('register')}
                       className="text-xs font-bold text-blue-600 hover:underline"
                     >
-                      Đăng ký nhận 15 ngày dùng thử ngay
+                      {ENABLE_TRIAL_LIMIT ? `Đăng ký nhận ${trialStatus.totalDays} ngày dùng thử ngay` : 'Đăng ký tài khoản miễn phí ngay'}
                     </button>
                   </div>
                 </form>
               ) : (
                 <form onSubmit={handleRegister} className="space-y-3.5">
                   {/* Banner ưu đãi */}
-                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2.5 text-xs text-amber-900">
-                    <Sparkles className="w-5 h-5 text-amber-600 shrink-0" />
-                    <div>
-                      <p className="font-bold">Tặng 15 ngày trải nghiệm đầy đủ!</p>
-                      <p className="text-[11px] text-amber-800">
-                        Sử dụng toàn bộ công cụ hình học, AI dựng hình, xuất Word siêu nét và lưu trữ đám mây.
-                      </p>
+                  {ENABLE_TRIAL_LIMIT ? (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2.5 text-xs text-amber-900">
+                      <Sparkles className="w-5 h-5 text-amber-600 shrink-0" />
+                      <div>
+                        <p className="font-bold">Tặng {trialStatus.totalDays} ngày trải nghiệm đầy đủ!</p>
+                        <p className="text-[11px] text-amber-800">
+                          Sử dụng toàn bộ công cụ hình học, AI dựng hình, xuất Word siêu nét và lưu trữ đám mây.
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2.5 text-xs text-emerald-900">
+                      <Sparkles className="w-5 h-5 text-emerald-600 shrink-0" />
+                      <div>
+                        <p className="font-bold">Sử dụng miễn phí toàn bộ công cụ!</p>
+                        <p className="text-[11px] text-emerald-800">
+                          Toàn bộ tính năng vẽ hình học, AI dựng hình, xuất Word siêu nét và lưu trữ đám mây.
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Họ và tên Thầy/Cô:</label>

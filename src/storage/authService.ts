@@ -1,4 +1,7 @@
 import { supabase } from '../supabaseClient';
+import { ENABLE_TRIAL_LIMIT, TRIAL_DAYS_COUNT } from '../config/trialConfig';
+
+export { ENABLE_TRIAL_LIMIT, TRIAL_DAYS_COUNT };
 
 export interface UserProfile {
   id: string;
@@ -7,7 +10,7 @@ export interface UserProfile {
   phone?: string;
   createdAt: number;
   trialStartDate: number;
-  trialDays: number; // 15 ngày
+  trialDays: number; // Số ngày dùng thử khi bật trial
   isVip: boolean;    // Đã kích hoạt bản quyền
   vipActivatedAt?: number;
   licenseKey?: string;
@@ -73,8 +76,8 @@ export class AuthService {
       fullName: fullName.trim() || 'Thầy/Cô ' + normalizedEmail.split('@')[0],
       phone: phone?.trim(),
       createdAt: Date.now(),
-      trialStartDate: firstUse, // Bắt đầu tính 15 ngày từ ngày đầu sử dụng
-      trialDays: 15,
+      trialStartDate: firstUse, // Bắt đầu tính ngày dùng thử khi bật trial
+      trialDays: TRIAL_DAYS_COUNT,
       isVip: false,
     };
 
@@ -165,12 +168,27 @@ export class AuthService {
 
   // Kiểm tra thời hạn dùng thử & VIP
   getTrialStatus(user: UserProfile | null): TrialStatus {
-    const totalDays = 15;
+    const totalDays = TRIAL_DAYS_COUNT;
     
     // Kiểm tra xem máy này đã kích hoạt VIP bằng email chưa
     const savedEmail = localStorage.getItem('user_licensed_email');
     const isLocalLicensed = Boolean(savedEmail && (!user || user.email === savedEmail));
 
+    // [CÔNG TẮC] Khi tạm thời TẮT giới hạn dùng thử (ENABLE_TRIAL_LIMIT = false):
+    // Cho phép tất cả người dùng sử dụng ứng dụng MIỄN PHÍ HOÀN TOÀN, không giới hạn thời gian và không bao giờ bị khóa.
+    if (!ENABLE_TRIAL_LIMIT) {
+      const isVip = Boolean(user?.isVip || isLocalLicensed);
+      return {
+        isVip,
+        daysRemaining: 9999, // Không giới hạn
+        isExpired: false,    // Không bao giờ hết hạn
+        totalDays,
+        statusText: isVip ? 'Bản quyền VIP Trọn đời' : 'Miễn phí hoàn toàn',
+        trialStartDate: user?.trialStartDate || getDeviceFirstUseTimestamp(),
+      };
+    }
+
+    // [CƠ CHẾ DÙNG THỬ CŨ] Khi bật lại giới hạn (ENABLE_TRIAL_LIMIT = true):
     if (user?.isVip || isLocalLicensed) {
       return {
         isVip: true,
@@ -190,7 +208,7 @@ export class AuthService {
 
     let statusText = '';
     if (isExpired) {
-      statusText = 'Hết hạn dùng thử 15 ngày';
+      statusText = `Hết hạn dùng thử ${totalDays} ngày`;
     } else {
       statusText = `Dùng thử: Còn ${daysRemaining} ngày`;
     }

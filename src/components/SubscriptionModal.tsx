@@ -15,7 +15,7 @@ import {
   CheckCircle2,
   Lock,
 } from 'lucide-react';
-import { authService, UserProfile, TrialStatus } from '../storage/authService';
+import { authService, UserProfile, TrialStatus, ENABLE_TRIAL_LIMIT } from '../storage/authService';
 
 interface SubscriptionModalProps {
   isOpen: boolean;
@@ -127,13 +127,13 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               <span className="text-xs text-blue-200">Sử dụng vĩnh viễn không thời hạn</span>
             </div>
             <h2 className="text-xl font-black tracking-tight text-white">
-              {forcedExpired || trialStatus.isExpired
-                ? 'HẾT HẠN DÙNG THỬ 15 NGÀY'
+              {ENABLE_TRIAL_LIMIT && (forcedExpired || trialStatus.isExpired)
+                ? `HẾT HẠN DÙNG THỬ ${trialStatus.totalDays} NGÀY`
                 : 'NÂNG CẤP BẢN QUYỀN TRỌN ĐỜI'}
             </h2>
             <p className="text-xs text-blue-200/90 mt-1 max-w-md">
-              {forcedExpired || trialStatus.isExpired
-                ? 'Thời gian 15 ngày trải nghiệm miễn phí đã kết thúc. Thầy/Cô vui lòng chuyển khoản để mở khóa vĩnh viễn mọi tính năng vẽ hình & lưu trữ đám mây.'
+              {ENABLE_TRIAL_LIMIT && (forcedExpired || trialStatus.isExpired)
+                ? `Thời gian ${trialStatus.totalDays} ngày trải nghiệm miễn phí đã kết thúc. Thầy/Cô vui lòng chuyển khoản để mở khóa vĩnh viễn mọi tính năng vẽ hình & lưu trữ đám mây.`
                 : 'Mở khóa không giới hạn: AI Dựng Hình thông minh, Xuất ảnh Word 600 DPI, Lưu trữ Đám mây và Cập nhật trọn đời.'}
             </p>
           </div>

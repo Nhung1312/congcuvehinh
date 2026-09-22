@@ -17,7 +17,7 @@ import {
 import { ChartDocument } from '../types';
 import { storage } from '../storage/storageService';
 import { cloudStorage } from '../storage/cloudStorageService';
-import { authService, UserProfile } from '../storage/authService';
+import { authService, UserProfile, ENABLE_TRIAL_LIMIT } from '../storage/authService';
 
 interface SavedProjectsModalProps {
   isOpen: boolean;
@@ -212,7 +212,9 @@ export const SavedProjectsModal: React.FC<SavedProjectsModalProps> = ({
                 Lưu Trữ Đám Mây Chưa Được Kích Hoạt
               </h4>
               <p className="text-xs text-slate-500 max-w-sm mx-auto mb-4">
-                Đăng nhập hoặc đăng ký (tặng 15 ngày dùng thử) để lưu trữ hình vẽ trên Đám mây và mở lại dễ dàng trên mọi thiết bị.
+                {ENABLE_TRIAL_LIMIT
+                  ? 'Đăng nhập hoặc đăng ký (tặng 30 ngày dùng thử) để lưu trữ hình vẽ trên Đám mây và mở lại dễ dàng trên mọi thiết bị.'
+                  : 'Đăng nhập hoặc đăng ký tài khoản để lưu trữ hình vẽ trên Đám mây và mở lại dễ dàng trên mọi thiết bị.'}
               </p>
               <button
                 onClick={() => {

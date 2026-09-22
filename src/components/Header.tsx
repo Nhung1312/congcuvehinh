@@ -23,7 +23,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { ChartDocument } from '../types';
-import { UserProfile, TrialStatus } from '../storage/authService';
+import { UserProfile, TrialStatus, ENABLE_TRIAL_LIMIT } from '../storage/authService';
 
 interface HeaderProps {
   currentDoc: ChartDocument;
@@ -344,34 +344,44 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Trial & VIP Status Badge + Subscription Action */}
-        {trialStatus && onOpenSubscriptionModal && (
-          <button
-            onClick={onOpenSubscriptionModal}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-bold transition border shadow-xs ${
-              trialStatus.isVip
-                ? 'bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-300 border-amber-500/40 hover:from-amber-500/30'
-                : trialStatus.isExpired
-                ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 hover:bg-rose-500/30 animate-pulse'
-                : 'bg-blue-500/20 text-blue-300 border-blue-500/40 hover:bg-blue-500/30'
-            }`}
-            title={trialStatus.isVip ? 'Bản quyền VIP Trọn đời' : 'Click để xem thông tin chuyển khoản Agribank / nhập mã kích hoạt'}
-          >
-            {trialStatus.isVip ? (
-              <Crown className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-            ) : trialStatus.isExpired ? (
-              <Clock className="w-3.5 h-3.5 text-rose-400" />
-            ) : (
-              <Clock className="w-3.5 h-3.5 text-blue-400" />
-            )}
-            <span className="hidden xl:inline">
-              {trialStatus.isVip ? 'VIP Trọn Đời' : trialStatus.isExpired ? 'Hết hạn 15 ngày' : `Dùng thử: Còn ${trialStatus.daysRemaining} ngày`}
-            </span>
-            {!trialStatus.isVip && (
-              <span className="bg-amber-400 text-slate-950 text-[10px] px-1.5 py-0.2 rounded font-extrabold ml-0.5">
-                Nâng cấp
+        {ENABLE_TRIAL_LIMIT ? (
+          trialStatus && onOpenSubscriptionModal && (
+            <button
+              onClick={onOpenSubscriptionModal}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-bold transition border shadow-xs ${
+                trialStatus.isVip
+                  ? 'bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-300 border-amber-500/40 hover:from-amber-500/30'
+                  : trialStatus.isExpired
+                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 hover:bg-rose-500/30 animate-pulse'
+                  : 'bg-blue-500/20 text-blue-300 border-blue-500/40 hover:bg-blue-500/30'
+              }`}
+              title={trialStatus.isVip ? 'Bản quyền VIP Trọn đời' : 'Click để xem thông tin chuyển khoản Agribank / nhập mã kích hoạt'}
+            >
+              {trialStatus.isVip ? (
+                <Crown className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+              ) : trialStatus.isExpired ? (
+                <Clock className="w-3.5 h-3.5 text-rose-400" />
+              ) : (
+                <Clock className="w-3.5 h-3.5 text-blue-400" />
+              )}
+              <span className="hidden xl:inline">
+                {trialStatus.isVip ? 'VIP Trọn Đời' : trialStatus.isExpired ? `Hết hạn ${trialStatus.totalDays} ngày` : `Dùng thử: Còn ${trialStatus.daysRemaining} ngày`}
               </span>
-            )}
-          </button>
+              {!trialStatus.isVip && (
+                <span className="bg-amber-400 text-slate-950 text-[10px] px-1.5 py-0.2 rounded font-extrabold ml-0.5">
+                  Nâng cấp
+                </span>
+              )}
+            </button>
+          )
+        ) : (
+          /* Khi TẮT trial limit: Chỉ hiển thị huy hiệu VIP nếu là VIP, không hiện cảnh báo hết hạn */
+          trialStatus?.isVip ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+              <Crown className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+              <span className="hidden xl:inline">VIP Trọn Đời</span>
+            </div>
+          ) : null
         )}
 
         {/* User Account / Cloud Sync Button */}
