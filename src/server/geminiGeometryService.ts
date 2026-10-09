@@ -286,7 +286,6 @@ export async function parseGeometryWithGemini(prompt: string, userApiKey?: strin
   const modelsToTry = [
     'gemini-3.8-flash',
   ];
-  let lastError: any = null;
 
   for (const modelName of modelsToTry) {
     try {
@@ -319,9 +318,8 @@ export async function parseGeometryWithGemini(prompt: string, userApiKey?: strin
       parsed.generationInfo = { source: 'gemini', model: modelName };
       return parsed;
     } catch (err: any) {
-      lastError = err;
-      console.warn(`[Gemini Geometry Service] Lỗi khi gọi model ${modelName}:`, err?.message || err);
-      // Thử model tiếp theo trong danh sách fallback
+      // Không log lỗi upstream, vì nội dung trả về có thể vô tình chứa key cá nhân.
+      console.warn(`[Gemini Geometry Service] Không gọi được ${modelName}; yêu cầu sẽ được xử lý theo chế độ dự phòng.`);
     }
   }
 
