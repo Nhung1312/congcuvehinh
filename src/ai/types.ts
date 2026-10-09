@@ -206,4 +206,6 @@ export interface GeometrySpecification {
   explanation: string;
   /** Nguồn thực sự được dùng để dựng hình; không chứa API key. */
   generationInfo?: { source: 'gemini' | 'rules'; model?: string; message?: string };
+  /** Quota miễn phí từ server; không chứa API key. */
+  trial?: { enabled: boolean; limit: number; used: number; remaining: number };
 }
