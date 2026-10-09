@@ -98,6 +98,7 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
 
     setIsProcessing(true);
     setErrorMsg(null);
+    setLastResult(null);
     setStepStatus('Đang phân tích đề...');
 
     try {
