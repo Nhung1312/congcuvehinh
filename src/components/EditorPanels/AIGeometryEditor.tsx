@@ -29,6 +29,7 @@ interface AIGeometryEditorProps {
   currentDoc: ChartDocument;
   onApplyDoc: (newDoc: ChartDocument) => void;
   onSwitchToManualTool?: (toolType: ToolType) => void;
+  onViewDrawing?: () => void;
 }
 
 type ProviderKey = 'mock' | 'gemini' | 'claude';
@@ -37,6 +38,7 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
   currentDoc,
   onApplyDoc,
   onSwitchToManualTool,
+  onViewDrawing,
 }) => {
   const [prompt, setPrompt] = useState<string>(
     'Cho tam giác ABC nhọn. Kẻ đường cao AH từ đỉnh A xuống cạnh BC (H thuộc BC).'
@@ -46,6 +48,39 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
   const [stepStatus, setStepStatus] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<GeometrySpecification | null>(null);
+
+  // Key cá nhân của từng khách hàng, không lưu trên server hay trong tài liệu hình.
+  // Chỉ lưu sessionStorage khi người dùng chủ động chọn, không dùng localStorage.
+  const storageKey = 'congcuvehinh-gemini-key-session';
+  const [saveKeyForTab, setSaveKeyForTab] = useState(() => {
+    try { return window.sessionStorage.getItem(storageKey) !== null; } catch { return false; }
+  });
+  const [userApiKey, setUserApiKey] = useState(() => {
+    try { return window.sessionStorage.getItem(storageKey) || ''; } catch { return ''; }
+  });
+  const [showApiKey, setShowApiKey] = useState(false);
+
+  const changeApiKey = (value: string) => {
+    setUserApiKey(value);
+    if (saveKeyForTab) {
+      try {
+        if (value) window.sessionStorage.setItem(storageKey, value);
+        else window.sessionStorage.removeItem(storageKey);
+      } catch { /* Private browsing may block sessionStorage. */ }
+    }
+  };
+  const changeSaveKey = (enabled: boolean) => {
+    setSaveKeyForTab(enabled);
+    try {
+      if (enabled && userApiKey) window.sessionStorage.setItem(storageKey, userApiKey);
+      else window.sessionStorage.removeItem(storageKey);
+    } catch { /* Browser blocked storage. */ }
+  };
+  const clearApiKey = () => {
+    setUserApiKey('');
+    setSaveKeyForTab(false);
+    try { window.sessionStorage.removeItem(storageKey); } catch { /* ignore */ }
+  };
 
   // Khởi tạo các provider
   const providers = {
@@ -66,10 +101,14 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
     setStepStatus('Đang phân tích đề...');
 
     try {
-      const provider = providers[selectedProvider];
-      
-      // Bước 1: Gemini 3.8 Flash phân tích ngôn ngữ tự nhiên thành GeometrySpecification
-      const spec = await provider.parseGeometryProblem(input);
+      // Gemini nhận key riêng của khách hàng chỉ trong request đang chạy.
+      // Các provider quy tắc không nhận hoặc lưu key.
+      const spec = selectedProvider === 'gemini'
+        ? await providers.gemini.parseGeometryProblem(input, userApiKey)
+        : await providers[selectedProvider].parseGeometryProblem(input);
+      if (selectedProvider !== 'gemini') {
+        spec.generationInfo = { source: 'rules', message: 'Bộ quy tắc SGK (không sử dụng Gemini).' };
+      }
       
       setStepStatus('Đang dựng hình...');
       await new Promise((resolve) => setTimeout(resolve, 300));
@@ -163,9 +202,47 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
                 : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
             }`}
           >
-            Claude AI
+            Claude (chưa tích hợp)
           </button>
         </div>
+      </div>
+
+      {/* BYOK: mỗi khách hàng dùng key của mình, chỉ gửi tới server khi yêu cầu dựng hình. */}
+      <div className="space-y-2 p-3 rounded-xl border border-slate-200 bg-slate-50">
+        <label htmlFor="geometry-user-api-key" className="text-xs font-bold text-slate-800">
+          API key Gemini cá nhân (Gemini 3.8 Flash)
+        </label>
+        <div className="flex gap-2">
+          <input
+            id="geometry-user-api-key"
+            type={showApiKey ? 'text' : 'password'}
+            autoComplete="off"
+            spellCheck={false}
+            value={userApiKey}
+            onChange={(e) => changeApiKey(e.target.value)}
+            placeholder="Dán API key Gemini của bạn vào đây"
+            className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button type="button" className="rounded-lg px-2 border border-slate-300 bg-white text-xs" onClick={() => setShowApiKey(!showApiKey)}>
+            {showApiKey ? 'Ẩn' : 'Hiện'}
+          </button>
+          <button type="button" className="rounded-lg px-2 border border-slate-300 bg-white text-xs" onClick={clearApiKey}>
+            Xóa
+          </button>
+        </div>
+        <label className="flex items-center gap-2 text-[11px] text-slate-700">
+          <input type="checkbox" checked={saveKeyForTab} onChange={(e) => changeSaveKey(e.target.checked)} />
+          Nhớ key trong phiên tab này (không chọn trên máy dùng chung)
+        </label>
+        <p className="text-[11px] text-slate-600">
+          Key chỉ gửi tới API của ứng dụng khi bấm dựng hình; không ghi vào tài liệu hay cơ sở dữ liệu.
+          {selectedProvider === 'gemini' && !userApiKey.trim()
+            ? ' Chưa có key: ứng dụng sẽ dùng bộ quy tắc SGK, không gọi Gemini.'
+            : ''}
+        </p>
+        <a className="text-[11px] text-blue-700 underline" href="https://aistudio.google.com/api-keys" target="_blank" rel="noopener noreferrer">
+          Mở Google AI Studio để tạo/quản lý API key
+        </a>
       </div>
 
       {/* Ô nhập đề bài */}
@@ -246,6 +323,20 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             <span>Đã nhận diện thành công:</span>
           </div>
+
+          {lastResult.generationInfo && (
+            <div className="rounded-md border border-emerald-200 bg-white p-2 text-[11px] text-slate-800">
+              {lastResult.generationInfo.source === 'gemini'
+                ? `Đã dùng AI: ${lastResult.generationInfo.model || 'Gemini'}`
+                : `Chế độ quy tắc SGK: ${lastResult.generationInfo.message || 'Không dùng Gemini API.'}`}
+            </div>
+          )}
+
+          {onViewDrawing && (
+            <button type="button" onClick={onViewDrawing} className="w-full rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700">
+              Xem hình vừa dựng
+            </button>
+          )}
 
           <div className="space-y-1">
             {lastResult.detectedEntities.map((ent, i) => (
