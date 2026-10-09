@@ -7,24 +7,12 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { GeometrySpecification } from '../ai/types';
 import { VietnameseGeometryParser } from '../ai/parser/vietnameseGeometryParser';
 
-let geminiClient: GoogleGenAI | null = null;
-
-function getGeminiClient(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return null;
-  }
-  if (!geminiClient) {
-    geminiClient = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        },
-      },
-    });
-  }
-  return geminiClient;
+/** BYOK: tạo client cho từng request, tuyệt đối không cache/chia sẻ key giữa khách hàng. */
+function getGeminiClient(userApiKey?: string): GoogleGenAI | null {
+  const key = userApiKey?.trim() || (
+    process.env.ALLOW_SHARED_GEMINI_KEY === 'true' ? process.env.GEMINI_API_KEY : undefined
+  );
+  return key ? new GoogleGenAI({ apiKey: key }) : null;
 }
 
 const SYSTEM_INSTRUCTION = `Bạn là chuyên gia Sư phạm Hình học Toán THCS Việt Nam (Toán lớp 6, 7, 8, 9) và là bộ phân tích ngôn ngữ tự nhiên thành Cấu trúc Dữ liệu Hình học (Geometry Specification JSON).
@@ -283,13 +271,14 @@ const GEOMETRY_RESPONSE_SCHEMA = {
 /**
  * Phân tích đề bài hình học bằng Gemini 3.8 Flash
  */
-export async function parseGeometryWithGemini(prompt: string): Promise<GeometrySpecification> {
-  const client = getGeminiClient();
+export async function parseGeometryWithGemini(prompt: string, userApiKey?: string): Promise<GeometrySpecification> {
+  const client = getGeminiClient(userApiKey);
 
   if (!client) {
     // Khi chưa có GEMINI_API_KEY: chạy chế độ cục bộ độc lập (Local Rule-based)
     const fallback = VietnameseGeometryParser.parse(prompt);
-    fallback.explanation = '(Đang sử dụng chế độ cục bộ - Phân tích cú pháp SGK)';
+    fallback.explanation = '(Đang sử dụng bộ quy tắc SGK vì chưa có API key Gemini.)';
+    fallback.generationInfo = { source: 'rules', message: 'Chưa nhập API key Gemini; không gọi AI.' };
     return fallback;
   }
 
@@ -317,7 +306,6 @@ export async function parseGeometryWithGemini(prompt: string): Promise<GeometryS
           systemInstruction: SYSTEM_INSTRUCTION,
           responseMimeType: 'application/json',
           responseSchema: GEOMETRY_RESPONSE_SCHEMA,
-          temperature: 0.1, // Nhiệt độ thấp để đảm bảo tính tất định và chính xác toán học
         },
       });
 
@@ -328,6 +316,7 @@ export async function parseGeometryWithGemini(prompt: string): Promise<GeometryS
 
       const parsed: GeometrySpecification = JSON.parse(responseText);
       validateAndNormalizeSpec(parsed, prompt);
+      parsed.generationInfo = { source: 'gemini', model: modelName };
       return parsed;
     } catch (err: any) {
       lastError = err;
@@ -336,10 +325,14 @@ export async function parseGeometryWithGemini(prompt: string): Promise<GeometryS
     }
   }
 
-  // Nếu tất cả các model đều gặp lỗi mạng/quota/billing, sử dụng fallback parser nội bộ
-  console.warn('[Gemini Geometry Service] Chuyển sang parser quy tắc nội bộ do lỗi API:', lastError?.message);
+  // Có key cá nhân thì phải báo lỗi thật, không ngụy trang kết quả quy tắc thành Gemini.
+  if (userApiKey?.trim()) {
+    throw new Error('Không gọi được Gemini 3.8 Flash bằng API key này. Hãy kiểm tra key, hạn mức và quyền truy cập model.');
+  }
+  console.warn('[Gemini Geometry Service] AI không khả dụng, dùng bộ quy tắc SGK.');
   const fallback = VietnameseGeometryParser.parse(prompt);
-  fallback.explanation = `(Đang sử dụng chế độ cục bộ - Tự động điều chỉnh theo chuẩn SGK)`;
+  fallback.explanation = '(Đang sử dụng chế độ quy tắc SGK, không phải Gemini AI.)';
+  fallback.generationInfo = { source: 'rules', message: 'Gemini không khả dụng; kết quả chỉ do bộ quy tắc dựng hình.' };
   return fallback;
 }
 
