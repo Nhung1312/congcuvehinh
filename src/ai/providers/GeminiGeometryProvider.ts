@@ -1,6 +1,6 @@
 /**
  * GeminiGeometryProvider.ts
- * Nhà cung cấp AI Gemini 2.5 Flash-Lite tích hợp giao thức GeometrySpecification
+ * Nhà cung cấp AI Gemini 3.8 Flash tích hợp giao thức GeometrySpecification
  */
 import { IAIGeometryProvider } from '../AIGeometryProvider';
 import { GeometrySpecification } from '../types';
@@ -8,8 +8,8 @@ import { VietnameseGeometryParser } from '../parser/vietnameseGeometryParser';
 
 export class GeminiGeometryProvider implements IAIGeometryProvider {
   public readonly id = 'gemini';
-  public readonly name = 'Gemini 2.5 Flash-Lite (Toán THCS)';
-  public readonly description = 'Phân tích đề bài tiếng Việt bằng mô hình Gemini 2.5 Flash-Lite kết hợp Geometry Engine';
+  public readonly name = 'Gemini 3.8 Flash (Toán THCS)';
+  public readonly description = 'Phân tích đề bài tiếng Việt bằng mô hình Gemini 3.8 Flash kết hợp Geometry Engine';
 
   public async parseGeometryProblem(prompt: string): Promise<GeometrySpecification> {
     try {
