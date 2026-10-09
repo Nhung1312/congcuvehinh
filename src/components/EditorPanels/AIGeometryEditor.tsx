@@ -59,6 +59,24 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
     try { return window.sessionStorage.getItem(storageKey) || ''; } catch { return ''; }
   });
   const [showApiKey, setShowApiKey] = useState(false);
+  const [trialStatus, setTrialStatus] = useState<GeometrySpecification['trial'] | null>(null);
+
+  const refreshTrialStatus = async () => {
+    try {
+      const response = await fetch('/api/trial/status', { cache: 'no-store', credentials: 'same-origin' });
+      if (!response.ok) throw new Error('Không thể tải hạn mức dùng thử.');
+      const result = await response.json();
+      setTrialStatus(result);
+    } catch {
+      // Do not assume free trial is available if /api/trial/status is missing.
+      setTrialStatus({ enabled: false, limit: 3, used: 0, remaining: 0 });
+    }
+  };
+
+  React.useEffect(() => {
+    void refreshTrialStatus();
+  }, []);
+
 
   const changeApiKey = (value: string) => {
     setUserApiKey(value);
@@ -123,12 +141,14 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
       // Bước 3: Đưa vào hệ thống render SVG và chỉnh sửa
       onApplyDoc(newDoc);
       setLastResult(spec);
+      if (spec.trial) setTrialStatus(spec.trial);
       setStepStatus('Hoàn tất.');
       setTimeout(() => {
         setStepStatus(null);
       }, 1200);
     } catch (err: any) {
       setErrorMsg(err.message || 'Không thể phân tích đề bài. Vui lòng kiểm tra lại cấu trúc câu.');
+      void refreshTrialStatus();
       setStepStatus(null);
     } finally {
       setIsProcessing(false);
@@ -208,6 +228,32 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
         </div>
       </div>
 
+      {selectedProvider === 'gemini' && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 space-y-1.5 text-xs text-blue-900">
+          <div className="flex items-center gap-2 font-bold">
+            <Sparkles className="h-4 w-4" />
+            3 lượt vẽ AI miễn phí bằng Gemini 3.8 Flash
+          </div>
+          <p>
+            {userApiKey.trim()
+              ? 'Đang dùng API key cá nhân của bạn – không trừ lượt miễn phí.'
+              : trialStatus === null
+                ? 'Đang kiểm tra số lượt miễn phí...'
+                : trialStatus.enabled
+                  ? `Bạn còn ${trialStatus.remaining}/${trialStatus.limit} lượt miễn phí.`
+                  : 'Hệ thống chưa bật 3 lượt miễn phí trên Vercel. Vui lòng dán API key riêng.'}
+          </p>
+          {trialStatus?.enabled && trialStatus.remaining === 0 && !userApiKey.trim() && (
+            <p className="font-semibold text-amber-900">
+              Đã hết lượt miễn phí. Dán API key Gemini bên dưới để tiếp tục.
+            </p>
+          )}
+          <p className="text-[11px] text-blue-700">
+            Chỉ một lượt vẽ Gemini thành công mới bị trừ. Các công cụ vẽ thủ công không bị giới hạn.
+          </p>
+        </div>
+      )}
+
       {/* BYOK: mỗi khách hàng dùng key của mình, chỉ gửi tới server khi yêu cầu dựng hình. */}
       <div className="space-y-2 p-3 rounded-xl border border-slate-200 bg-slate-50">
         <label htmlFor="geometry-user-api-key" className="text-xs font-bold text-slate-800">
@@ -238,7 +284,7 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
         <p className="text-[11px] text-slate-600">
           Key chỉ gửi tới API của ứng dụng khi bấm dựng hình; không ghi vào tài liệu hay cơ sở dữ liệu.
           {selectedProvider === 'gemini' && !userApiKey.trim()
-            ? ' Chưa có key: ứng dụng sẽ dùng bộ quy tắc SGK, không gọi Gemini.'
+            ? ' Nếu còn lượt thử và Vercel đã bật dùng thử, ứng dụng sẽ gọi Gemini bằng key của hệ thống.'
             : ''}
         </p>
         <a className="text-[11px] text-blue-700 underline" href="https://aistudio.google.com/api-keys" target="_blank" rel="noopener noreferrer">
