@@ -4,6 +4,7 @@ import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import { parseGeometryWithGemini } from './src/server/geminiGeometryService';
 
+dotenv.config({ path: '.env.local' });
 dotenv.config();
 
 async function startServer() {
