@@ -8,10 +8,10 @@ import { GeometrySpecification } from '../ai/types';
 import { VietnameseGeometryParser } from '../ai/parser/vietnameseGeometryParser';
 
 /** BYOK: tạo client cho từng request, tuyệt đối không cache/chia sẻ key giữa khách hàng. */
-function getGeminiClient(userApiKey?: string): GoogleGenAI | null {
-  const key = userApiKey?.trim() || (
-    process.env.ALLOW_SHARED_GEMINI_KEY === 'true' ? process.env.GEMINI_API_KEY : undefined
-  );
+function getGeminiClient(userApiKey?: string, allowTrialKey = false): GoogleGenAI | null {
+  // System API key may only be used when the caller has already checked the
+  // three-use trial and explicitly opts into spending a trial credit.
+  const key = userApiKey?.trim() || (allowTrialKey ? process.env.GEMINI_API_KEY?.trim() : undefined);
   return key ? new GoogleGenAI({ apiKey: key }) : null;
 }
 
@@ -271,8 +271,10 @@ const GEOMETRY_RESPONSE_SCHEMA = {
 /**
  * Phân tích đề bài hình học bằng Gemini 3.8 Flash
  */
-export async function parseGeometryWithGemini(prompt: string, userApiKey?: string): Promise<GeometrySpecification> {
-  const client = getGeminiClient(userApiKey);
+export async function parseGeometryWithGemini(
+  prompt: string, userApiKey?: string, allowTrialKey = false
+): Promise<GeometrySpecification> {
+  const client = getGeminiClient(userApiKey, allowTrialKey);
 
   if (!client) {
     // Khi chưa có GEMINI_API_KEY: chạy chế độ cục bộ độc lập (Local Rule-based)
@@ -324,8 +326,8 @@ export async function parseGeometryWithGemini(prompt: string, userApiKey?: strin
   }
 
   // Có key cá nhân thì phải báo lỗi thật, không ngụy trang kết quả quy tắc thành Gemini.
-  if (userApiKey?.trim()) {
-    throw new Error('Không gọi được Gemini 3.8 Flash bằng API key này. Hãy kiểm tra key, hạn mức và quyền truy cập model.');
+  if (userApiKey?.trim() || allowTrialKey) {
+    throw new Error('Không gọi được Gemini 3.8 Flash. Hãy kiểm tra API key, hạn mức và quyền truy cập model.');
   }
   console.warn('[Gemini Geometry Service] AI không khả dụng, dùng bộ quy tắc SGK.');
   const fallback = VietnameseGeometryParser.parse(prompt);
