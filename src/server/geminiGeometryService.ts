@@ -1,6 +1,6 @@
 /**
  * geminiGeometryService.ts
- * Server-side service xử lý phân tích đề bài Toán THCS bằng mô hình Gemini 2.5 Flash-Lite.
+ * Server-side service xử lý phân tích đề bài Toán THCS bằng mô hình Gemini 3.8 Flash.
  * Bảo mật hoàn toàn API key trong môi trường server.
  */
 import { GoogleGenAI, Type } from '@google/genai';
@@ -281,7 +281,7 @@ const GEOMETRY_RESPONSE_SCHEMA = {
 };
 
 /**
- * Phân tích đề bài hình học bằng Gemini 2.5 Flash-Lite
+ * Phân tích đề bài hình học bằng Gemini 3.8 Flash
  */
 export async function parseGeometryWithGemini(prompt: string): Promise<GeometrySpecification> {
   const client = getGeminiClient();
@@ -293,12 +293,9 @@ export async function parseGeometryWithGemini(prompt: string): Promise<GeometryS
     return fallback;
   }
 
-  // Model Flash / Flash-Lite theo chuẩn mới nhất của Google GenAI API
+  // Gemini 3.8 Flash (model ID chính thức); lỗi API sẽ chuyển sang parser nội bộ như trước đây.
   const modelsToTry = [
-    'gemini-3.1-flash-lite',
-    'gemini-flash-latest',
-    'gemini-3.7-flash',
-    'gemini-2.5-flash',
+    'gemini-3.8-flash',
   ];
   let lastError: any = null;
 
