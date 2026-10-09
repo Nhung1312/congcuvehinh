@@ -68,7 +68,7 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
     try {
       const provider = providers[selectedProvider];
       
-      // Bước 1: Gemini 2.5 Flash-Lite phân tích ngôn ngữ tự nhiên thành GeometrySpecification
+      // Bước 1: Gemini 3.8 Flash phân tích ngôn ngữ tự nhiên thành GeometrySpecification
       const spec = await provider.parseGeometryProblem(input);
       
       setStepStatus('Đang dựng hình...');
@@ -141,7 +141,7 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
                 : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
             }`}
           >
-            Gemini 2.5 AI
+            Gemini 3.8 Flash
           </button>
           <button
             type="button"
