@@ -20,16 +20,19 @@ async function startServer() {
 
   app.post('/api/geometry/parse', async (req, res) => {
     try {
-      const { prompt } = req.body;
-      if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
-        return res.status(400).json({ error: 'Vui lòng nhập đề bài hình học.' });
+      const { prompt, apiKey } = req.body || {};
+      res.setHeader('Cache-Control', 'no-store');
+      if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 6000) {
+        return res.status(400).json({ error: 'Đề bài phải có từ 1 đến 6000 ký tự.' });
       }
-
-      const spec = await parseGeometryWithGemini(prompt.trim());
+      if (apiKey !== undefined && (typeof apiKey !== 'string' || apiKey.length > 256)) {
+        return res.status(400).json({ error: 'API key không hợp lệ.' });
+      }
+      const spec = await parseGeometryWithGemini(prompt.trim(), apiKey);
       return res.json({ success: true, spec });
     } catch (err: any) {
-      console.error('[API /api/geometry/parse Error]:', err);
-      return res.status(500).json({
+      console.error('[API /api/geometry/parse Error]:', err?.message || 'Lỗi không xác định');
+      return res.status(502).json({
         error: err?.message || 'Lỗi khi phân tích đề bài với Gemini AI.',
       });
     }
