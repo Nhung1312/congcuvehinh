@@ -1,0 +1,82 @@
+/**
+ * Giải các điểm phụ theo quan hệ phụ thuộc thay vì thứ tự Gemini trả về.
+ * Hàm thuần: kéo thả điểm gốc sẽ tính lại toàn bộ điểm phụ khi SVG render.
+ */
+import type { CustomAuxPoint, Point2D } from '../types';
+import { lineIntersection, midpoint, projectPointToLine, resolvePointCoordinate } from './geometryMath';
+
+function endpoints(value: string | string[] | undefined, points: Record<string, Point2D>): [Point2D, Point2D] | null {
+  if (!value) return null;
+  const names = Array.isArray(value) ? value : value.trim().split('');
+  if (names.length !== 2) return null;
+  const first = resolvePointCoordinate(names[0], points);
+  const second = resolvePointCoordinate(names[1], points);
+  return first && second ? [first, second] : null;
+}
+
+function computePoint(point: CustomAuxPoint, points: Record<string, Point2D>, defaultCircleRadius?: number): Point2D | null {
+  if (point.type === 'midpoint' || point.type === 'ratio') {
+    const segment = endpoints(point.segment, points);
+    if (!segment) return null;
+    if (point.type === 'midpoint') return midpoint(...segment);
+    const ratio = point.ratio;
+    if (typeof ratio !== 'number' || !Number.isFinite(ratio)) return null;
+    return {
+      x: segment[0].x + (segment[1].x - segment[0].x) * ratio,
+      y: segment[0].y + (segment[1].y - segment[0].y) * ratio,
+    };
+  }
+
+  if (point.type === 'projection') {
+    const from = point.fromPoint && resolvePointCoordinate(point.fromPoint, points);
+    const target = endpoints(point.targetLine, points);
+    return from && target ? projectPointToLine(from, ...target).point : null;
+  }
+
+  if (point.type === 'intersection') {
+    const first = endpoints(point.line1, points);
+    const second = endpoints(point.line2, points);
+    return first && second ? lineIntersection(...first, ...second) : null;
+  }
+
+  if (point.type === 'free') {
+    return typeof point.freeX === 'number' && typeof point.freeY === 'number'
+      && Number.isFinite(point.freeX) && Number.isFinite(point.freeY)
+      ? { x: point.freeX, y: point.freeY } : null;
+  }
+
+  if (point.type === 'on-circle' && typeof point.angle === 'number' && Number.isFinite(point.angle)) {
+    const center = resolvePointCoordinate(point.centerPoint || 'O', points);
+    const radius = point.radius ?? defaultCircleRadius;
+    if (!center || typeof radius !== 'number' || !Number.isFinite(radius) || radius <= 0) return null;
+    const radians = point.angle * Math.PI / 180;
+    return { x: center.x + radius * Math.cos(radians), y: center.y + radius * Math.sin(radians) };
+  }
+  return null;
+}
+
+export function resolveAuxiliaryPoints(
+  namedPoints: Record<string, Point2D>,
+  auxPoints: CustomAuxPoint[],
+  defaultCircleRadius?: number
+): Record<string, Point2D> {
+  const resolved: Record<string, Point2D> = { ...namedPoints };
+  const pending = auxPoints.filter(point => Boolean(point.name));
+
+  // Các tên do auxPoints định nghĩa không được dùng tọa độ mặc định cũ (M, N, D...).
+  for (const point of pending) delete resolved[point.name];
+
+  // Tối đa N lượt: mỗi lượt thành công giải ít nhất một điểm.
+  for (let pass = 0; pass < pending.length; pass++) {
+    let progress = false;
+    for (const point of pending) {
+      if (resolved[point.name]) continue;
+      const computed = computePoint(point, resolved, defaultCircleRadius);
+      if (!computed || !Number.isFinite(computed.x) || !Number.isFinite(computed.y)) continue;
+      resolved[point.name] = computed;
+      progress = true;
+    }
+    if (!progress) break; // Thiếu tham chiếu, vòng phụ thuộc hoặc đường thẳng song song.
+  }
+  return resolved;
+}
