@@ -102,11 +102,22 @@ test('Hồi quy Đợt 2: Tam giác nhọn nội tiếp (O) + BD, CE cắt nhau 
     'Phải có phần kéo dài cần thiết từ B/C đến T'
   );
 
-  // 4. Ký hiệu vuông góc tại A hướng theo tia AT (không hướng x)
+  // 4. Ký hiệu vuông góc tại A hướng theo tia AT (không hướng x) và bán kính OA nét đứt
+  assert.ok(
+    tri.auxLines?.some(l => (l.from === 'O' && l.to === 'A') || (l.from === 'A' && l.to === 'O')),
+    'Phải tự động dựng bán kính OA từ tâm O đến tiếp điểm A'
+  );
+  const lineOA = tri.auxLines?.find(l => (l.from === 'O' && l.to === 'A') || (l.from === 'A' && l.to === 'O'));
+  assert.equal(lineOA?.style, 'dashed', 'Đoạn bán kính OA phải là nét đứt');
+
   const raA = tri.rightAngleMarkers?.find(r => r.vertex === 'A');
   if (raA) {
     assert.notEqual(raA.ray1, 'x', 'Ký hiệu vuông góc không dùng điểm phụ x');
     assert.notEqual(raA.ray2, 'x', 'Ký hiệu vuông góc không dùng điểm phụ x');
+    assert.ok(
+      (raA.ray1 === 'O' && raA.ray2 === 'T') || (raA.ray2 === 'O' && raA.ray1 === 'T'),
+      'Ký hiệu vuông góc tại A phải thể hiện giữa OA và AT'
+    );
   }
 
   // 5. Bounding box sau render có chứa T và mở rộng an toàn
@@ -211,3 +222,172 @@ test('CanvasArea không để nút kéo xanh lệch khỏi hình SVG khi viewBox
   assert.doesNotMatch(html, /pointer-events:none/,
     'SVG phải nhận trực tiếp sự kiện pointer để kéo A/B/C');
 });
+
+test('Tiếp tuyến của đường tròn (O) tại A tự động dựng bán kính OA nét đứt và ký hiệu vuông góc OA ⟂ AT', () => {
+  const prompt = 'Cho tam giác ABC nhọn, AB < AC, nội tiếp đường tròn (O). Kẻ hai đường cao BD và CE của tam giác ABC (D thuộc AC, E thuộc AB), chúng cắt nhau tại H. Gọi M là trung điểm của BC. Kẻ tiếp tuyến của đường tròn (O) tại A, tiếp tuyến này cắt đường thẳng BC tại T.';
+  const spec = VietnameseGeometryParser.parse(prompt);
+  const doc = GeometrySpecificationAdapter.specToChartDocument(spec);
+  const tri = doc.data.geometry?.triangle!;
+
+  // 1. Tự động dựng bán kính OA
+  const oa = tri.auxLines?.find(l => (l.from === 'O' && l.to === 'A') || (l.from === 'A' && l.to === 'O'));
+  assert.ok(oa, 'Phải có bán kính OA');
+  assert.equal(oa?.style, 'dashed', 'Bán kính OA phải là nét đứt');
+
+  // 2. Ký hiệu vuông góc tại A giữa OA và AT
+  const raA = tri.rightAngleMarkers?.find(r => r.vertex === 'A');
+  assert.ok(raA, 'Phải có góc vuông tại A');
+  assert.ok(
+    (raA.ray1 === 'O' && raA.ray2 === 'T') || (raA.ray2 === 'O' && raA.ray1 === 'T'),
+    'Góc vuông tại A phải giữa O và T'
+  );
+
+  // 3. Render SVG chứa nét đứt cho đoạn OA
+  const html = renderToStaticMarkup(React.createElement(CanvasArea, {
+    currentDoc: doc,
+    onCopyImage: () => {},
+  }));
+  assert.ok(html.includes('stroke-dasharray="6 4"'), 'SVG phải render nét đứt cho đoạn OA');
+});
+
+test('Nếu OA không được hiển thị thì không được hiển thị ký hiệu vuông góc tại A', () => {
+  const prompt = 'Cho tam giác ABC nhọn, AB < AC, nội tiếp đường tròn (O). Kẻ tiếp tuyến của đường tròn (O) tại A, tiếp tuyến này cắt đường thẳng BC tại T.';
+  const spec = VietnameseGeometryParser.parse(prompt);
+  const doc = GeometrySpecificationAdapter.specToChartDocument(spec);
+  const tri = doc.data.geometry?.triangle!;
+
+  // Giả lập tắt hiển thị đoạn OA
+  if (tri.auxLines) {
+    tri.auxLines = tri.auxLines.map(l =>
+      (l.from === 'O' && l.to === 'A') || (l.from === 'A' && l.to === 'O')
+        ? { ...l, enabled: false }
+        : l
+    );
+  }
+
+  const html = renderToStaticMarkup(React.createElement(CanvasArea, {
+    currentDoc: doc,
+    onCopyImage: () => {},
+  }));
+
+  // Khi OA bị tắt, ký hiệu góc vuông tại A không được xuất hiện
+  const [A, B, C] = tri.points!;
+  const O = getTriangleCircumcircle(A, B, C).center;
+  const resolved = resolveAuxiliaryPoints({ A, B, C, O }, tri.auxPoints || []);
+  const raPathA = getRightAngleMarkerPath(A, O, resolved.T, 10);
+  assert.ok(raPathA.length > 0, 'Phải tính được đường dẫn góc vuông chuẩn');
+  assert.equal(html.includes(raPathA), false, 'Ký hiệu vuông góc tại A không được xuất hiện trong SVG khi OA bị tắt');
+});
+
+test('Không làm ảnh hưởng các ký hiệu vuông góc khác như BD ⟂ AC tại D và CE ⟂ AB tại E', () => {
+  const prompt = 'Cho tam giác ABC nhọn, AB < AC, nội tiếp đường tròn (O). Kẻ hai đường cao BD và CE của tam giác ABC (D thuộc AC, E thuộc AB), chúng cắt nhau tại H. Gọi M là trung điểm của BC. Kẻ tiếp tuyến của đường tròn (O) tại A, tiếp tuyến này cắt đường thẳng BC tại T.';
+  const spec = VietnameseGeometryParser.parse(prompt);
+  const doc = GeometrySpecificationAdapter.specToChartDocument(spec);
+  const tri = doc.data.geometry?.triangle!;
+
+  // Hai đường cao BD và CE
+  assert.equal(tri.altitudes?.length, 2, 'Phải có 2 đường cao BD và CE');
+  const altBD = tri.altitudes?.find(a => a.fromVertex === 'B');
+  const altCE = tri.altitudes?.find(a => a.fromVertex === 'C');
+  assert.ok(altBD, 'Có đường cao BD');
+  assert.ok(altCE, 'Có đường cao CE');
+  assert.equal(altBD?.showRightAngle !== false, true, 'Đường cao BD hiển thị góc vuông tại D');
+  assert.equal(altCE?.showRightAngle !== false, true, 'Đường cao CE hiển thị góc vuông tại E');
+});
+
+test('Chuỗi dựng hình nhiều bước M -> D -> K -> N, tiếp tuyến tại B và các đoạn nối AM, DE, MN, BT', () => {
+  const prompt = 'Cho tam giác ABC nhọn, AB < AC, nội tiếp đường tròn (O). Gọi M là trung điểm của BC. Từ M kẻ MD vuông góc với AB tại D, ME vuông góc với AC tại E. Từ D kẻ DK vuông góc với AC tại K. Gọi N là trung điểm của DK. Kẻ tiếp tuyến của đường tròn (O) tại B, tiếp tuyến này cắt đường thẳng AC tại T. Nối OB, AM, DE, MN và BT.';
+  const spec = VietnameseGeometryParser.parse(prompt);
+  const doc = GeometrySpecificationAdapter.specToChartDocument(spec);
+  const tri = doc.data.geometry?.triangle!;
+
+  // 1. Kiểm tra tam giác nhọn (không bị gán nhầm góc vuông tại A)
+  assert.equal(tri.type, 'general', 'Tam giác ABC phải là tam giác nhọn (general)');
+  assert.equal(tri.rightAngleMarkers?.some(r => r.vertex === 'A'), false, 'Không có góc vuông tại đỉnh A');
+
+  // 2. Điểm N là trung điểm của DK
+  const pointN = tri.auxPoints?.find(p => p.name === 'N');
+  assert.ok(pointN, 'Phải có điểm N trong auxPoints');
+  assert.equal(pointN?.type, 'midpoint', 'Điểm N phải có loại midpoint');
+  assert.equal(pointN?.segment, 'DK', 'N phải là trung điểm của DK');
+
+  // 3. Giải toạ độ chuỗi M -> D -> K -> N
+  const [A, B, C] = tri.points!;
+  const O = getTriangleCircumcircle(A, B, C).center;
+  const resolved = resolveAuxiliaryPoints({ A, B, C, O }, tri.auxPoints || []);
+  assert.ok(resolved.M, 'Phải giải được toạ độ M');
+  assert.ok(resolved.D, 'Phải giải được toạ độ D');
+  assert.ok(resolved.E, 'Phải giải được toạ độ E');
+  assert.ok(resolved.K, 'Phải giải được toạ độ K');
+  assert.ok(resolved.N, 'Phải giải được toạ độ N');
+  assert.ok(resolved.T, 'Phải giải được toạ độ T');
+
+  // N nằm trên đoạn DK và là trung điểm DK
+  const midDK = { x: (resolved.D.x + resolved.K.x) / 2, y: (resolved.D.y + resolved.K.y) / 2 };
+  assert.ok(Math.hypot(resolved.N.x - midDK.x, resolved.N.y - midDK.y) < 1e-4, 'N phải là trung điểm chính xác của DK');
+
+  // 4. Có đầy đủ các đoạn nối AM, DE, MN, BT
+  assert.ok(
+    tri.auxLines?.some(l => (l.from === 'A' && l.to === 'M') || (l.from === 'M' && l.to === 'A')),
+    'Phải có đoạn nối AM'
+  );
+  assert.ok(
+    tri.auxLines?.some(l => (l.from === 'D' && l.to === 'E') || (l.from === 'E' && l.to === 'D')),
+    'Phải có đoạn nối DE'
+  );
+  assert.ok(
+    tri.auxLines?.some(l => (l.from === 'M' && l.to === 'N') || (l.from === 'N' && l.to === 'M')),
+    'Phải có đoạn nối MN'
+  );
+  assert.ok(
+    tri.auxLines?.some(l => (l.from === 'B' && l.to === 'T') || (l.from === 'T' && l.to === 'B')),
+    'Phải có đoạn nối BT'
+  );
+
+  // 5. Bán kính OB nét đứt
+  const lineOB = tri.auxLines?.find(l => (l.from === 'O' && l.to === 'B') || (l.from === 'B' && l.to === 'O'));
+  assert.ok(lineOB, 'Phải có bán kính OB');
+  assert.equal(lineOB?.style, 'dashed', 'Đoạn bán kính OB phải là nét đứt');
+
+  // 6. Ký hiệu vuông góc tại B chỉ hợp lệ khi có OB và BT
+  const raB = tri.rightAngleMarkers?.find(r => r.vertex === 'B');
+  assert.ok(raB, 'Phải có góc vuông tại tiếp điểm B');
+  assert.ok(
+    (raB?.ray1 === 'O' && raB?.ray2 === 'T') || (raB?.ray2 === 'O' && raB?.ray1 === 'T'),
+    'Góc vuông tại B phải nằm giữa OB và BT'
+  );
+
+  const raPathB = getRightAngleMarkerPath(B, O, resolved.T, 10);
+  assert.ok(raPathB.length > 0, 'Phải tính được đường dẫn góc vuông tại B');
+
+  // Render SVG khi có đủ OB và BT -> có ký hiệu vuông góc tại B
+  const htmlFull = renderToStaticMarkup(React.createElement(CanvasArea, {
+    currentDoc: doc,
+    onCopyImage: () => {},
+  }));
+  assert.ok(htmlFull.includes(raPathB), 'SVG phải chứa ký hiệu vuông góc tại B khi có đủ OB và BT');
+
+  // Khi tắt OB -> ký hiệu vuông góc tại B bị ẩn
+  const docNoOB = JSON.parse(JSON.stringify(doc));
+  docNoOB.data.geometry.triangle.auxLines = docNoOB.data.geometry.triangle.auxLines.map((l: any) =>
+    (l.from === 'O' && l.to === 'B') || (l.from === 'B' && l.to === 'O') ? { ...l, enabled: false } : l
+  );
+  const htmlNoOB = renderToStaticMarkup(React.createElement(CanvasArea, {
+    currentDoc: docNoOB,
+    onCopyImage: () => {},
+  }));
+  assert.equal(htmlNoOB.includes(raPathB), false, 'SVG không được hiển thị ký hiệu vuông góc tại B khi OB bị tắt');
+
+  // Khi tắt BT -> ký hiệu vuông góc tại B bị ẩn
+  const docNoBT = JSON.parse(JSON.stringify(doc));
+  docNoBT.data.geometry.triangle.auxLines = docNoBT.data.geometry.triangle.auxLines.map((l: any) =>
+    (l.from === 'B' && l.to === 'T') || (l.from === 'T' && l.to === 'B') ? { ...l, enabled: false } : l
+  );
+  const htmlNoBT = renderToStaticMarkup(React.createElement(CanvasArea, {
+    currentDoc: docNoBT,
+    onCopyImage: () => {},
+  }));
+  assert.equal(htmlNoBT.includes(raPathB), false, 'SVG không được hiển thị ký hiệu vuông góc tại B khi BT bị tắt');
+});
+
+

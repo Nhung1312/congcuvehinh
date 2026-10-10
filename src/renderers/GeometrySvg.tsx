@@ -372,6 +372,58 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
           (typeof o.line2 === 'string' && o.line2.includes('x')))
     );
 
+    // Xử lý tự động bán kính OA khi có tiếp tuyến tại A của đường tròn (O)
+    const centerPointName = triangle?.circumscribedCircle?.centerName || 'O';
+    const tangentPoint = auxPoints.find((p) => p.type === 'tangent');
+    const tangentIntPoint = auxPoints.find(
+      (p) =>
+        p.type === 'intersection' &&
+        typeof p.line1 === 'string' &&
+        (p.line1.includes('x') || p.line1.includes('A'))
+    );
+    const tangentAt =
+      tangentPoint?.fromPoint ||
+      (tangentIntPoint && typeof tangentIntPoint.line1 === 'string'
+        ? tangentIntPoint.line1.replace('x', '')
+        : undefined) ||
+      'A';
+
+    const hasTangentCase =
+      !!tangentPoint ||
+      !!tangentIntPoint ||
+      rightAngleMarkers.some(
+        (r) =>
+          r.vertex === tangentAt &&
+          (r.ray1 === centerPointName || r.ray2 === centerPointName)
+      );
+
+    const effectiveAuxLines = [...auxLines];
+    const hasExplicitOALine = effectiveAuxLines.some(
+      (l) =>
+        (l.from === centerPointName && l.to === tangentAt) ||
+        (l.from === tangentAt && l.to === centerPointName)
+    );
+
+    // Renderer SVG: nếu có tangent tại A và có tâm O thì phải dựng OA (nét đứt) nếu chưa có
+    if (
+      hasTangentCase &&
+      !hasExplicitOALine &&
+      pointsMap[centerPointName] &&
+      pointsMap[tangentAt]
+    ) {
+      effectiveAuxLines.push({
+        id: `auto-radius-${centerPointName}${tangentAt}`,
+        from: centerPointName,
+        to: tangentAt,
+        style: 'dashed',
+        enabled: true,
+      });
+    }
+
+    const displayedLines = effectiveAuxLines.filter(
+      (l) => l.enabled !== false && !(hasTangentInt && (l.from === 'x' || l.to === 'x'))
+    );
+
     return (
       <g id="auxiliary-elements-layer">
         {/* 1. Ký hiệu góc bằng nhau (Equal Angle Arcs) */}
@@ -402,9 +454,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
         ))}
 
         {/* 2. Đoạn nối / Đường phụ tùy ý (Auxiliary Lines) */}
-        {auxLines
-          .filter((l) => l.enabled !== false && !(hasTangentInt && (l.from === 'x' || l.to === 'x')))
-          .map((line, idx) => {
+        {displayedLines.map((line, idx) => {
           const pStart = resolvePointCoordinate(line.from, pointsMap);
           const pEnd = resolvePointCoordinate(line.to, pointsMap);
           if (!pStart || !pEnd) return null;
@@ -487,6 +537,31 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
           const r1 = resolvePointCoordinate(m.ray1, pointsMap);
           const r2 = resolvePointCoordinate(m.ray2, pointsMap);
           if (!v || !r1 || !r2) return null;
+
+          // Kiểm tra góc vuông tiếp tuyến - bán kính (tại tiếp điểm với tâm O)
+          const isRay1Center = m.ray1 === centerPointName && m.vertex !== centerPointName;
+          const isRay2Center = m.ray2 === centerPointName && m.vertex !== centerPointName;
+          if (isRay1Center || isRay2Center) {
+            const tangentRay = isRay1Center ? m.ray2 : m.ray1;
+            // 3. Nếu vì lý do nào đó OA không được hiển thị thì không được hiển thị ký hiệu vuông góc tại A
+            const isRadiusDisplayed =
+              Boolean(triangle?.circumscribedCircle?.enabled && triangle?.circumscribedCircle?.showRadii) ||
+              displayedLines.some(
+                (l) =>
+                  (l.from === centerPointName && l.to === m.vertex) ||
+                  (l.from === m.vertex && l.to === centerPointName)
+              );
+            // Ký hiệu vuông góc tại A chỉ xuất hiện khi thực sự có cả hai tia OA và tiếp tuyến (ví dụ AT)
+            const isTangentRayDisplayed = displayedLines.some(
+              (l) =>
+                (l.from === m.vertex && l.to === tangentRay) ||
+                (l.from === tangentRay && l.to === m.vertex)
+            );
+            if (!isRadiusDisplayed || !isTangentRayDisplayed) {
+              return null;
+            }
+          }
+
           const raPath = getRightAngleMarkerPath(v, r1, r2, m.size || 10);
           return (
             <path
@@ -1524,7 +1599,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
             D: pD_incircle,
             E: pE_incircle,
             F: pF_incircle,
-            M: pM_thales || midpoint(pA, pB),
+            M: pM_thales || midpoint(pB, pC),
             N: pN_thales || midpoint(pA, pC),
             AB: midpoint(pA, pB),
             BC: midpoint(pB, pC),
@@ -1548,7 +1623,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
               D: pD_incircle,
               E: pE_incircle,
               F: pF_incircle,
-              M: pM_thales || midpoint(pA, pB),
+              M: pM_thales || midpoint(pB, pC),
               N: pN_thales || midpoint(pA, pC),
               AB: midpoint(pA, pB),
               BC: midpoint(pB, pC),

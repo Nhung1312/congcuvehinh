@@ -139,7 +139,6 @@ export class GeometrySpecificationAdapter {
     const namedSpecialPoints = new Set([
       ...triVertices,
       ...(spec.altitudes || []).map(item => item.foot),
-      ...(spec.medians || []).map(item => item.midpoint),
       ...(spec.bisectors || []).map(item => item.foot),
     ]);
     const segmentKey = (from: string, to: string) => [from, to].sort().join(':');
@@ -179,17 +178,18 @@ export class GeometrySpecificationAdapter {
 
     const auxPoints: NonNullable<TriangleData['auxPoints']> = (spec.auxPoints || [])
       .filter(point => {
-        if (!point.name || namedSpecialPoints.has(point.name) || seenPointNames.has(point.name)) return false;
+        if (!point.name || triVertices.has(point.name) || namedSpecialPoints.has(point.name) || seenPointNames.has(point.name)) return false;
         seenPointNames.add(point.name);
         return true;
       })
       .map((point, index) => {
         const hidden = isHelperHidden(point);
+        const inMedians = (spec.medians || []).some(m => m.midpoint === point.name);
         return {
           ...point,
           id: `ai-point-${index}`,
-          showPoint: hidden || point.showPoint === false ? false : true,
-          showLabel: hidden || point.showLabel === false ? false : true,
+          showPoint: hidden || inMedians || point.showPoint === false ? false : true,
+          showLabel: hidden || inMedians || point.showLabel === false ? false : true,
         };
       });
 
@@ -197,7 +197,7 @@ export class GeometrySpecificationAdapter {
     const projectionSegments = auxPoints
       .filter(point => point.type === 'projection' && Boolean(point.fromPoint))
       .map(point => ({ from: point.fromPoint!, to: point.name, style: 'solid' as const }));
-    const usedSegments = new Set(specialSegments);
+    const usedSegments = new Set<string>(specialSegments);
     const auxLines: NonNullable<TriangleData['auxLines']> = [];
     const hasTangentInt = (spec.auxPoints || []).some(
       p =>
@@ -264,8 +264,47 @@ export class GeometrySpecificationAdapter {
       }
     }
 
+    // Tự động dựng bán kính OA từ tâm O đến tiếp điểm A nếu có tiếp tuyến tại A của đường tròn (O)
+    const tangentPoint = (spec.auxPoints || []).find(p => p.type === 'tangent');
+    const tangentAt =
+      tangentPoint?.fromPoint ||
+      (tangentIntPoint && typeof tangentIntPoint.line1 === 'string'
+        ? tangentIntPoint.line1.replace('x', '')
+        : undefined) ||
+      'A';
+    const circleCenter =
+      tangentPoint?.centerPoint ||
+      'O';
+    const hasTangent = !!(
+      tangentPoint ||
+      tangentIntPoint ||
+      (spec.rightAngles || []).some(
+        r => r.vertex === tangentAt && (r.ray1 === circleCenter || r.ray2 === circleCenter)
+      )
+    );
+
+    if (hasTangent && tangentAt && circleCenter) {
+      const existingOA = auxLines.find(
+        l =>
+          (l.from === circleCenter && l.to === tangentAt) ||
+          (l.from === tangentAt && l.to === circleCenter)
+      );
+      if (!existingOA) {
+        auxLines.push({
+          id: `ai-line-${auxLines.length}`,
+          from: circleCenter,
+          to: tangentAt,
+          style: 'dashed',
+          enabled: true,
+        });
+      } else {
+        existingOA.style = 'dashed';
+      }
+    }
+
     const rightAngleMarkers: NonNullable<TriangleData['rightAngleMarkers']> = [];
     const markerKeys = new Set<string>();
+    const targetTangentRay = hasTangentInt && tangentIntPoint ? tangentIntPoint.name : (tangentPoint?.name || 'x');
     const candidates = [
       ...(spec.rightAngles || []).map(r => {
         if (hasTangentInt && tangentIntPoint) {
@@ -282,6 +321,19 @@ export class GeometrySpecificationAdapter {
           ray2: Array.isArray(point.targetLine) ? point.targetLine[0] : point.targetLine![0],
         })),
     ];
+    if (
+      hasTangent &&
+      tangentAt &&
+      circleCenter &&
+      !candidates.some(
+        r =>
+          r.vertex === tangentAt &&
+          ((r.ray1 === circleCenter && r.ray2 === targetTangentRay) ||
+            (r.ray2 === circleCenter && r.ray1 === targetTangentRay))
+      )
+    ) {
+      candidates.push({ vertex: tangentAt, ray1: circleCenter, ray2: targetTangentRay });
+    }
     for (const marker of candidates) {
       if (!marker.vertex || !marker.ray1 || !marker.ray2) continue;
       const key = [marker.vertex, ...[marker.ray1, marker.ray2].sort()].join(':');

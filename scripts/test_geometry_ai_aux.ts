@@ -223,6 +223,7 @@ test('Bài toán kết hợp Toán 9: tam giác nội tiếp đường tròn (O)
   // Kiểm tra tiếp tuyến Ax
   assert.ok(tri.auxPoints?.some((p: any) => p.name === 'x' && p.type === 'tangent'), 'Phải có điểm x trên tiếp tuyến');
   assert.ok(tri.auxLines?.some((l: any) => (l.from === 'A' && l.to === 'x') || (l.from === 'x' && l.to === 'A')), 'Phải có tia tiếp tuyến Ax');
+  assert.ok(tri.auxLines?.some((l: any) => (l.from === 'O' && l.to === 'A') || (l.from === 'A' && l.to === 'O')), 'Phải có bán kính OA');
   assert.ok(tri.rightAngleMarkers?.some((r: any) => r.vertex === 'A'), 'Tiếp tuyến Ax phải có góc vuông tại tiếp điểm A với bán kính OA');
 });
 

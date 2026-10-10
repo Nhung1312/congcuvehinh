@@ -862,38 +862,51 @@ function validateAndNormalizeSpec(spec: GeometrySpecification, originalPrompt: s
       });
     }
 
-    // 5. Nếu đề chỉ có "M là trung điểm BC" mà không yêu cầu vẽ trung tuyến AM:
-    // Không thêm đường trung tuyến, chỉ tạo điểm M là trung điểm
-    const hasMidpointOnly = (rawText.includes('m là trung điểm') || rawText.includes('trung điểm m')) && !hasMedianCommand;
-    if (hasMidpointOnly && !spec.auxPoints.some(p => p.name === 'M') && !spec.medians.some(m => m.midpoint === 'M')) {
-      spec.auxPoints.push({
-        name: 'M',
-        type: 'midpoint',
-        segment: oppBC,
-      });
-      if (!spec.equalSegments.some(es => es.segments.includes(`${vB}M`))) {
-        spec.equalSegments.push({
-          segments: [`${vB}M`, `M${vC}`],
-          tickType: 1,
+    // 5. Trung điểm: M là trung điểm BC, N là trung điểm DK, v.v.
+    const midRegex = /(?:trung\s+điểm\s+([A-Za-z])(?:\s+của\s+([A-Za-z]{2}))?|(?:gọi\s+)?([A-Za-z])\s+là\s+trung\s+điểm\s+(?:của\s+([A-Za-z]{2}))?)/gi;
+    let midMatch;
+    while ((midMatch = midRegex.exec(combinedText)) !== null) {
+      const mid = (midMatch[1] || midMatch[3])?.toUpperCase();
+      const seg = (midMatch[2] || midMatch[4] || oppBC)?.toUpperCase();
+      if (!mid || mid.length !== 1 || seg.length !== 2) continue;
+
+      const isMedianTarget = (mid === 'M' && hasMedianCommand);
+      if (!isMedianTarget && !spec.auxPoints.some(p => p.name === mid) && !spec.medians.some(m => m.midpoint === mid)) {
+        spec.auxPoints.push({
+          name: mid,
+          type: 'midpoint',
+          segment: seg,
         });
+        if (!spec.equalSegments.some(es => es.segments.includes(`${seg[0]}${mid}`))) {
+          spec.equalSegments.push({
+            segments: [`${seg[0]}${mid}`, `${mid}${seg[1]}`],
+            tickType: 1,
+          });
+        }
       }
     }
 
-    // 6. Tiếp tuyến Ax của (O)
-    if (rawText.includes('tiếp tuyến ax') || (rawText.includes('tiếp tuyến') && rawText.includes('ax'))) {
-      if (!spec.auxPoints.some(p => p.name === 'x')) {
+    // 6. Tiếp tuyến tại một điểm của (O) (Ax, tiếp tuyến tại A, tiếp tuyến tại B...)
+    const tanMatch = combinedText.match(/tiếp\s+tuyến\s+(?:của\s+(?:\(O\)|đường\s+tròn(?:\s+\(O\))?)\s+)?tại\s+([A-Za-z])|tiếp\s+tuyến\s+([A-Za-z])([a-z])\b/i);
+    if (tanMatch || rawText.includes('tiếp tuyến ax') || (rawText.includes('tiếp tuyến') && rawText.includes('ax'))) {
+      const tanAt = (tanMatch?.[1] || tanMatch?.[2] || 'A').toUpperCase();
+      const tanHelper = (tanMatch?.[3] || 'x');
+      if (!spec.auxPoints.some(p => p.name === tanHelper)) {
         spec.auxPoints.push({
-          name: 'x',
+          name: tanHelper,
           type: 'tangent',
-          fromPoint: 'A',
+          fromPoint: tanAt,
           centerPoint: 'O',
         });
       }
-      if (!spec.auxLines.some(l => (l.from === 'A' && l.to === 'x') || (l.from === 'x' && l.to === 'A'))) {
-        spec.auxLines.push({ from: 'A', to: 'x', style: 'solid' });
+      if (!spec.auxLines.some(l => (l.from === tanAt && l.to === tanHelper) || (l.from === tanHelper && l.to === tanAt))) {
+        spec.auxLines.push({ from: tanAt, to: tanHelper, style: 'solid' });
       }
-      if (!spec.rightAngles.some(r => r.vertex === 'A' && ((r.ray1 === 'O' && r.ray2 === 'x') || (r.ray1 === 'x' && r.ray2 === 'O')))) {
-        spec.rightAngles.push({ vertex: 'A', ray1: 'O', ray2: 'x' });
+      if (!spec.auxLines.some(l => (l.from === 'O' && l.to === tanAt) || (l.from === tanAt && l.to === 'O'))) {
+        spec.auxLines.push({ from: 'O', to: tanAt, style: 'dashed' });
+      }
+      if (!spec.rightAngles.some(r => r.vertex === tanAt && ((r.ray1 === 'O' && r.ray2 === tanHelper) || (r.ray1 === tanHelper && r.ray2 === 'O')))) {
+        spec.rightAngles.push({ vertex: tanAt, ray1: 'O', ray2: tanHelper });
       }
     }
   }
@@ -942,29 +955,38 @@ function validateAndNormalizeSpec(spec: GeometrySpecification, originalPrompt: s
     }
   }
 
-  // 5. Nhận diện các đoạn thẳng nối phụ (Nối DE, Nối AM...)
-  const connectRegex = /\b[Nn]ối\s+([A-Z])([A-Z])(?:\s+và\s+([A-Z])([A-Z]))?\b/g;
-  let connMatch;
-  while ((connMatch = connectRegex.exec(combinedText)) !== null) {
-    const pairs = [
-      [connMatch[1], connMatch[2]],
-      [connMatch[3], connMatch[4]],
-    ];
-    for (const [p1, p2] of pairs) {
-      if (!p1 || !p2 || p1 === p2) continue;
-      const pA = p1.toUpperCase();
-      const pB = p2.toUpperCase();
-      const isAlreadyInMedians = spec.medians.some(
-        m => (m.from === pA && m.midpoint === pB) || (m.from === pB && m.midpoint === pA)
-      );
+  // 5. Nhận diện các đoạn thẳng nối phụ (Nối OB, AM, DE, MN và BT...)
+  const connectClauses = combinedText.matchAll(/\b(?:[Nn]ối|kẻ\s+các\s+đoạn\s+thẳng|kẻ\s+đoạn\s+thẳng)\s+([^.!?;\n]+)/gi);
+  for (const clause of connectClauses) {
+    const content = clause[1];
+    const segMatches = content.matchAll(/\b([A-Z])([A-Z])\b/g);
+    for (const m of segMatches) {
+      const p1 = m[1].toUpperCase();
+      const p2 = m[2].toUpperCase();
+      if (p1 === p2) continue;
       const isAlreadyInAltitudes = spec.altitudes.some(
-        a => (a.from === pA && a.foot === pB) || (a.from === pB && a.foot === pA)
+        a => (a.from === p1 && a.foot === p2) || (a.from === p2 && a.foot === p1)
       );
       const isAlreadyInAuxLines = spec.auxLines.some(
-        l => (l.from === pA && l.to === pB) || (l.from === pB && l.to === pA)
+        l => (l.from === p1 && l.to === p2) || (l.from === p2 && l.to === p1)
       );
-      if (!isAlreadyInMedians && !isAlreadyInAltitudes && !isAlreadyInAuxLines) {
-        spec.auxLines.push({ from: pA, to: pB, style: 'solid' });
+      if (!isAlreadyInAltitudes && !isAlreadyInAuxLines) {
+        spec.auxLines.push({ from: p1, to: p2, style: 'solid' });
+      }
+    }
+    const withMatches = content.matchAll(/\b([A-Z])\s+với\s+([A-Z])\b/g);
+    for (const m of withMatches) {
+      const p1 = m[1].toUpperCase();
+      const p2 = m[2].toUpperCase();
+      if (p1 === p2) continue;
+      const isAlreadyInAltitudes = spec.altitudes.some(
+        a => (a.from === p1 && a.foot === p2) || (a.from === p2 && a.foot === p1)
+      );
+      const isAlreadyInAuxLines = spec.auxLines.some(
+        l => (l.from === p1 && l.to === p2) || (l.from === p2 && l.to === p1)
+      );
+      if (!isAlreadyInAltitudes && !isAlreadyInAuxLines) {
+        spec.auxLines.push({ from: p1, to: p2, style: 'solid' });
       }
     }
   }

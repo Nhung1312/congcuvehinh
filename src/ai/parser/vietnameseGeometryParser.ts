@@ -194,19 +194,19 @@ export class VietnameseGeometryParser {
       const vertexMatch = text.match(/cân\s+tại\s+([a-z])/i);
       specialVertex = vertexMatch ? vertexMatch[1].toUpperCase() : vertices[0];
       detectedEntities.push(`Loại tam giác: Cân tại ${specialVertex}`);
-    } else if (text.includes('vuông')) {
-      triType = 'right';
-      const vertexMatch = text.match(/vuông\s+tại\s+([a-z])/i);
-      specialVertex = vertexMatch ? vertexMatch[1].toUpperCase() : vertices[0];
-      detectedEntities.push(`Loại tam giác: Vuông tại ${specialVertex}`);
-    } else if (text.includes('nhọn')) {
+    } else if (text.includes('nhọn') || /tam\s+giác\s+[^,.]{0,25}nhọn/i.test(raw)) {
       triType = 'general';
       detectedEntities.push('Loại tam giác: Tam giác nhọn');
-    } else if (text.includes('tù')) {
+    } else if (text.includes('tù') || /tam\s+giác\s+[^,.]{0,25}tù/i.test(raw)) {
       triType = 'obtuse';
       const vertexMatch = text.match(/tù\s+tại\s+([a-z])/i);
       specialVertex = vertexMatch ? vertexMatch[1].toUpperCase() : vertices[0];
       detectedEntities.push(`Loại tam giác: Tam giác tù tại ${specialVertex}`);
+    } else if (/(?:tam\s+giác\s+[^,.]{0,25}vuông|vuông\s+tại\s+[a-z])/i.test(raw) || (text.includes('vuông') && !text.includes('vuông góc'))) {
+      triType = 'right';
+      const vertexMatch = text.match(/vuông\s+tại\s+([a-z])/i);
+      specialVertex = vertexMatch ? vertexMatch[1].toUpperCase() : vertices[0];
+      detectedEntities.push(`Loại tam giác: Vuông tại ${specialVertex}`);
     }
 
     const [vA, vB, vC] = vertices;
@@ -283,10 +283,9 @@ export class VietnameseGeometryParser {
         const mid = matchMed[3].toUpperCase();
         const seg = (matchMed[4] || `${vB}${vC}`).toUpperCase();
         if (mid !== vA && mid !== vB && mid !== vC) {
-          // Chỉ thêm trung tuyến nếu đề bài thực sự có từ "trung tuyến" hoặc "nối/kẻ" đoạn nối từ đỉnh tới trung điểm
-          const hasConnectingVerb = text.includes('trung tuyến') ||
-            new RegExp(`(?:trung\\s+tuyến|nối|kẻ).*?\\b${vA}${mid}\\b|\\b${vA}${mid}\\b.*?(?:trung\\s+tuyến|nối|kẻ)`, 'i').test(raw);
-          if (hasConnectingVerb && !medians.some(m => m.midpoint === mid)) {
+          // Chỉ thêm medians chuyên biệt khi đề bài thực sự có từ "trung tuyến"
+          const hasExplicitMedianWord = text.includes('trung tuyến');
+          if (hasExplicitMedianWord && !medians.some(m => m.midpoint === mid)) {
             medians.push({
               from: vA,
               toSegment: seg,
@@ -308,9 +307,8 @@ export class VietnameseGeometryParser {
       const mid = midMatch[1].toUpperCase();
       const seg = (midMatch[2] || `${vB}${vC}`).toUpperCase();
       if (mid !== vA && mid !== vB && mid !== vC) {
-        const hasConnectingVerb = text.includes('trung tuyến') ||
-          new RegExp(`(?:trung\\s+tuyến|nối|kẻ).*?\\b${vA}${mid}\\b|\\b${vA}${mid}\\b.*?(?:trung\\s+tuyến|nối|kẻ)`, 'i').test(raw);
-        if (hasConnectingVerb) {
+        const hasExplicitMedianWord = text.includes('trung tuyến');
+        if (hasExplicitMedianWord) {
           medians.push({
             from: vA,
             toSegment: seg,
@@ -325,7 +323,7 @@ export class VietnameseGeometryParser {
       }
     }
 
-    if (medians.length === 0 && (text.includes('trung tuyến am') || (/(?:trung\s+tuyến|nối|kẻ).*?\bam\b/i.test(raw) && text.includes('trung điểm')))) {
+    if (medians.length === 0 && text.includes('trung tuyến am')) {
       medians.push({
         from: vA,
         toSegment: `${vB}${vC}`,
@@ -923,37 +921,47 @@ export class VietnameseGeometryParser {
       }
     }
 
-    // 3. Tiếp tuyến Ax của đường tròn (O)
-    if (constrText.includes('tiếp tuyến ax') || (constrText.includes('tiếp tuyến') && constrText.includes('ax'))) {
-      if (!spec.auxPoints.some(p => p.name === 'x')) {
+    // 3. Tiếp tuyến của đường tròn (O) tại tiếp điểm (A, B, C...)
+    const tanMatch = constructionPrompt.match(/tiếp\s+tuyến\s+(?:của\s+đường\s+tròn\s+\(O\)\s+)?(?:tại\s+([A-Z])|([A-Z])([a-z]))/i);
+    if (tanMatch || constrText.includes('tiếp tuyến ax')) {
+      const tanAt = (tanMatch?.[1] || tanMatch?.[2] || 'A').toUpperCase();
+      const tanHelper = (tanMatch?.[3] || 'x');
+      if (!spec.auxPoints.some(p => p.name === tanHelper)) {
         spec.auxPoints.push({
-          name: 'x',
+          name: tanHelper,
           type: 'tangent',
-          fromPoint: 'A',
+          fromPoint: tanAt,
           centerPoint: 'O',
         });
       }
-      if (!spec.auxLines.some(l => (l.from === 'A' && l.to === 'x') || (l.from === 'x' && l.to === 'A'))) {
-        spec.auxLines.push({ from: 'A', to: 'x', style: 'solid' });
+      if (!spec.auxLines.some(l => (l.from === tanAt && l.to === tanHelper) || (l.from === tanHelper && l.to === tanAt))) {
+        spec.auxLines.push({ from: tanAt, to: tanHelper, style: 'solid' });
       }
-      if (!spec.rightAngles.some(r => r.vertex === 'A' && ((r.ray1 === 'O' && r.ray2 === 'x') || (r.ray1 === 'x' && r.ray2 === 'O')))) {
-        spec.rightAngles.push({ vertex: 'A', ray1: 'O', ray2: 'x' });
+      if (!spec.auxLines.some(l => (l.from === 'O' && l.to === tanAt) || (l.from === tanAt && l.to === 'O'))) {
+        spec.auxLines.push({ from: 'O', to: tanAt, style: 'dashed' });
+      }
+      if (!spec.rightAngles.some(r => r.vertex === tanAt && ((r.ray1 === 'O' && r.ray2 === tanHelper) || (r.ray1 === tanHelper && r.ray2 === 'O')))) {
+        spec.rightAngles.push({ vertex: tanAt, ray1: 'O', ray2: tanHelper });
       }
     }
 
-    // 4. Trung điểm M khi không có đường trung tuyến
-    const midMatch = constructionPrompt.match(/(?:trung\s+điểm\s+([A-Z])(?:\s+của\s+([A-Z]{2}))?|(?:gọi\s+)?([A-Z])\s+là\s+trung\s+điểm\s+(?:của\s+([A-Z]{2}))?)/i);
-    if (midMatch) {
-      const mid = (midMatch[1] || midMatch[3]).toUpperCase();
-      const seg = (midMatch[2] || midMatch[4] || 'BC').toUpperCase();
-      const inMedians = spec.medians.some(m => m.midpoint === mid);
-      if (!inMedians && !spec.auxPoints.some(p => p.name === mid)) {
+    // 4. Trung điểm (M là trung điểm BC, N là trung điểm DK, v.v.)
+    const midRegex = /(?:trung\s+điểm\s+([A-Z])(?:\s+của\s+([A-Z]{2}))?|(?:gọi\s+)?([A-Z])\s+là\s+trung\s+điểm\s+(?:của\s+([A-Z]{2}))?)/gi;
+    let midMatch;
+    while ((midMatch = midRegex.exec(constructionPrompt)) !== null) {
+      const mid = (midMatch[1] || midMatch[3])?.toUpperCase();
+      const seg = (midMatch[2] || midMatch[4] || 'BC')?.toUpperCase();
+      if (!mid || mid.length !== 1 || seg.length !== 2) continue;
+
+      if (!spec.auxPoints.some(p => p.name === mid)) {
         spec.auxPoints.push({
           name: mid,
           type: 'midpoint',
           segment: seg,
+          showPoint: true,
+          showLabel: true,
         });
-        if (seg.length === 2 && !spec.equalSegments.some(es => es.segments.includes(`${seg[0]}${mid}`))) {
+        if (!spec.equalSegments.some(es => es.segments.includes(`${seg[0]}${mid}`))) {
           spec.equalSegments.push({
             segments: [`${seg[0]}${mid}`, `${mid}${seg[1]}`],
             tickType: 1,
@@ -1002,29 +1010,38 @@ export class VietnameseGeometryParser {
       }
     }
 
-    // 6. Nối các đoạn thẳng (Nối DE, Nối AM...)
-    const connectRegex = /\b[Nn]ối\s+([A-Z])([A-Z])(?:\s+và\s+([A-Z])([A-Z]))?\b/g;
-    let connMatch;
-    while ((connMatch = connectRegex.exec(constructionPrompt)) !== null) {
-      const pairs = [
-        [connMatch[1], connMatch[2]],
-        [connMatch[3], connMatch[4]],
-      ];
-      for (const [p1, p2] of pairs) {
-        if (!p1 || !p2 || p1 === p2) continue;
-        const pA = p1.toUpperCase();
-        const pB = p2.toUpperCase();
-        const isAlreadyInMedians = spec.medians.some(
-          m => (m.from === pA && m.midpoint === pB) || (m.from === pB && m.midpoint === pA)
-        );
+    // 6. Nối các đoạn thẳng (Nối OB, AM, DE, MN và BT...)
+    const connectClauses = constructionPrompt.matchAll(/\b(?:[Nn]ối|kẻ\s+các\s+đoạn\s+thẳng|kẻ\s+đoạn\s+thẳng)\s+([^.!?;\n]+)/gi);
+    for (const clause of connectClauses) {
+      const content = clause[1];
+      const segMatches = content.matchAll(/\b([A-Z])([A-Z])\b/g);
+      for (const m of segMatches) {
+        const p1 = m[1].toUpperCase();
+        const p2 = m[2].toUpperCase();
+        if (p1 === p2) continue;
         const isAlreadyInAltitudes = spec.altitudes.some(
-          a => (a.from === pA && a.foot === pB) || (a.from === pB && a.foot === pA)
+          a => (a.from === p1 && a.foot === p2) || (a.from === p2 && a.foot === p1)
         );
         const isAlreadyInAuxLines = spec.auxLines.some(
-          l => (l.from === pA && l.to === pB) || (l.from === pB && l.to === pA)
+          l => (l.from === p1 && l.to === p2) || (l.from === p2 && l.to === p1)
         );
-        if (!isAlreadyInMedians && !isAlreadyInAltitudes && !isAlreadyInAuxLines) {
-          spec.auxLines.push({ from: pA, to: pB, style: 'solid' });
+        if (!isAlreadyInAltitudes && !isAlreadyInAuxLines) {
+          spec.auxLines.push({ from: p1, to: p2, style: 'solid' });
+        }
+      }
+      const withMatches = content.matchAll(/\b([A-Z])\s+với\s+([A-Z])\b/g);
+      for (const m of withMatches) {
+        const p1 = m[1].toUpperCase();
+        const p2 = m[2].toUpperCase();
+        if (p1 === p2) continue;
+        const isAlreadyInAltitudes = spec.altitudes.some(
+          a => (a.from === p1 && a.foot === p2) || (a.from === p2 && a.foot === p1)
+        );
+        const isAlreadyInAuxLines = spec.auxLines.some(
+          l => (l.from === p1 && l.to === p2) || (l.from === p2 && l.to === p1)
+        );
+        if (!isAlreadyInAltitudes && !isAlreadyInAuxLines) {
+          spec.auxLines.push({ from: p1, to: p2, style: 'solid' });
         }
       }
     }
