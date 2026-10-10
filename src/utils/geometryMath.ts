@@ -49,8 +49,10 @@ export const vecNorm = (v: Vector2D): Vector2D => {
 };
 
 export const dotProd = (v1: Vector2D, v2: Vector2D): number => v1.x * v2.x + v1.y * v2.y;
+export const vecDot = dotProd;
 
 export const crossProd = (v1: Vector2D, v2: Vector2D): number => v1.x * v2.y - v1.y * v2.x;
+export const vecCross = crossProd;
 
 // Vector vuông góc với v (xoay 90 độ ngược chiều kim đồng hồ)
 export const vecPerp = (v: Vector2D): Vector2D => ({
@@ -685,7 +687,7 @@ export const constrainTrianglePointDrag = (
   return result;
 };
 
-// 12. Ràng buộc hình học thông minh khi kéo đỉnh tứ giác
+// 12. Ràng buộc hình học thông minh khi kéo đỉnh tứ giác (Bảo toàn hình học cho mọi góc xoay)
 export const constrainQuadPointDrag = (
   type: string,
   pts: [Point2D, Point2D, Point2D, Point2D],
@@ -705,7 +707,7 @@ export const constrainQuadPointDrag = (
   }
 
   if (type === 'parallelogram') {
-    // AB // CD và AD // BC => D = A + C - B
+    // AB // CD và AD // BC => D = A + C - B hay A + C = B + D
     if (dragIdx === 0) {
       result[0] = newPoint;
       result[3] = {
@@ -735,136 +737,258 @@ export const constrainQuadPointDrag = (
   }
 
   if (type === 'rectangle') {
-    // Giữ hình chữ nhật dạng cạnh song song với các trục tọa độ
-    if (dragIdx === 0) { // Đỉnh A (top-left)
-      result[0] = newPoint;
-      result[1].y = newPoint.y;
-      result[3].x = newPoint.x;
-    } else if (dragIdx === 1) { // Đỉnh B (top-right)
-      result[1] = newPoint;
-      result[0].y = newPoint.y;
-      result[2].x = newPoint.x;
-    } else if (dragIdx === 2) { // Đỉnh C (bottom-right)
-      result[2] = newPoint;
-      result[1].x = newPoint.x;
-      result[3].y = newPoint.y;
-    } else if (dragIdx === 3) { // Đỉnh D (bottom-left)
-      result[3] = newPoint;
-      result[0].x = newPoint.x;
-      result[2].y = newPoint.y;
+    // Luôn có 4 góc vuông và 2 cặp cạnh đối song song & bằng nhau (bảo toàn cho mọi góc xoay)
+    // Đỉnh đối diện đóng vai trò điểm neo cố định. Trục chữ nhật theo 2 cạnh xuất phát từ điểm neo.
+    if (dragIdx === 0) { // Kéo A (đối diện C)
+      const anchor = pts[2]; // C
+      const uDir = vecNorm(vecSub(pts[3], anchor)); // Hướng CD
+      const vDir = vecNorm(vecSub(pts[1], anchor)); // Hướng CB
+      const w = vecSub(newPoint, anchor);
+      let wu = w.x * uDir.x + w.y * uDir.y;
+      let wv = w.x * vDir.x + w.y * vDir.y;
+      if (Math.abs(wu) < 20) wu = (wu >= 0 ? 1 : -1) * 20;
+      if (Math.abs(wv) < 20) wv = (wv >= 0 ? 1 : -1) * 20;
+      result[2] = anchor;
+      result[3] = { x: anchor.x + wu * uDir.x, y: anchor.y + wu * uDir.y };
+      result[1] = { x: anchor.x + wv * vDir.x, y: anchor.y + wv * vDir.y };
+      result[0] = { x: anchor.x + wu * uDir.x + wv * vDir.x, y: anchor.y + wu * uDir.y + wv * vDir.y };
+    } else if (dragIdx === 1) { // Kéo B (đối diện D)
+      const anchor = pts[3]; // D
+      const uDir = vecNorm(vecSub(pts[2], anchor)); // Hướng DC
+      const vDir = vecNorm(vecSub(pts[0], anchor)); // Hướng DA
+      const w = vecSub(newPoint, anchor);
+      let wu = w.x * uDir.x + w.y * uDir.y;
+      let wv = w.x * vDir.x + w.y * vDir.y;
+      if (Math.abs(wu) < 20) wu = (wu >= 0 ? 1 : -1) * 20;
+      if (Math.abs(wv) < 20) wv = (wv >= 0 ? 1 : -1) * 20;
+      result[3] = anchor;
+      result[2] = { x: anchor.x + wu * uDir.x, y: anchor.y + wu * uDir.y };
+      result[0] = { x: anchor.x + wv * vDir.x, y: anchor.y + wv * vDir.y };
+      result[1] = { x: anchor.x + wu * uDir.x + wv * vDir.x, y: anchor.y + wu * uDir.y + wv * vDir.y };
+    } else if (dragIdx === 2) { // Kéo C (đối diện A)
+      const anchor = pts[0]; // A
+      const uDir = vecNorm(vecSub(pts[1], anchor)); // Hướng AB
+      const vDir = vecNorm(vecSub(pts[3], anchor)); // Hướng AD
+      const w = vecSub(newPoint, anchor);
+      let wu = w.x * uDir.x + w.y * uDir.y;
+      let wv = w.x * vDir.x + w.y * vDir.y;
+      if (Math.abs(wu) < 20) wu = (wu >= 0 ? 1 : -1) * 20;
+      if (Math.abs(wv) < 20) wv = (wv >= 0 ? 1 : -1) * 20;
+      result[0] = anchor;
+      result[1] = { x: anchor.x + wu * uDir.x, y: anchor.y + wu * uDir.y };
+      result[3] = { x: anchor.x + wv * vDir.x, y: anchor.y + wv * vDir.y };
+      result[2] = { x: anchor.x + wu * uDir.x + wv * vDir.x, y: anchor.y + wu * uDir.y + wv * vDir.y };
+    } else if (dragIdx === 3) { // Kéo D (đối diện B)
+      const anchor = pts[1]; // B
+      const uDir = vecNorm(vecSub(pts[0], anchor)); // Hướng BA
+      const vDir = vecNorm(vecSub(pts[2], anchor)); // Hướng BC
+      const w = vecSub(newPoint, anchor);
+      let wu = w.x * uDir.x + w.y * uDir.y;
+      let wv = w.x * vDir.x + w.y * vDir.y;
+      if (Math.abs(wu) < 20) wu = (wu >= 0 ? 1 : -1) * 20;
+      if (Math.abs(wv) < 20) wv = (wv >= 0 ? 1 : -1) * 20;
+      result[1] = anchor;
+      result[0] = { x: anchor.x + wu * uDir.x, y: anchor.y + wu * uDir.y };
+      result[2] = { x: anchor.x + wv * vDir.x, y: anchor.y + wv * vDir.y };
+      result[3] = { x: anchor.x + wu * uDir.x + wv * vDir.x, y: anchor.y + wu * uDir.y + wv * vDir.y };
     }
     return result;
   }
 
   if (type === 'square') {
-    // Giữ hình vuông đều
-    const a = result[0];
-    if (dragIdx === 2) { // Kéo góc đối C
-      const size = Math.max(30, Math.min(newPoint.x - a.x, newPoint.y - a.y));
-      result[1] = { x: a.x + size, y: a.y };
-      result[2] = { x: a.x + size, y: a.y + size };
-      result[3] = { x: a.x, y: a.y + size };
-    } else if (dragIdx === 1) { // Kéo đỉnh B
-      const size = Math.max(30, newPoint.x - a.x);
-      result[1] = { x: a.x + size, y: a.y };
-      result[2] = { x: a.x + size, y: a.y + size };
-      result[3] = { x: a.x, y: a.y + size };
-    } else if (dragIdx === 3) { // Kéo đỉnh D
-      const size = Math.max(30, newPoint.y - a.y);
-      result[1] = { x: a.x + size, y: a.y };
-      result[2] = { x: a.x + size, y: a.y + size };
-      result[3] = { x: a.x, y: a.y + size };
-    } else { // Kéo đỉnh A
-      const dx = newPoint.x - pts[0].x;
-      const dy = newPoint.y - pts[0].y;
-      return [
-        { x: pts[0].x + dx, y: pts[0].y + dy },
-        { x: pts[1].x + dx, y: pts[1].y + dy },
-        { x: pts[2].x + dx, y: pts[2].y + dy },
-        { x: pts[3].x + dx, y: pts[3].y + dy },
-      ];
+    // Luôn có 4 cạnh bằng nhau và 4 góc vuông (bảo toàn cho mọi góc xoay)
+    const oppIdx = (dragIdx + 2) % 4;
+    const anchor = pts[oppIdx];
+    let dVec = vecSub(newPoint, anchor);
+    if (vecLen(dVec) < 25) {
+      const u = vecLen(dVec) > 1e-4 ? vecNorm(dVec) : { x: 1, y: 0 };
+      dVec = { x: u.x * 25, y: u.y * 25 };
     }
+    const center = { x: anchor.x + dVec.x / 2, y: anchor.y + dVec.y / 2 };
+    const hVec = { x: dVec.x / 2, y: dVec.y / 2 };
+    const hPerp = { x: -hVec.y, y: hVec.x };
+
+    // Giữ chiều quay (orientation) không bị lật
+    const prevCenter = { x: (pts[dragIdx].x + pts[oppIdx].x) / 2, y: (pts[dragIdx].y + pts[oppIdx].y) / 2 };
+    const prevPerpPt = pts[(dragIdx + 1) % 4];
+    const prevSideVec = vecSub(prevPerpPt, prevCenter);
+    const sign = (prevSideVec.x * hPerp.x + prevSideVec.y * hPerp.y) >= 0 ? 1 : -1;
+
+    result[oppIdx] = anchor;
+    result[dragIdx] = { x: anchor.x + dVec.x, y: anchor.y + dVec.y };
+    result[(dragIdx + 1) % 4] = { x: center.x + sign * hPerp.x, y: center.y + sign * hPerp.y };
+    result[(dragIdx + 3) % 4] = { x: center.x - sign * hPerp.x, y: center.y - sign * hPerp.y };
     return result;
   }
 
   if (type === 'rhombus') {
-    // 2 đường chéo AC và BD cắt nhau tại trung điểm O và vuông góc
-    const center = {
-      x: (pts[0].x + pts[2].x) / 2,
-      y: (pts[1].y + pts[3].y) / 2,
-    };
-    if (dragIdx === 0) {
-      result[0] = { x: center.x, y: newPoint.y };
-      result[2] = { x: center.x, y: 2 * center.y - newPoint.y };
-    } else if (dragIdx === 2) {
-      result[2] = { x: center.x, y: newPoint.y };
-      result[0] = { x: center.x, y: 2 * center.y - newPoint.y };
-    } else if (dragIdx === 1) {
-      result[1] = { x: newPoint.x, y: center.y };
-      result[3] = { x: 2 * center.x - newPoint.x, y: center.y };
-    } else if (dragIdx === 3) {
-      result[3] = { x: newPoint.x, y: center.y };
-      result[1] = { x: 2 * center.x - newPoint.x, y: center.y };
+    // 4 cạnh luôn bằng nhau, 2 đường chéo AC và BD vuông góc tại trung điểm O (cho mọi góc xoay)
+    if (dragIdx === 0 || dragIdx === 2) {
+      // Kéo A hoặc C: đường chéo BD cố định tâm O và hướng
+      const center = { x: (pts[1].x + pts[3].x) / 2, y: (pts[1].y + pts[3].y) / 2 };
+      const bdVec = vecSub(pts[3], pts[1]);
+      const bdLen = vecLen(bdVec);
+      if (bdLen < 1e-4) return result;
+      const bdUnit = { x: bdVec.x / bdLen, y: bdVec.y / bdLen };
+      const nUnit = { x: -bdUnit.y, y: bdUnit.x }; // Vuông góc BD
+
+      const w = vecSub(newPoint, center);
+      let h = w.x * nUnit.x + w.y * nUnit.y;
+      const origH = vecDot(vecSub(pts[dragIdx], center), nUnit);
+      if (origH !== 0 && Math.sign(h) !== Math.sign(origH)) {
+        h = Math.sign(origH) * Math.max(20, Math.abs(h));
+      }
+      if (Math.abs(h) < 20) h = (origH >= 0 ? 1 : -1) * 20;
+
+      if (dragIdx === 0) {
+        result[0] = { x: center.x + h * nUnit.x, y: center.y + h * nUnit.y };
+        result[2] = { x: center.x - h * nUnit.x, y: center.y - h * nUnit.y };
+      } else {
+        result[2] = { x: center.x + h * nUnit.x, y: center.y + h * nUnit.y };
+        result[0] = { x: center.x - h * nUnit.x, y: center.y - h * nUnit.y };
+      }
+    } else {
+      // Kéo B hoặc D: đường chéo AC cố định tâm O và hướng
+      const center = { x: (pts[0].x + pts[2].x) / 2, y: (pts[0].y + pts[2].y) / 2 };
+      const acVec = vecSub(pts[2], pts[0]);
+      const acLen = vecLen(acVec);
+      if (acLen < 1e-4) return result;
+      const acUnit = { x: acVec.x / acLen, y: acVec.y / acLen };
+      const nUnit = { x: -acUnit.y, y: acUnit.x }; // Vuông góc AC
+
+      const w = vecSub(newPoint, center);
+      let h = w.x * nUnit.x + w.y * nUnit.y;
+      const origH = vecDot(vecSub(pts[dragIdx], center), nUnit);
+      if (origH !== 0 && Math.sign(h) !== Math.sign(origH)) {
+        h = Math.sign(origH) * Math.max(20, Math.abs(h));
+      }
+      if (Math.abs(h) < 20) h = (origH >= 0 ? 1 : -1) * 20;
+
+      if (dragIdx === 1) {
+        result[1] = { x: center.x + h * nUnit.x, y: center.y + h * nUnit.y };
+        result[3] = { x: center.x - h * nUnit.x, y: center.y - h * nUnit.y };
+      } else {
+        result[3] = { x: center.x + h * nUnit.x, y: center.y + h * nUnit.y };
+        result[1] = { x: center.x - h * nUnit.x, y: center.y - h * nUnit.y };
+      }
     }
     return result;
   }
 
   if (type === 'trapezoid') {
-    // AB // CD (giữ y của A = y của B và y của C = y của D)
+    // Hai đáy luôn song song: AB // CD (bảo toàn cho mọi góc xoay)
     if (dragIdx === 0) {
+      // Kéo A: B di chuyển cùng phương song song với đáy CD
+      const uCD = vecNorm(vecSub(pts[2], pts[3])); // Phương CD (D -> C)
+      const abOrig = vecSub(pts[1], pts[0]);
+      const abLen = Math.max(20, vecDot(abOrig, uCD));
       result[0] = newPoint;
-      result[1].y = newPoint.y;
+      result[1] = { x: newPoint.x + abLen * uCD.x, y: newPoint.y + abLen * uCD.y };
     } else if (dragIdx === 1) {
-      result[1] = newPoint;
-      result[0].y = newPoint.y;
+      // Kéo B: chiếu B lên đường thẳng qua A song song với CD
+      const uCD = vecNorm(vecSub(pts[2], pts[3]));
+      const w = vecSub(newPoint, pts[0]);
+      let len = vecDot(w, uCD);
+      if (len < 20) len = 20;
+      result[1] = { x: pts[0].x + len * uCD.x, y: pts[0].y + len * uCD.y };
     } else if (dragIdx === 2) {
-      result[2] = newPoint;
-      result[3].y = newPoint.y;
+      // Kéo C: chiếu C lên đường thẳng qua D song song với AB
+      const uAB = vecNorm(vecSub(pts[1], pts[0]));
+      const w = vecSub(newPoint, pts[3]);
+      let len = vecDot(w, uAB);
+      if (len < 20) len = 20;
+      result[2] = { x: pts[3].x + len * uAB.x, y: pts[3].y + len * uAB.y };
     } else if (dragIdx === 3) {
+      // Kéo D: C di chuyển cùng phương song song với AB
+      const uAB = vecNorm(vecSub(pts[1], pts[0]));
+      const cdOrig = vecSub(pts[2], pts[3]);
+      const cdLen = Math.max(20, vecDot(cdOrig, uAB));
       result[3] = newPoint;
-      result[2].y = newPoint.y;
+      result[2] = { x: newPoint.x + cdLen * uAB.x, y: newPoint.y + cdLen * uAB.y };
     }
     return result;
   }
 
   if (type === 'right-trapezoid') {
-    // AB // CD, góc A = D = 90 độ (A.x = D.x)
-    if (dragIdx === 0) {
-      result[0] = newPoint;
-      result[1].y = newPoint.y;
-      result[3].x = newPoint.x;
-    } else if (dragIdx === 1) {
-      result[1] = newPoint;
-      result[0].y = newPoint.y;
-    } else if (dragIdx === 2) {
-      result[2] = newPoint;
-      result[3].y = newPoint.y;
-    } else if (dragIdx === 3) {
+    // AB // CD, góc A = D = 90 độ (AD ⊥ AB và AD ⊥ CD cho mọi góc xoay)
+    const baseDir = vecNorm(vecSub(pts[2], pts[3])); // Hướng CD (D -> C)
+    const legDir = { x: -baseDir.y, y: baseDir.x }; // Hướng vuông góc (D -> A)
+
+    if (dragIdx === 0) { // Kéo A: A phải nằm trên đường vuông góc xuất phát từ D
+      const w = vecSub(newPoint, pts[3]);
+      let h = vecDot(w, legDir);
+      if (Math.abs(h) < 20) h = (h >= 0 ? 1 : -1) * 20;
+      const abLen = Math.max(20, vecDot(vecSub(pts[1], pts[0]), baseDir));
+      result[0] = { x: pts[3].x + h * legDir.x, y: pts[3].y + h * legDir.y };
+      result[1] = { x: result[0].x + abLen * baseDir.x, y: result[0].y + abLen * baseDir.y };
+    } else if (dragIdx === 1) { // Kéo B: chiếu B lên đường thẳng qua A song song với CD
+      const w = vecSub(newPoint, pts[0]);
+      let len = vecDot(w, baseDir);
+      if (len < 20) len = 20;
+      result[1] = { x: pts[0].x + len * baseDir.x, y: pts[0].y + len * baseDir.y };
+    } else if (dragIdx === 2) { // Kéo C: chiếu C lên đường thẳng qua D song song với AB
+      const w = vecSub(newPoint, pts[3]);
+      let len = vecDot(w, baseDir);
+      if (len < 20) len = 20;
+      result[2] = { x: pts[3].x + len * baseDir.x, y: pts[3].y + len * baseDir.y };
+    } else if (dragIdx === 3) { // Kéo D: dời cả hình để bảo toàn góc vuông tại A và D
+      const h = vecDot(vecSub(pts[0], pts[3]), legDir);
+      const abLen = Math.max(20, vecDot(vecSub(pts[1], pts[0]), baseDir));
+      const cdLen = Math.max(20, vecDot(vecSub(pts[2], pts[3]), baseDir));
       result[3] = newPoint;
-      result[0].x = newPoint.x;
-      result[2].y = newPoint.y;
+      result[2] = { x: newPoint.x + cdLen * baseDir.x, y: newPoint.y + cdLen * baseDir.y };
+      result[0] = { x: newPoint.x + h * legDir.x, y: newPoint.y + h * legDir.y };
+      result[1] = { x: result[0].x + abLen * baseDir.x, y: result[0].y + abLen * baseDir.y };
     }
     return result;
   }
 
   if (type === 'isosceles-trapezoid') {
-    // AB // CD, AD = BC (đối xứng qua trục đứng xMid của CD)
-    if (dragIdx === 0) {
-      const xMid = (result[3].x + result[2].x) / 2;
-      result[0] = newPoint;
-      result[1] = { x: 2 * xMid - newPoint.x, y: newPoint.y };
-    } else if (dragIdx === 1) {
-      const xMid = (result[3].x + result[2].x) / 2;
-      result[1] = newPoint;
-      result[0] = { x: 2 * xMid - newPoint.x, y: newPoint.y };
-    } else if (dragIdx === 2) {
-      const xMid = (result[0].x + result[1].x) / 2;
-      result[2] = newPoint;
-      result[3] = { x: 2 * xMid - newPoint.x, y: newPoint.y };
-    } else if (dragIdx === 3) {
-      const xMid = (result[0].x + result[1].x) / 2;
-      result[3] = newPoint;
-      result[2] = { x: 2 * xMid - newPoint.x, y: newPoint.y };
+    // AB // CD và AD = BC (đối xứng qua trục trung trực của 2 đáy cho mọi góc xoay)
+    if (dragIdx === 0 || dragIdx === 1) {
+      // Đáy CD cố định trục đối xứng
+      const midCD = { x: (pts[3].x + pts[2].x) / 2, y: (pts[3].y + pts[2].y) / 2 };
+      const uBase = vecNorm(vecSub(pts[2], pts[3])); // D -> C
+      const nAxis = { x: -uBase.y, y: uBase.x }; // Trục đối xứng vuông góc đáy
+
+      const w = vecSub(newPoint, midCD);
+      let h = vecDot(w, nAxis); // Chiều cao
+      if (Math.abs(h) < 20) h = (h >= 0 ? 1 : -1) * 20;
+      let halfW = vecDot(w, uBase); // Bán kính đáy AB
+      if (Math.abs(halfW) < 15) halfW = (halfW >= 0 ? 1 : -1) * 15;
+
+      const midAB = { x: midCD.x + h * nAxis.x, y: midCD.y + h * nAxis.y };
+      if (dragIdx === 0) {
+        const wDist = Math.abs(halfW);
+        result[0] = { x: midAB.x - wDist * uBase.x, y: midAB.y - wDist * uBase.y };
+        result[1] = { x: midAB.x + wDist * uBase.x, y: midAB.y + wDist * uBase.y };
+      } else {
+        const wDist = Math.abs(halfW);
+        result[1] = { x: midAB.x + wDist * uBase.x, y: midAB.y + wDist * uBase.y };
+        result[0] = { x: midAB.x - wDist * uBase.x, y: midAB.y - wDist * uBase.y };
+      }
+    } else {
+      // Đáy AB cố định trục đối xứng
+      const midAB = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      const uBase = vecNorm(vecSub(pts[1], pts[0])); // A -> B
+      const nAxis = { x: -uBase.y, y: uBase.x };
+
+      const w = vecSub(newPoint, midAB);
+      let h = vecDot(w, nAxis);
+      if (Math.abs(h) < 20) h = (h >= 0 ? 1 : -1) * 20;
+      let halfW = vecDot(w, uBase);
+      if (Math.abs(halfW) < 15) halfW = (halfW >= 0 ? 1 : -1) * 15;
+
+      const midCD = { x: midAB.x + h * nAxis.x, y: midAB.y + h * nAxis.y };
+      if (dragIdx === 2) {
+        const wDist = Math.abs(halfW);
+        result[2] = { x: midCD.x + wDist * uBase.x, y: midCD.y + wDist * uBase.y };
+        result[3] = { x: midCD.x - wDist * uBase.x, y: midCD.y - wDist * uBase.y };
+      } else {
+        const wDist = Math.abs(halfW);
+        result[3] = { x: midCD.x - wDist * uBase.x, y: midCD.y - wDist * uBase.y };
+        result[2] = { x: midCD.x + wDist * uBase.x, y: midCD.y + wDist * uBase.y };
+      }
     }
     return result;
   }
@@ -876,15 +1000,16 @@ export const constrainQuadPointDrag = (
     const p2 = pts[otherIdxs[1]];
     const p3 = pts[otherIdxs[2]];
     const circle = getTriangleCircumcircle(p1, p2, p3);
-    const vec = vecSub(newPoint, circle.center);
-    const len = vecLen(vec);
-    if (len > 1e-4) {
-      result[dragIdx] = {
-        x: circle.center.x + (vec.x / len) * circle.radius,
-        y: circle.center.y + (vec.y / len) * circle.radius,
-      };
+    if (circle && circle.radius > 5 && Number.isFinite(circle.radius)) {
+      const vec = vecSub(newPoint, circle.center);
+      const len = vecLen(vec);
+      if (len > 1e-4) {
+        result[dragIdx] = {
+          x: circle.center.x + (vec.x / len) * circle.radius,
+          y: circle.center.y + (vec.y / len) * circle.radius,
+        };
+      }
     }
-    // Kéo trùng tâm không xác định phương chiếu lên đường tròn.
     return result;
   }
 
@@ -1362,8 +1487,8 @@ export const constrainCircleDrag = (
     return points.map((p, i) => (i === 0 ? newPoint : { x: p.x + dx, y: p.y + dy }));
   }
 
-  // Không kéo điểm bán kính về tâm: bán kính bằng 0 làm hình suy biến.
-  if (dragIdx === 1 && dist(center, newPoint) < 5 &&
+  // Không kéo điểm bán kính về tâm: bán kính < 15 làm hình suy biến.
+  if (dragIdx === 1 && dist(center, newPoint) < 15 &&
       type !== 'two-tangents' && type !== 'two-circles' && type !== 'exterior-angle') {
     return result;
   }
@@ -1371,8 +1496,9 @@ export const constrainCircleDrag = (
   // 2. Kéo điểm A (Bán kính) (dragIdx = 1) trong basic, diameter-chord, tangent-point
   if (dragIdx === 1) {
     if (type === 'basic' || type === 'diameter-chord' || type === 'tangent-point') {
-      result[1] = newPoint;
-      const newRadius = dist(center, newPoint);
+      const newRadius = Math.max(15, dist(center, newPoint));
+      const u = dist(center, newPoint) > 1e-4 ? vecNorm(vecSub(newPoint, center)) : { x: 1, y: 0 };
+      result[1] = { x: center.x + u.x * newRadius, y: center.y + u.y * newRadius };
       
       // Nếu có dây cung C, D trong diameter-chord, cập nhật khoảng cách tới tâm theo tỉ lệ hoặc giữ góc
       if (type === 'diameter-chord' && points.length >= 4) {
@@ -1389,8 +1515,9 @@ export const constrainCircleDrag = (
 
     if (type === 'arc' || type === 'sector' || type === 'segment') {
       // Kéo điểm A: thay đổi bán kính r và góc của A, tự động giữ bán kính cho B
-      result[1] = newPoint;
-      const newRadius = dist(center, newPoint);
+      const newRadius = Math.max(15, dist(center, newPoint));
+      const u = dist(center, newPoint) > 1e-4 ? vecNorm(vecSub(newPoint, center)) : { x: 1, y: 0 };
+      result[1] = { x: center.x + u.x * newRadius, y: center.y + u.y * newRadius };
       if (points.length >= 3 && newRadius > 5) {
         const vB = vecNorm(vecSub(points[2], center));
         result[2] = {
@@ -1403,7 +1530,7 @@ export const constrainCircleDrag = (
 
     if (type === 'inscribed-angle' || type === 'tangent-chord-angle' || type === 'interior-angle') {
       // Khóa điểm trên đường tròn
-      const r = dist(center, points[1]);
+      const r = dist(center, points[1]) || 110;
       if (dist(center, newPoint) < 1e-4) return result;
       const v = vecNorm(vecSub(newPoint, center));
       result[1] = {
@@ -1413,7 +1540,20 @@ export const constrainCircleDrag = (
       return result;
     }
 
-    if (type === 'two-tangents' || type === 'exterior-angle') {
+    if (type === 'two-tangents') {
+      // Kéo điểm ngoài P: P luôn phải nằm ngoài đường tròn (d >= r + 15) để 2 tiếp tuyến luôn tiếp xúc đúng
+      const r = (points[2] ? dist(center, points[2]) : null) || 110;
+      const d = dist(center, newPoint);
+      if (d <= r + 15) {
+        const u = d > 1e-4 ? vecNorm(vecSub(newPoint, center)) : { x: 1, y: 0 };
+        result[1] = { x: center.x + u.x * (r + 15), y: center.y + u.y * (r + 15) };
+      } else {
+        result[1] = newPoint;
+      }
+      return result;
+    }
+
+    if (type === 'exterior-angle') {
       // Kéo điểm ngoài P
       result[1] = newPoint;
       return result;

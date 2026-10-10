@@ -1327,6 +1327,17 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
       const label = bis.label || (bis.fromVertex === 'B' ? 'E' : bis.fromVertex === 'C' ? 'F' : 'D');
       auxiliaryAnchors[label] = angleBisectorPoint(from, side1, side2);
     }
+    if (!auxiliaryAnchors['G']) {
+      auxiliaryAnchors['G'] = { x: (pA.x + pB.x + pC.x) / 3, y: (pA.y + pB.y + pC.y) / 3 };
+    }
+    if (!auxiliaryAnchors['H']) {
+      const vBC = { x: pC.x - pB.x, y: pC.y - pB.y };
+      const d1 = { x: -vBC.y, y: vBC.x };
+      const vAC = { x: pC.x - pA.x, y: pC.y - pA.y };
+      const d2 = { x: -vAC.y, y: vAC.x };
+      const ortho = lineIntersection(pA, { x: pA.x + d1.x, y: pA.y + d1.y }, pB, { x: pB.x + d2.x, y: pB.y + d2.y });
+      if (ortho) auxiliaryAnchors['H'] = ortho;
+    }
 
     return (
       <g id="triangle-group">
@@ -3316,17 +3327,24 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
 
         {/* Các đường phụ và ký hiệu hình học tự do (Giai đoạn 3.2) */}
         {(() => {
-          const circleMap = {
+          const tanPoint1Name = c.tangentPointsNames?.[0] || 'A';
+          const tanPoint2Name = c.tangentPointsNames?.[1] || 'B';
+          const circleMap: Record<string, Point2D> = {
             O: pCenter,
             [c.centerName || 'O']: pCenter,
             "O'": pCenter2,
             [c.center2Name || "O'"]: pCenter2,
-            A: pRadius,
-            B: pDiamB,
+            A: twoTangents?.isValid ? twoTangents.p1 : pRadius,
+            B: twoTangents?.isValid ? twoTangents.p2 : pDiamB,
             C: pChordC,
             D: pChordD,
             H: pChordH,
             P: pExtP,
+            [c.externalPointName || 'P']: pExtP,
+            ...(twoTangents?.isValid ? {
+              [tanPoint1Name]: twoTangents.p1,
+              [tanPoint2Name]: twoTangents.p2,
+            } : {}),
             E: pts[4] ? (lineIntersection(pts[1], pts[2], pts[3], pts[4]) || midpoint(pts[1], pts[2])) : midpoint(pChordC, pChordD),
           };
           return (

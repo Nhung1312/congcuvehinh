@@ -7,7 +7,19 @@ import { test } from 'node:test';
 import type { GeometrySpecification } from '../src/ai/types';
 import { GeometrySpecificationAdapter } from '../src/ai/adapter/geometrySpecificationAdapter';
 import { resolveAuxiliaryPoints } from '../src/utils/resolveAuxiliaryPoints';
-import { midpoint, projectPointToLine, constrainTrianglePointDrag, constrainQuadPointDrag, constrainCircleDrag, getQuadPresetPoints, getTriangleCircumcircle, dist } from '../src/utils/geometryMath';
+import {
+  midpoint,
+  projectPointToLine,
+  constrainTrianglePointDrag,
+  constrainQuadPointDrag,
+  constrainCircleDrag,
+  getQuadPresetPoints,
+  getTriangleCircumcircle,
+  getTwoTangentContactPoints,
+  lineIntersection,
+  dist,
+  type Point2D,
+} from '../src/utils/geometryMath';
 import { VietnameseGeometryParser } from '../src/ai/parser/vietnameseGeometryParser';
 
 const baseSpec = (changes: Partial<GeometrySpecification> = {}): GeometrySpecification => ({
@@ -311,3 +323,334 @@ test('Đường tròn: không cho bán kính bằng 0 và giữ điểm trên đ
   const translated = constrainCircleDrag('basic', [center, radial], 0, { x: 250, y: 250 });
   assert.equal(dist(translated[0], translated[1]), 100, 'Dịch tâm giữ nguyên bán kính');
 });
+
+// ==========================================
+// ĐỢT 2 – KIỂM THỬ RÀNG BUỘC KÉO THẢ THÔNG MINH
+// ==========================================
+
+// Helper toán học: tích vô hướng, tích có hướng
+const dotProduct = (p1: Point2D, p2: Point2D, p3: Point2D) => {
+  // Vector p1->p2 và p1->p3
+  return (p2.x - p1.x) * (p3.x - p1.x) + (p2.y - p1.y) * (p3.y - p1.y);
+};
+const crossProduct = (u: Point2D, v: Point2D) => u.x * v.y - u.y * v.x;
+
+// Helper tạo hình bị xoay quanh tâm một góc alpha (radian)
+const rotateQuad = (pts: [Point2D, Point2D, Point2D, Point2D], angleRad: number): [Point2D, Point2D, Point2D, Point2D] => {
+  const cx = (pts[0].x + pts[1].x + pts[2].x + pts[3].x) / 4;
+  const cy = (pts[0].y + pts[1].y + pts[2].y + pts[3].y) / 4;
+  const cos = Math.cos(angleRad);
+  const sin = Math.sin(angleRad);
+  return pts.map(p => ({
+    x: cx + (p.x - cx) * cos - (p.y - cy) * sin,
+    y: cy + (p.x - cx) * sin + (p.y - cy) * cos,
+  })) as [Point2D, Point2D, Point2D, Point2D];
+};
+
+test('Đợt 2 - Hình chữ nhật bị xoay: kéo mọi đỉnh luôn bảo toàn 4 góc vuông và cặp cạnh đối song song', () => {
+  // Xoay hình chữ nhật 35 độ
+  const rotatedRect = rotateQuad(getQuadPresetPoints('rectangle'), 35 * Math.PI / 180);
+
+  // Kéo từng đỉnh 0, 1, 2, 3 đến các vị trí khác nhau
+  const testDrags = [
+    { dragIdx: 0, target: { x: 120, y: 90 } },
+    { dragIdx: 1, target: { x: 450, y: 160 } },
+    { dragIdx: 2, target: { x: 430, y: 350 } },
+    { dragIdx: 3, target: { x: 130, y: 290 } },
+  ];
+
+  for (const { dragIdx, target } of testDrags) {
+    const res = constrainQuadPointDrag('rectangle', rotatedRect, dragIdx, target);
+    const [A, B, C, D] = res;
+
+    // 1. Tích vô hướng tại cả 4 góc phải bằng 0 (4 góc vuông)
+    assert.ok(Math.abs(dotProduct(B, A, C)) < 1e-6, `Góc B phải là 90 độ khi kéo đỉnh ${dragIdx}`);
+    assert.ok(Math.abs(dotProduct(C, B, D)) < 1e-6, `Góc C phải là 90 độ khi kéo đỉnh ${dragIdx}`);
+    assert.ok(Math.abs(dotProduct(D, C, A)) < 1e-6, `Góc D phải là 90 độ khi kéo đỉnh ${dragIdx}`);
+    assert.ok(Math.abs(dotProduct(A, D, B)) < 1e-6, `Góc A phải là 90 độ khi kéo đỉnh ${dragIdx}`);
+
+    // 2. Hai cặp cạnh đối song song: tích có hướng = 0
+    const vAB = { x: B.x - A.x, y: B.y - A.y };
+    const vDC = { x: C.x - D.x, y: C.y - D.y };
+    assert.ok(Math.abs(crossProduct(vAB, vDC)) < 1e-6, `AB // CD khi kéo đỉnh ${dragIdx}`);
+
+    const vAD = { x: D.x - A.x, y: D.y - A.y };
+    const vBC = { x: C.x - B.x, y: C.y - B.y };
+    assert.ok(Math.abs(crossProduct(vAD, vBC)) < 1e-6, `AD // BC khi kéo đỉnh ${dragIdx}`);
+
+    // 3. Hai cặp cạnh đối bằng nhau
+    assert.ok(Math.abs(dist(A, B) - dist(C, D)) < 1e-6, `AB = CD khi kéo đỉnh ${dragIdx}`);
+    assert.ok(Math.abs(dist(A, D) - dist(B, C)) < 1e-6, `AD = BC khi kéo đỉnh ${dragIdx}`);
+  }
+});
+
+test('Đợt 2 - Hình vuông bị xoay: kéo mọi đỉnh luôn bảo toàn 4 cạnh bằng nhau và 4 góc vuông', () => {
+  // Xoay hình vuông 45 độ
+  const rotatedSquare = rotateQuad(getQuadPresetPoints('square'), Math.PI / 4);
+
+  const testDrags = [
+    { dragIdx: 0, target: { x: 130, y: 150 } },
+    { dragIdx: 1, target: { x: 390, y: 90 } },
+    { dragIdx: 2, target: { x: 420, y: 360 } },
+    { dragIdx: 3, target: { x: 140, y: 350 } },
+  ];
+
+  for (const { dragIdx, target } of testDrags) {
+    const res = constrainQuadPointDrag('square', rotatedSquare, dragIdx, target);
+    const [A, B, C, D] = res;
+
+    // 1. Tích vô hướng tại 4 góc = 0
+    assert.ok(Math.abs(dotProduct(B, A, C)) < 1e-6, `Góc B phải là 90 độ khi kéo đỉnh ${dragIdx}`);
+    assert.ok(Math.abs(dotProduct(C, B, D)) < 1e-6, `Góc C phải là 90 độ khi kéo đỉnh ${dragIdx}`);
+    assert.ok(Math.abs(dotProduct(D, C, A)) < 1e-6, `Góc D phải là 90 độ khi kéo đỉnh ${dragIdx}`);
+    assert.ok(Math.abs(dotProduct(A, D, B)) < 1e-6, `Góc A phải là 90 độ khi kéo đỉnh ${dragIdx}`);
+
+    // 2. 4 cạnh bằng nhau
+    const dAB = dist(A, B);
+    const dBC = dist(B, C);
+    const dCD = dist(C, D);
+    const dDA = dist(D, A);
+    assert.ok(Math.abs(dAB - dBC) < 1e-6, `AB = BC khi kéo đỉnh ${dragIdx}`);
+    assert.ok(Math.abs(dBC - dCD) < 1e-6, `BC = CD khi kéo đỉnh ${dragIdx}`);
+    assert.ok(Math.abs(dCD - dDA) < 1e-6, `CD = DA khi kéo đỉnh ${dragIdx}`);
+
+    // 3. Hai đường chéo vuông góc và bằng nhau
+    const vAC = { x: C.x - A.x, y: C.y - A.y };
+    const vBD = { x: D.x - B.x, y: D.y - B.y };
+    assert.ok(Math.abs(vAC.x * vBD.x + vAC.y * vBD.y) < 1e-6, `AC vuông góc BD khi kéo đỉnh ${dragIdx}`);
+    assert.ok(Math.abs(dist(A, C) - dist(B, D)) < 1e-6, `AC = BD khi kéo đỉnh ${dragIdx}`);
+  }
+});
+
+test('Đợt 2 - Hình bình hành bị xoay: hai cặp cạnh đối luôn song song và bằng nhau', () => {
+  const rotatedPara = rotateQuad(getQuadPresetPoints('parallelogram'), 25 * Math.PI / 180);
+
+  for (let dragIdx = 0; dragIdx < 4; dragIdx++) {
+    const target = { x: 250 + dragIdx * 30, y: 150 + dragIdx * 20 };
+    const res = constrainQuadPointDrag('parallelogram', rotatedPara, dragIdx, target);
+    const [A, B, C, D] = res;
+
+    const vAB = { x: B.x - A.x, y: B.y - A.y };
+    const vDC = { x: C.x - D.x, y: C.y - D.y };
+    const vAD = { x: D.x - A.x, y: D.y - A.y };
+    const vBC = { x: C.x - B.x, y: C.y - B.y };
+
+    // Tích có hướng bằng 0 khi song song
+    assert.ok(Math.abs(crossProduct(vAB, vDC)) < 1e-6, `AB // CD khi kéo đỉnh ${dragIdx}`);
+    assert.ok(Math.abs(crossProduct(vAD, vBC)) < 1e-6, `AD // BC khi kéo đỉnh ${dragIdx}`);
+
+    // Cặp cạnh đối bằng nhau
+    assert.ok(Math.abs(dist(A, B) - dist(C, D)) < 1e-6, `AB = CD khi kéo đỉnh ${dragIdx}`);
+    assert.ok(Math.abs(dist(A, D) - dist(B, C)) < 1e-6, `AD = BC khi kéo đỉnh ${dragIdx}`);
+
+    // Trung điểm 2 đường chéo trùng nhau
+    const midAC = midpoint(A, C);
+    const midBD = midpoint(B, D);
+    assert.ok(dist(midAC, midBD) < 1e-6, `Trung điểm AC trùng trung điểm BD khi kéo đỉnh ${dragIdx}`);
+  }
+});
+
+test('Đợt 2 - Hình thoi bị xoay: 4 cạnh luôn bằng nhau, 2 đường chéo vuông góc', () => {
+  const rotatedRhombus = rotateQuad(getQuadPresetPoints('rhombus'), 40 * Math.PI / 180);
+
+  for (let dragIdx = 0; dragIdx < 4; dragIdx++) {
+    const target = { x: 260 + (dragIdx % 2) * 50, y: 170 + dragIdx * 30 };
+    const res = constrainQuadPointDrag('rhombus', rotatedRhombus, dragIdx, target);
+    const [A, B, C, D] = res;
+
+    // 4 cạnh bằng nhau
+    const dAB = dist(A, B);
+    const dBC = dist(B, C);
+    const dCD = dist(C, D);
+    const dDA = dist(D, A);
+    assert.ok(Math.abs(dAB - dBC) < 1e-6, `AB = BC khi kéo đỉnh ${dragIdx}`);
+    assert.ok(Math.abs(dBC - dCD) < 1e-6, `BC = CD khi kéo đỉnh ${dragIdx}`);
+    assert.ok(Math.abs(dCD - dDA) < 1e-6, `CD = DA khi kéo đỉnh ${dragIdx}`);
+
+    // 2 đường chéo vuông góc
+    const vAC = { x: C.x - A.x, y: C.y - A.y };
+    const vBD = { x: D.x - B.x, y: D.y - B.y };
+    assert.ok(Math.abs(vAC.x * vBD.x + vAC.y * vBD.y) < 1e-6, `AC vuông góc BD khi kéo đỉnh ${dragIdx}`);
+
+    // Cắt nhau tại trung điểm
+    const midAC = midpoint(A, C);
+    const midBD = midpoint(B, D);
+    assert.ok(dist(midAC, midBD) < 1e-6, `Trung điểm AC trùng trung điểm BD khi kéo đỉnh ${dragIdx}`);
+  }
+});
+
+test('Đợt 2 - Hình thang bị xoay: hai đáy luôn song song', () => {
+  const rotatedTrap = rotateQuad(getQuadPresetPoints('trapezoid'), 30 * Math.PI / 180);
+
+  for (let dragIdx = 0; dragIdx < 4; dragIdx++) {
+    const target = { x: 240 + dragIdx * 20, y: 160 + dragIdx * 30 };
+    const res = constrainQuadPointDrag('trapezoid', rotatedTrap, dragIdx, target);
+    const [A, B, C, D] = res;
+
+    const vAB = { x: B.x - A.x, y: B.y - A.y };
+    const vDC = { x: C.x - D.x, y: C.y - D.y };
+    assert.ok(Math.abs(crossProduct(vAB, vDC)) < 1e-6, `Tích có hướng = 0: AB // CD khi kéo đỉnh ${dragIdx}`);
+  }
+});
+
+test('Đợt 2 - Hình thang cân bị xoay: hai đáy song song và hai cạnh bên bằng nhau', () => {
+  const rotatedIsoTrap = rotateQuad(getQuadPresetPoints('isosceles-trapezoid'), 50 * Math.PI / 180);
+
+  for (let dragIdx = 0; dragIdx < 4; dragIdx++) {
+    const target = { x: 230 + dragIdx * 25, y: 150 + dragIdx * 25 };
+    const res = constrainQuadPointDrag('isosceles-trapezoid', rotatedIsoTrap, dragIdx, target);
+    const [A, B, C, D] = res;
+
+    // Hai đáy song song
+    const vAB = { x: B.x - A.x, y: B.y - A.y };
+    const vDC = { x: C.x - D.x, y: C.y - D.y };
+    assert.ok(Math.abs(crossProduct(vAB, vDC)) < 1e-6, `AB // CD khi kéo đỉnh ${dragIdx}`);
+
+    // Hai cạnh bên bằng nhau: AD = BC
+    assert.ok(Math.abs(dist(A, D) - dist(B, C)) < 1e-6, `AD = BC (${dist(A, D)} vs ${dist(B, C)}) khi kéo đỉnh ${dragIdx}`);
+  }
+});
+
+test('Đợt 2 - Hình thang vuông bị xoay: hai đáy song song và duy trì các góc vuông', () => {
+  const rotatedRightTrap = rotateQuad(getQuadPresetPoints('right-trapezoid'), 20 * Math.PI / 180);
+
+  for (let dragIdx = 0; dragIdx < 4; dragIdx++) {
+    const target = { x: 220 + dragIdx * 25, y: 170 + dragIdx * 20 };
+    const res = constrainQuadPointDrag('right-trapezoid', rotatedRightTrap, dragIdx, target);
+    const [A, B, C, D] = res;
+
+    // Hai đáy song song
+    const vAB = { x: B.x - A.x, y: B.y - A.y };
+    const vDC = { x: C.x - D.x, y: C.y - D.y };
+    assert.ok(Math.abs(crossProduct(vAB, vDC)) < 1e-6, `AB // CD khi kéo đỉnh ${dragIdx}`);
+
+    // Góc A và D bằng 90 độ
+    assert.ok(Math.abs(dotProduct(A, D, B)) < 1e-6, `Góc A phải vuông khi kéo đỉnh ${dragIdx}`);
+    assert.ok(Math.abs(dotProduct(D, A, C)) < 1e-6, `Góc D phải vuông khi kéo đỉnh ${dragIdx}`);
+  }
+});
+
+test('Đợt 2 - Tứ giác nội tiếp: kéo mọi đỉnh đều luôn thuộc cùng đường tròn', () => {
+  const pts = getQuadPresetPoints('cyclic');
+
+  for (let dragIdx = 0; dragIdx < 4; dragIdx++) {
+    const target = { x: 180 + dragIdx * 50, y: 120 + dragIdx * 40 };
+    const res = constrainQuadPointDrag('cyclic', pts, dragIdx, target);
+
+    // 4 đỉnh phải cùng cách đều tâm đường tròn ngoại tiếp của 3 đỉnh kia
+    const otherIdxs = [0, 1, 2, 3].filter(i => i !== dragIdx);
+    const circle = getTriangleCircumcircle(res[otherIdxs[0]], res[otherIdxs[1]], res[otherIdxs[2]]);
+
+    for (let i = 0; i < 4; i++) {
+      assert.ok(
+        Math.abs(dist(res[i], circle.center) - circle.radius) < 1e-6,
+        `Đỉnh ${i} phải nằm trên đường tròn khi kéo đỉnh ${dragIdx}`
+      );
+    }
+  }
+});
+
+test('Đợt 2 - Đường tròn & tiếp tuyến: kéo tâm O, tiếp điểm A, điểm ngoài P', () => {
+  const center = { x: 250, y: 220 };
+  const r = 100;
+  const radPoint = { x: center.x + r, y: center.y };
+
+  // 1. Kéo tâm O: tịnh tiến toàn bộ hệ thống
+  const movedCenter = constrainCircleDrag('basic', [center, radPoint], 0, { x: 300, y: 270 });
+  assert.equal(dist(movedCenter[0], movedCenter[1]), r, 'Bán kính bảo toàn khi kéo tâm');
+
+  // 2. Tiếp điểm A trong tangent-point: tiếp tuyến luôn vuông góc OA
+  const pA = { x: center.x + r * Math.cos(Math.PI / 3), y: center.y + r * Math.sin(Math.PI / 3) };
+  const tanPts = constrainCircleDrag('tangent-point', [center, pA], 1, { x: 380, y: 280 });
+  const newRadius = dist(tanPts[0], tanPts[1]);
+  assert.ok(newRadius >= 15, 'Bán kính không bị suy biến về 0');
+  // Vector OA và vector tiếp tuyến
+  const vOA = { x: tanPts[1].x - tanPts[0].x, y: tanPts[1].y - tanPts[0].y };
+  const vTan = { x: -vOA.y, y: vOA.x };
+  assert.ok(Math.abs(vOA.x * vTan.x + vOA.y * vTan.y) < 1e-6, 'Tiếp tuyến luôn vuông góc OA');
+
+  // 3. Hai tiếp tuyến từ điểm ngoài P trong two-tangents:
+  const extP = { x: center.x + 180, y: center.y + 40 };
+  const twoTanPts = constrainCircleDrag('two-tangents', [center, extP], 1, { x: 420, y: 310 });
+  const pNew = twoTanPts[1];
+  const tangents = getTwoTangentContactPoints(center, r, pNew);
+  assert.ok(tangents.isValid, 'Tiếp tuyến phải hợp lệ khi P ở ngoài đường tròn');
+
+  // Kiểm tra tiếp xúc đúng: OA ⊥ PA và OB ⊥ PB
+  const dotOA_PA = (tangents.p1.x - center.x) * (tangents.p1.x - pNew.x) + (tangents.p1.y - center.y) * (tangents.p1.y - pNew.y);
+  const dotOB_PB = (tangents.p2.x - center.x) * (tangents.p2.x - pNew.x) + (tangents.p2.y - center.y) * (tangents.p2.y - pNew.y);
+  assert.ok(Math.abs(dotOA_PA) < 1e-6, 'OA vuông góc PA tại tiếp điểm A');
+  assert.ok(Math.abs(dotOB_PB) < 1e-6, 'OB vuông góc PB tại tiếp điểm B');
+  assert.ok(Math.abs(dist(center, tangents.p1) - r) < 1e-6, 'Khoảng cách từ tiếp điểm A tới tâm bằng bán kính');
+  assert.ok(Math.abs(dist(center, tangents.p2) - r) < 1e-6, 'Khoảng cách từ tiếp điểm B tới tâm bằng bán kính');
+  assert.ok(Math.abs(dist(pNew, tangents.p1) - dist(pNew, tangents.p2)) < 1e-6, 'Hai đoạn tiếp tuyến PA = PB');
+
+  // 4. Kéo P vào trong đường tròn: P được kẹp ngoài đường tròn, không suy biến
+  const clamped = constrainCircleDrag('two-tangents', [center, extP], 1, center);
+  assert.ok(dist(center, clamped[1]) >= r + 15, 'P không thể nằm trong đường tròn');
+});
+
+test('Đợt 2 - Cập nhật điểm phụ thời gian thực: chuỗi H -> D -> E -> K khi kéo đỉnh gốc', () => {
+  // Tam giác ABC vuông tại A
+  let triPts: [Point2D, Point2D, Point2D] = [
+    { x: 150, y: 300 }, // A (đỉnh vuông)
+    { x: 420, y: 300 }, // B
+    { x: 150, y: 100 }, // C
+  ];
+
+  // Kéo B tới 3 vị trí khác nhau
+  const dragPositions = [
+    { x: 380, y: 300 },
+    { x: 450, y: 300 },
+    { x: 350, y: 280 },
+  ];
+
+  for (const pos of dragPositions) {
+    const updatedPts = constrainTrianglePointDrag('right', triPts, 1, pos, 'A');
+    const [A, B, C] = updatedPts;
+
+    // 1. Góc vuông tại A được bảo toàn
+    assert.ok(Math.abs(dotProduct(A, B, C)) < 1e-6, 'Góc A luôn vuông 90 độ khi kéo B');
+
+    // 2. Điểm phụ phụ thuộc nhiều bước:
+    // H: chân đường cao từ A lên BC
+    // D: hình chiếu của H lên AB
+    // E: hình chiếu của H lên AC
+    // K: hình chiếu của D lên BC
+    // M: trung điểm BC
+    const auxPointsSpec = [
+      { id: '1', name: 'H', type: 'projection' as const, fromPoint: 'A', targetLine: 'BC' },
+      { id: '2', name: 'D', type: 'projection' as const, fromPoint: 'H', targetLine: 'AB' },
+      { id: '3', name: 'E', type: 'projection' as const, fromPoint: 'H', targetLine: 'AC' },
+      { id: '4', name: 'K', type: 'projection' as const, fromPoint: 'D', targetLine: 'BC' },
+      { id: '5', name: 'M', type: 'midpoint' as const, segment: 'BC' },
+    ];
+
+    const resolved = resolveAuxiliaryPoints({ A, B, C }, auxPointsSpec);
+    assert.ok(resolved.H && resolved.D && resolved.E && resolved.K && resolved.M);
+
+    // Kiểm tra H thuộc BC và AH vuông góc BC
+    const vBC = { x: C.x - B.x, y: C.y - B.y };
+    const vAH = { x: resolved.H.x - A.x, y: resolved.H.y - A.y };
+    assert.ok(Math.abs(vAH.x * vBC.x + vAH.y * vBC.y) < 1e-6, 'AH vuông góc BC');
+
+    // Kiểm tra D thuộc AB và HD vuông góc AB
+    const vAB = { x: B.x - A.x, y: B.y - A.y };
+    const vHD = { x: resolved.D.x - resolved.H.x, y: resolved.D.y - resolved.H.y };
+    assert.ok(Math.abs(vHD.x * vAB.x + vHD.y * vAB.y) < 1e-6, 'HD vuông góc AB');
+
+    // Kiểm tra E thuộc AC và HE vuông góc AC
+    const vAC = { x: C.x - A.x, y: C.y - A.y };
+    const vHE = { x: resolved.E.x - resolved.H.x, y: resolved.E.y - resolved.H.y };
+    assert.ok(Math.abs(vHE.x * vAC.x + vHE.y * vAC.y) < 1e-6, 'HE vuông góc AC');
+
+    // Kiểm tra K thuộc BC và DK vuông góc BC
+    const vDK = { x: resolved.K.x - resolved.D.x, y: resolved.K.y - resolved.D.y };
+    assert.ok(Math.abs(vDK.x * vBC.x + vDK.y * vBC.y) < 1e-6, 'DK vuông góc BC');
+
+    // Kiểm tra M là trung điểm BC
+    assert.ok(Math.abs(resolved.M.x - (B.x + C.x) / 2) < 1e-6, 'M.x là trung điểm BC');
+    assert.ok(Math.abs(resolved.M.y - (B.y + C.y) / 2) < 1e-6, 'M.y là trung điểm BC');
+  }
+});
+
