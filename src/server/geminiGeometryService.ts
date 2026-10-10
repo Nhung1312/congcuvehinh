@@ -6,6 +6,7 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import type { GeometrySpecification } from '../ai/types';
 import { completeCompositeTriangle } from '../ai/parser/completeCompositeTriangle';
+import { makeGeometryUserParts, type GeometryImageInput } from '../ai/geometryImageInput';
 
 /** Gemini client được khởi tạo: ưu tiên API key cá nhân của người dùng, nếu không có sẽ dùng server GEMINI_API_KEY */
 function getGeminiClient(userApiKey?: string): { client: GoogleGenAI; keySource: 'user' | 'server' } | null {
@@ -602,7 +603,7 @@ const GEOMETRY_RESPONSE_SCHEMA = {
 /**
  * Phân tích đề bài hình học bằng Gemini 3.8 Flash
  */
-export async function parseGeometryWithGemini(prompt: string, userApiKey?: string): Promise<GeometrySpecification> {
+export async function parseGeometryWithGemini(prompt: string, userApiKey?: string, image?: GeometryImageInput): Promise<GeometrySpecification> {
   const clientInfo = getGeminiClient(userApiKey);
 
   if (!clientInfo) {
@@ -627,11 +628,7 @@ export async function parseGeometryWithGemini(prompt: string, userApiKey?: strin
           contents: [
             {
               role: 'user',
-              parts: [
-                {
-                  text: `Hãy phân tích đề bài hình học THCS sau đây và trả về cấu trúc Geometry Specification JSON chuẩn xác:\n\n"${prompt}"`,
-                },
-              ],
+              parts: makeGeometryUserParts(prompt, image),
             },
           ],
           config: {
