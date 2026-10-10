@@ -5,13 +5,10 @@
  */
 import { GoogleGenAI, Type } from '@google/genai';
 import { GeometrySpecification } from '../ai/types';
-import { VietnameseGeometryParser } from '../ai/parser/vietnameseGeometryParser';
 
-/** BYOK: tạo client cho từng request, tuyệt đối không cache/chia sẻ key giữa khách hàng. */
-function getGeminiClient(userApiKey?: string, allowTrialKey = false): GoogleGenAI | null {
-  // System API key may only be used when the caller has already checked the
-  // three-use trial and explicitly opts into spending a trial credit.
-  const key = userApiKey?.trim() || (allowTrialKey ? process.env.GEMINI_API_KEY?.trim() : undefined);
+/** A new Gemini client is created for each caller's personal key. */
+function getGeminiClient(userApiKey?: string): GoogleGenAI | null {
+  const key = userApiKey?.trim();
   return key ? new GoogleGenAI({ apiKey: key }) : null;
 }
 
@@ -271,18 +268,10 @@ const GEOMETRY_RESPONSE_SCHEMA = {
 /**
  * Phân tích đề bài hình học bằng Gemini 3.8 Flash
  */
-export async function parseGeometryWithGemini(
-  prompt: string, userApiKey?: string, allowTrialKey = false
-): Promise<GeometrySpecification> {
-  const client = getGeminiClient(userApiKey, allowTrialKey);
+export async function parseGeometryWithGemini(prompt: string, userApiKey?: string): Promise<GeometrySpecification> {
+  const client = getGeminiClient(userApiKey);
 
-  if (!client) {
-    // Khi chưa có GEMINI_API_KEY: chạy chế độ cục bộ độc lập (Local Rule-based)
-    const fallback = VietnameseGeometryParser.parse(prompt);
-    fallback.explanation = '(Đang sử dụng bộ quy tắc SGK vì chưa có API key Gemini.)';
-    fallback.generationInfo = { source: 'rules', message: 'Chưa nhập API key Gemini; không gọi AI.' };
-    return fallback;
-  }
+  if (!client) throw new Error('Vui lòng nhập API key Gemini cá nhân.');
 
   // Gemini 3.8 Flash (model ID chính thức); lỗi API sẽ chuyển sang parser nội bộ như trước đây.
   const modelsToTry = [
@@ -325,15 +314,7 @@ export async function parseGeometryWithGemini(
     }
   }
 
-  // Có key cá nhân thì phải báo lỗi thật, không ngụy trang kết quả quy tắc thành Gemini.
-  if (userApiKey?.trim() || allowTrialKey) {
-    throw new Error('Không gọi được Gemini 3.8 Flash. Hãy kiểm tra API key, hạn mức và quyền truy cập model.');
-  }
-  console.warn('[Gemini Geometry Service] AI không khả dụng, dùng bộ quy tắc SGK.');
-  const fallback = VietnameseGeometryParser.parse(prompt);
-  fallback.explanation = '(Đang sử dụng chế độ quy tắc SGK, không phải Gemini AI.)';
-  fallback.generationInfo = { source: 'rules', message: 'Gemini không khả dụng; kết quả chỉ do bộ quy tắc dựng hình.' };
-  return fallback;
+  throw new Error('Gemini 3.8 Flash không khả dụng với API key này.');
 }
 
 /**
