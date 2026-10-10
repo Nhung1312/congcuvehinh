@@ -328,8 +328,9 @@ test('Chuỗi dựng hình nhiều bước M -> D -> K -> N, tiếp tuyến tạ
 
   // 4. Có đầy đủ các đoạn nối AM, DE, MN, BT
   assert.ok(
-    tri.auxLines?.some(l => (l.from === 'A' && l.to === 'M') || (l.from === 'M' && l.to === 'A')),
-    'Phải có đoạn nối AM'
+    tri.auxLines?.some(l => (l.from === 'A' && l.to === 'M') || (l.from === 'M' && l.to === 'A')) ||
+    tri.medians?.some(m => m.from === 'A' && m.label === 'M'),
+    'AM phải được vẽ dưới dạng đoạn phụ hoặc trung tuyến AM'
   );
   assert.ok(
     tri.auxLines?.some(l => (l.from === 'D' && l.to === 'E') || (l.from === 'E' && l.to === 'D')),
