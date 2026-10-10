@@ -1,30 +1,15 @@
 /**
  * geminiGeometryService.ts
- * Server-side service xử lý phân tích đề bài Toán THCS bằng mô hình Gemini 2.5 Flash-Lite.
+ * Server-side service xử lý phân tích đề bài Toán THCS bằng mô hình Gemini 3.8 Flash.
  * Bảo mật hoàn toàn API key trong môi trường server.
  */
 import { GoogleGenAI, Type } from '@google/genai';
 import { GeometrySpecification } from '../ai/types';
-import { VietnameseGeometryParser } from '../ai/parser/vietnameseGeometryParser';
 
-let geminiClient: GoogleGenAI | null = null;
-
-function getGeminiClient(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return null;
-  }
-  if (!geminiClient) {
-    geminiClient = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        },
-      },
-    });
-  }
-  return geminiClient;
+/** A new Gemini client is created for each caller's personal key. */
+function getGeminiClient(userApiKey?: string): GoogleGenAI | null {
+  const key = userApiKey?.trim();
+  return key ? new GoogleGenAI({ apiKey: key }) : null;
 }
 
 const SYSTEM_INSTRUCTION = `Bạn là chuyên gia Sư phạm Hình học Toán THCS Việt Nam (Toán lớp 6, 7, 8, 9) và là bộ phân tích ngôn ngữ tự nhiên thành Cấu trúc Dữ liệu Hình học (Geometry Specification JSON).
@@ -281,26 +266,17 @@ const GEOMETRY_RESPONSE_SCHEMA = {
 };
 
 /**
- * Phân tích đề bài hình học bằng Gemini 2.5 Flash-Lite
+ * Phân tích đề bài hình học bằng Gemini 3.8 Flash
  */
-export async function parseGeometryWithGemini(prompt: string): Promise<GeometrySpecification> {
-  const client = getGeminiClient();
+export async function parseGeometryWithGemini(prompt: string, userApiKey?: string): Promise<GeometrySpecification> {
+  const client = getGeminiClient(userApiKey);
 
-  if (!client) {
-    // Khi chưa có GEMINI_API_KEY: chạy chế độ cục bộ độc lập (Local Rule-based)
-    const fallback = VietnameseGeometryParser.parse(prompt);
-    fallback.explanation = '(Đang sử dụng chế độ cục bộ - Phân tích cú pháp SGK)';
-    return fallback;
-  }
+  if (!client) throw new Error('Vui lòng nhập API key Gemini cá nhân.');
 
-  // Model Flash / Flash-Lite theo chuẩn mới nhất của Google GenAI API
+  // Gemini 3.8 Flash (model ID chính thức); lỗi API sẽ chuyển sang parser nội bộ như trước đây.
   const modelsToTry = [
-    'gemini-3.1-flash-lite',
-    'gemini-flash-latest',
-    'gemini-3.7-flash',
-    'gemini-2.5-flash',
+    'gemini-3.8-flash',
   ];
-  let lastError: any = null;
 
   for (const modelName of modelsToTry) {
     try {
@@ -320,7 +296,6 @@ export async function parseGeometryWithGemini(prompt: string): Promise<GeometryS
           systemInstruction: SYSTEM_INSTRUCTION,
           responseMimeType: 'application/json',
           responseSchema: GEOMETRY_RESPONSE_SCHEMA,
-          temperature: 0.1, // Nhiệt độ thấp để đảm bảo tính tất định và chính xác toán học
         },
       });
 
@@ -331,19 +306,15 @@ export async function parseGeometryWithGemini(prompt: string): Promise<GeometryS
 
       const parsed: GeometrySpecification = JSON.parse(responseText);
       validateAndNormalizeSpec(parsed, prompt);
+      parsed.generationInfo = { source: 'gemini', model: modelName };
       return parsed;
     } catch (err: any) {
-      lastError = err;
-      console.warn(`[Gemini Geometry Service] Lỗi khi gọi model ${modelName}:`, err?.message || err);
-      // Thử model tiếp theo trong danh sách fallback
+      // Không log lỗi upstream, vì nội dung trả về có thể vô tình chứa key cá nhân.
+      console.warn(`[Gemini Geometry Service] Không gọi được ${modelName}; yêu cầu sẽ được xử lý theo chế độ dự phòng.`);
     }
   }
 
-  // Nếu tất cả các model đều gặp lỗi mạng/quota/billing, sử dụng fallback parser nội bộ
-  console.warn('[Gemini Geometry Service] Chuyển sang parser quy tắc nội bộ do lỗi API:', lastError?.message);
-  const fallback = VietnameseGeometryParser.parse(prompt);
-  fallback.explanation = `(Đang sử dụng chế độ cục bộ - Tự động điều chỉnh theo chuẩn SGK)`;
-  return fallback;
+  throw new Error('Gemini 3.8 Flash không khả dụng với API key này.');
 }
 
 /**
