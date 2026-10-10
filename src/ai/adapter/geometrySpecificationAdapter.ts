@@ -160,8 +160,10 @@ export class GeometrySpecificationAdapter {
       .map((point, index) => ({
         ...point,
         id: `ai-point-${index}`,
-        showPoint: true,
-        showLabel: true,
+        showPoint: !(point.type === 'tangent' && (spec.auxPoints || []).some(p => p.type === 'intersection' &&
+          typeof p.line1 === 'string' && p.line1.includes(point.name))),
+        showLabel: !(point.type === 'tangent' && (spec.auxPoints || []).some(p => p.type === 'intersection' &&
+          typeof p.line1 === 'string' && p.line1.includes(point.name))),
       }));
 
     // Một điểm hình chiếu D của H phải có cả đoạn HD ngay cả khi AI quên auxLines.

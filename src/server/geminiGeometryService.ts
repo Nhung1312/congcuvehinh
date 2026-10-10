@@ -5,6 +5,7 @@
  */
 import { GoogleGenAI, Type } from '@google/genai';
 import type { GeometrySpecification } from '../ai/types';
+import { completeCompositeTriangle } from '../ai/parser/completeCompositeTriangle';
 
 /** Gemini client được khởi tạo: ưu tiên API key cá nhân của người dùng, nếu không có sẽ dùng server GEMINI_API_KEY */
 function getGeminiClient(userApiKey?: string): { client: GoogleGenAI; keySource: 'user' | 'server' } | null {
@@ -87,6 +88,8 @@ LƯU Ý BẮT BUỘC:
    - type: "intersection": Giao điểm của 2 đường thẳng (line1 và line2).
    - type: "on-circle": Điểm nằm trên đường tròn.
    - type: "free": Điểm tự do.
+   - type: "tangent": điểm hướng trên tiếp tuyến qua fromPoint với tâm centerPoint.
+   - Với tiếp tuyến tại A cắt BC tại T: x là điểm hướng tiếp tuyến (type tangent), T là giao điểm (type intersection) line1 "Ax", line2 "BC"; các điểm dùng chung tam giác và đường tròn ngoại tiếp.
 
 6. CÁC ĐOẠN THẲNG & ĐƯỜNG PHỤ NỐI (auxLines):
    Mọi yêu cầu nối hai điểm trong đề bài (ví dụ "Nối AM", "Nối DE", "Kẻ MN", "Nối OA, BC") phải được đưa vào auxLines:
@@ -489,7 +492,7 @@ const GEOMETRY_RESPONSE_SCHEMA = {
           name: { type: Type.STRING, description: 'Tên điểm phụ, ví dụ H, D, E, M, N, G, K, I' },
           type: {
             type: Type.STRING,
-            enum: ['midpoint', 'ratio', 'projection', 'intersection', 'on-circle', 'free'],
+            enum: ['midpoint', 'ratio', 'projection', 'intersection', 'on-circle', 'free', 'tangent', 'orthocenter'],
           },
           segment: { type: Type.STRING, description: 'Đoạn thẳng chứa trung điểm hoặc tỉ số, ví dụ AB, BC' },
           ratio: { type: Type.NUMBER, description: 'Tỉ số chia từ 0 đến 1' },
@@ -968,4 +971,5 @@ function validateAndNormalizeSpec(spec: GeometrySpecification, originalPrompt: s
       }
     }
   }
+  completeCompositeTriangle(spec, sanitizedPrompt);
 }
