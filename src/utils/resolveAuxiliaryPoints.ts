@@ -3,11 +3,33 @@
  * Hàm thuần: kéo thả điểm gốc sẽ tính lại toàn bộ điểm phụ khi SVG render.
  */
 import type { CustomAuxPoint, Point2D } from '../types';
-import { lineIntersection, midpoint, projectPointToLine, resolvePointCoordinate } from './geometryMath';
+import {
+  lineIntersection,
+  midpoint,
+  projectPointToLine,
+  resolvePointCoordinate,
+  getTriangleCircumcircle,
+  getTriangleIncircle,
+} from './geometryMath';
 
 function endpoints(value: string | string[] | undefined, points: Record<string, Point2D>): [Point2D, Point2D] | null {
   if (!value) return null;
-  const names = Array.isArray(value) ? value : value.trim().split('');
+  let names: string[];
+  if (Array.isArray(value)) {
+    names = value;
+  } else {
+    const trimmed = value.trim();
+    if (trimmed.includes(',')) {
+      names = trimmed.split(',').map(s => s.trim());
+    } else if (trimmed.includes('-')) {
+      names = trimmed.split('-').map(s => s.trim());
+    } else if (trimmed.includes("'")) {
+      const tokens = trimmed.match(/[A-Za-z0-9]+'?/g);
+      names = tokens && tokens.length === 2 ? tokens : trimmed.split('');
+    } else {
+      names = trimmed.split('');
+    }
+  }
   if (names.length !== 2) return null;
   const first = resolvePointCoordinate(names[0], points);
   const second = resolvePointCoordinate(names[1], points);
@@ -55,6 +77,42 @@ function computePoint(point: CustomAuxPoint, points: Record<string, Point2D>, de
       const d2 = { x: -vAC.y, y: vAC.x };
       const pB2 = { x: pB.x + d2.x, y: pB.y + d2.y };
       return lineIntersection(pA, pA2, pB, pB2);
+    }
+  }
+
+  // Trọng tâm G (Giao điểm các đường trung tuyến)
+  if (point.type === 'centroid' || (point as any).type === 'gravity') {
+    const verts = (point as any).triangleVertices || ['A', 'B', 'C'];
+    const pA = resolvePointCoordinate(verts[0], points);
+    const pB = resolvePointCoordinate(verts[1], points);
+    const pC = resolvePointCoordinate(verts[2], points);
+    if (pA && pB && pC) {
+      return {
+        x: (pA.x + pB.x + pC.x) / 3,
+        y: (pA.y + pB.y + pC.y) / 3,
+      };
+    }
+  }
+
+  // Tâm đường tròn nội tiếp I
+  if (point.type === 'incenter') {
+    const verts = (point as any).triangleVertices || ['A', 'B', 'C'];
+    const pA = resolvePointCoordinate(verts[0], points);
+    const pB = resolvePointCoordinate(verts[1], points);
+    const pC = resolvePointCoordinate(verts[2], points);
+    if (pA && pB && pC) {
+      return getTriangleIncircle(pA, pB, pC).center;
+    }
+  }
+
+  // Tâm đường tròn ngoại tiếp O
+  if (point.type === 'circumcenter') {
+    const verts = (point as any).triangleVertices || ['A', 'B', 'C'];
+    const pA = resolvePointCoordinate(verts[0], points);
+    const pB = resolvePointCoordinate(verts[1], points);
+    const pC = resolvePointCoordinate(verts[2], points);
+    if (pA && pB && pC) {
+      return getTriangleCircumcircle(pA, pB, pC).center;
     }
   }
 

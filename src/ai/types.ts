@@ -45,7 +45,7 @@ export interface GeometricPerpBisectorSpec {
 
 export interface GeometricAuxPointSpec {
   name: string;
-  type: 'midpoint' | 'ratio' | 'projection' | 'free' | 'intersection' | 'on-circle' | 'tangent' | 'orthocenter';
+  type: 'midpoint' | 'ratio' | 'projection' | 'free' | 'intersection' | 'on-circle' | 'tangent' | 'orthocenter' | 'centroid' | 'incenter' | 'circumcenter';
   segment?: string | [string, string];
   ratio?: number; // 0..1
   fromPoint?: string;
