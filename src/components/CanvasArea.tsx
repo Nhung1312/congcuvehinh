@@ -66,77 +66,9 @@ export const CanvasArea: React.FC<CanvasAreaProps> = ({
   const width = currentDoc.settings.width || 600;
   const height = currentDoc.settings.height || 450;
 
-  // --- LOGIC KÉO THẢ TƯƠNG TÁC TRỰC TIẾP (DRAG & DROP) ---
-  const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
-  const lastPos = useRef<{ x: number; y: number } | null>(null);
-
-  // Lấy danh sách điểm hiện tại đang vẽ trên màn hình
-  const getDraggablePoints = (): Point2D[] => {
-    if (!isGeometry || !currentDoc.data.geometry) return [];
-    const type = currentDoc.type;
-    const geo = currentDoc.data.geometry;
-    
-    if (type === 'GEOMETRY_TRIANGLE') return geo.triangle?.points || [];
-    if (type === 'GEOMETRY_QUADRILATERAL') return geo.quadrilateral?.points || [];
-    if (type === 'GEOMETRY_LINE_RAY') return geo.lineRay?.points || [];
-    if (type === 'GEOMETRY_ANGLE') return geo.angle?.points || [];
-    if (type === 'GEOMETRY_CIRCLE') return geo.circle?.points || [];
-    return [];
-  };
-
-  // Cập nhật lại 1 điểm khi bị kéo đi nơi khác
-  const updateDraggablePoint = (index: number, newPoint: Point2D) => {
-    const type = currentDoc.type;
-    const pts = [...getDraggablePoints()];
-    pts[index] = newPoint;
-    
-    if (type === 'GEOMETRY_TRIANGLE' && onUpdateTrianglePoints) onUpdateTrianglePoints(pts as [Point2D, Point2D, Point2D]);
-    if (type === 'GEOMETRY_QUADRILATERAL' && onUpdateQuadPoints) onUpdateQuadPoints(pts as [Point2D, Point2D, Point2D, Point2D]);
-    if (type === 'GEOMETRY_LINE_RAY' && onUpdateLineRayPoints) onUpdateLineRayPoints(pts);
-    if (type === 'GEOMETRY_ANGLE' && onUpdateAnglePoints) onUpdateAnglePoints(pts);
-    if (type === 'GEOMETRY_CIRCLE' && onUpdateCirclePoints) {
-      const radius = currentDoc.data.geometry?.circle?.radius;
-      onUpdateCirclePoints(pts, radius);
-    }
-  };
-
-  const handlePointerDown = (e: React.PointerEvent, idx: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    setDraggingIdx(idx);
-    lastPos.current = { x: e.clientX, y: e.clientY };
-  };
-
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (draggingIdx === null || !lastPos.current) return;
-    e.preventDefault();
-
-    // Chia cho tỷ lệ zoom để chuột đi bao nhiêu, hình chạy chính xác bấy nhiêu
-    const scale = zoomLevel / 100;
-    const dx = (e.clientX - lastPos.current.x) / scale;
-    const dy = (e.clientY - lastPos.current.y) / scale;
-
-    lastPos.current = { x: e.clientX, y: e.clientY };
-
-    const pts = getDraggablePoints();
-    if (!pts[draggingIdx]) return;
-
-    const newPt = {
-      x: Math.round(pts[draggingIdx].x + dx),
-      y: Math.round(pts[draggingIdx].y + dy),
-    };
-    updateDraggablePoint(draggingIdx, newPt);
-  };
-
-  const handlePointerUp = (e: React.PointerEvent) => {
-    if (draggingIdx !== null) {
-      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-      setDraggingIdx(null);
-      lastPos.current = null;
-    }
-  };
-  // --- END LOGIC KÉO THẢ ---
+  // All geometry dragging is owned by GeometrySvg, which maps pointer positions
+  // through its actual viewBox and preserves triangle/quad/circle constraints.
+  // Do not place CSS-coordinate handles over SVG-coordinate geometry.
 
   const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 15, 200));
   const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 15, 50));
@@ -364,46 +296,13 @@ export const CanvasArea: React.FC<CanvasAreaProps> = ({
           style={{
             transform: `scale(${zoomLevel / 100})`,
             transformOrigin: 'center center',
-            transition: draggingIdx !== null ? 'none' : 'transform 0.15s ease-out', // Bỏ delay lúc đang kéo
+            transition: 'transform 0.15s ease-out',
           }}
           className="bg-white rounded-md shadow-xl border border-slate-300/80 p-4 inline-block relative group"
         >
-          {/* LỚP OVERLAY BẮT SỰ KIỆN KÉO THẢ CHUỘT */}
-          <div 
-            style={{ width, height, position: 'relative' }}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerLeave={handlePointerUp}
-          >
-            {/* Lớp SVG Hình Vẽ Bên Dưới (Bị vô hiệu hóa click để nhường chuột cho Overlay) */}
-            <div style={{ width: '100%', height: '100%', pointerEvents: 'none' }}>
-              {renderSvgContent()}
-            </div>
-
-            {/* Lớp Nút Bấm Kéo Thả Ở Trên Cùng */}
-            {isGeometry && getDraggablePoints().map((pt, idx) => (
-              <div
-                key={idx}
-                onPointerDown={(e) => handlePointerDown(e, idx)}
-                style={{
-                  position: 'absolute',
-                  left: pt.x,
-                  top: pt.y,
-                  transform: 'translate(-50%, -50%)',
-                  width: '24px',
-                  height: '24px',
-                  borderRadius: '50%',
-                  cursor: draggingIdx === idx ? 'grabbing' : 'grab',
-                  backgroundColor: 'rgba(59, 130, 246, 0.15)', // Màu xanh mờ
-                  border: '2px solid rgba(59, 130, 246, 0.8)',
-                  zIndex: 50,
-                  touchAction: 'none', // Sửa lỗi bị cuộn trang trên màn hình cảm ứng
-                }}
-                // Các nút kéo thả này sẽ ẩn đi cho đẹp, và hiện lên ngay khi rê chuột (Hover) vào bảng vẽ
-                className="opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity"
-                title={`Kéo thả điểm này`}
-              />
-            ))}
+          {/* Single source of drag coordinates: SVG controls and its dynamic viewBox. */}
+          <div style={{ width, height }}>
+            {renderSvgContent()}
           </div>
         </div>
       </div>

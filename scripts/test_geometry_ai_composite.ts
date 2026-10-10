@@ -2,6 +2,7 @@ import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { GeometrySvg } from '../src/renderers/GeometrySvg';
+import { CanvasArea } from '../src/components/CanvasArea';
 import { aspectFitSceneViewBox } from '../src/utils/geometrySceneBounds';
 import { getRightAngleMarkerPath } from '../src/utils/geometryMath';
 import assert from 'node:assert/strict';
@@ -190,4 +191,23 @@ test('Ký hiệu góc vuông phải có hai cạnh vuông góc thật', () => {
   const first={x:x2-x1,y:y2-y1}, second={x:x3-x2,y:y3-y2};
   assert.ok(Math.abs(first.x*second.x+first.y*second.y) < 1e-8, 'Hai nét ở góc kí hiệu phải vuông');
   assert.equal(getRightAngleMarkerPath(A,{x:200,y:100},{x:160,y:140}), '', 'Không vẽ dấu vuông vào góc không phải 90 độ');
+});
+
+
+test('CanvasArea không để nút kéo xanh lệch khỏi hình SVG khi viewBox thay đổi', () => {
+  const doc = GeometrySpecificationAdapter.specToChartDocument(
+    VietnameseGeometryParser.parse(
+      'Cho tam giác ABC nhọn nội tiếp đường tròn (O). Kẻ tiếp tuyến tại A cắt đường thẳng BC tại T.'
+    )
+  );
+  const html = renderToStaticMarkup(React.createElement(CanvasArea, {
+    currentDoc: doc,
+    onCopyImage: () => {},
+  }));
+  assert.ok(html.includes('id="svg-math-canvas"'), 'GeometrySvg phải là nơi dựng hình');
+  assert.ok(html.includes('viewBox="'), 'Giữ lại viewBox để xử lý điểm T ở ngoài tam giác');
+  assert.doesNotMatch(html, /rgba\(59, 130, 246, 0\.15\)|Kéo thả điểm này/,
+    'Không được còn nút overlay xanh đặt theo tọa độ CSS');
+  assert.doesNotMatch(html, /pointer-events:none/,
+    'SVG phải nhận trực tiếp sự kiện pointer để kéo A/B/C');
 });
