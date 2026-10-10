@@ -4,6 +4,7 @@ import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import { parseGeometryWithGemini } from './src/server/geminiGeometryService';
 
+dotenv.config({ path: '.env.local' });
 dotenv.config();
 
 async function startServer() {
@@ -18,18 +19,20 @@ async function startServer() {
   });
 
   app.post('/api/geometry/parse', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const { prompt, apiKey } = req.body || {};
+    if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 6000)
+      return res.status(400).json({ error: 'Đề bài phải có từ 1 đến 6000 ký tự.' });
+    if (typeof apiKey !== 'string' || !apiKey.trim() || apiKey.length > 256)
+      return res.status(400).json({ error: 'Vui lòng nhập API key Gemini cá nhân.' });
     try {
-      const { prompt } = req.body;
-      if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
-        return res.status(400).json({ error: 'Vui lòng nhập đề bài hình học.' });
-      }
-
-      const spec = await parseGeometryWithGemini(prompt.trim());
+      const spec = await parseGeometryWithGemini(prompt.trim(), apiKey.trim());
+      if (spec.generationInfo?.source !== 'gemini') throw new Error('Gemini không trả về kết quả.');
       return res.json({ success: true, spec });
     } catch (err: any) {
-      console.error('[API /api/geometry/parse Error]:', err);
-      return res.status(500).json({
-        error: err?.message || 'Lỗi khi phân tích đề bài với Gemini AI.',
+      return res.status(502).json({
+        code: 'GEMINI_UNAVAILABLE',
+        error: err?.message || 'Không gọi được Gemini 3.8 Flash bằng API key này.',
       });
     }
   });

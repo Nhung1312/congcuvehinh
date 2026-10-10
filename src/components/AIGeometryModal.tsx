@@ -58,10 +58,8 @@ export const AIGeometryModal: React.FC<AIGeometryModalProps> = ({
         <div className="p-5 overflow-y-auto flex-1">
           <AIGeometryEditor
             currentDoc={currentDoc}
-            onApplyDoc={(newDoc) => {
-              onApplyDoc(newDoc);
-              onClose();
-            }}
+            onApplyDoc={onApplyDoc}
+            onViewDrawing={onClose}
             onSwitchToManualTool={(type) => {
               if (onSwitchToManualTool) onSwitchToManualTool(type);
               onClose();

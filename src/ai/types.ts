@@ -204,4 +204,6 @@ export interface GeometrySpecification {
   // Ghi chú và giải thích hình học từ AI
   detectedEntities: string[];
   explanation: string;
+  /** Nguồn thực sự được dùng để dựng hình; không chứa API key. */
+  generationInfo?: { source: 'gemini' | 'rules'; model?: string; message?: string };
 }

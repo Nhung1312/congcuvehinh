@@ -16,6 +16,9 @@ import {
   Layers,
   ArrowRight,
   Lightbulb,
+  Code2,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { ChartDocument, BaseChartSettings, ToolType } from '../../types';
 import { AI_GEOMETRY_PRESETS, GeometryProblemPreset } from '../../ai/aiPresets';
@@ -29,6 +32,7 @@ interface AIGeometryEditorProps {
   currentDoc: ChartDocument;
   onApplyDoc: (newDoc: ChartDocument) => void;
   onSwitchToManualTool?: (toolType: ToolType) => void;
+  onViewDrawing?: () => void;
 }
 
 type ProviderKey = 'mock' | 'gemini' | 'claude';
@@ -37,6 +41,7 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
   currentDoc,
   onApplyDoc,
   onSwitchToManualTool,
+  onViewDrawing,
 }) => {
   const [prompt, setPrompt] = useState<string>(
     'Cho tam giác ABC nhọn. Kẻ đường cao AH từ đỉnh A xuống cạnh BC (H thuộc BC).'
@@ -45,7 +50,42 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [stepStatus, setStepStatus] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [failedProvider, setFailedProvider] = useState<ProviderKey | null>(null);
   const [lastResult, setLastResult] = useState<GeometrySpecification | null>(null);
+  const [showJsonSpec, setShowJsonSpec] = useState<boolean>(false);
+  const [copiedJson, setCopiedJson] = useState<boolean>(false);
+
+  // Key cá nhân của từng khách hàng, không lưu trên server hay trong tài liệu hình.
+  // Chỉ lưu sessionStorage khi người dùng chủ động chọn, không dùng localStorage.
+  const storageKey = 'congcuvehinh-gemini-key-session';
+  const [saveKeyForTab, setSaveKeyForTab] = useState(() => {
+    try { return window.sessionStorage.getItem(storageKey) !== null; } catch { return false; }
+  });
+  const [userApiKey, setUserApiKey] = useState(() => {
+    try { return window.sessionStorage.getItem(storageKey) || ''; } catch { return ''; }
+  });
+  const [showApiKey, setShowApiKey] = useState(false);
+  const changeApiKey = (value: string) => {
+    setUserApiKey(value);
+    if (saveKeyForTab) {
+      try {
+        if (value) window.sessionStorage.setItem(storageKey, value);
+        else window.sessionStorage.removeItem(storageKey);
+      } catch { /* Private browsing may block sessionStorage. */ }
+    }
+  };
+  const changeSaveKey = (enabled: boolean) => {
+    setSaveKeyForTab(enabled);
+    try {
+      if (enabled && userApiKey) window.sessionStorage.setItem(storageKey, userApiKey);
+      else window.sessionStorage.removeItem(storageKey);
+    } catch { /* Browser blocked storage. */ }
+  };
+  const clearApiKey = () => {
+    setUserApiKey('');
+    setSaveKeyForTab(false);
+    try { window.sessionStorage.removeItem(storageKey); } catch { /* ignore */ }
+  };
 
   // Khởi tạo các provider
   const providers = {
@@ -63,13 +103,19 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
 
     setIsProcessing(true);
     setErrorMsg(null);
+    setFailedProvider(null);
+    setLastResult(null);
     setStepStatus('Đang phân tích đề...');
 
     try {
-      const provider = providers[selectedProvider];
-      
-      // Bước 1: Gemini 2.5 Flash-Lite phân tích ngôn ngữ tự nhiên thành GeometrySpecification
-      const spec = await provider.parseGeometryProblem(input);
+      // Gemini nhận key riêng của khách hàng chỉ trong request đang chạy.
+      // Các provider quy tắc không nhận hoặc lưu key.
+      const spec = selectedProvider === 'gemini'
+        ? await providers.gemini.parseGeometryProblem(input, userApiKey)
+        : await providers[selectedProvider].parseGeometryProblem(input);
+      if (selectedProvider !== 'gemini') {
+        spec.generationInfo = { source: 'rules', message: 'Bộ quy tắc SGK (không sử dụng Gemini).' };
+      }
       
       setStepStatus('Đang dựng hình...');
       await new Promise((resolve) => setTimeout(resolve, 300));
@@ -88,6 +134,7 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
         setStepStatus(null);
       }, 1200);
     } catch (err: any) {
+      setFailedProvider(selectedProvider);
       setErrorMsg(err.message || 'Không thể phân tích đề bài. Vui lòng kiểm tra lại cấu trúc câu.');
       setStepStatus(null);
     } finally {
@@ -141,7 +188,7 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
                 : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
             }`}
           >
-            Gemini 2.5 AI
+            Gemini 3.8 Flash
           </button>
           <button
             type="button"
@@ -163,9 +210,47 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
                 : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
             }`}
           >
-            Claude AI
+            Claude (chưa tích hợp)
           </button>
         </div>
+      </div>
+
+      {/* BYOK: mỗi khách hàng dùng key của mình, chỉ gửi tới server khi yêu cầu dựng hình. */}
+      <div className="space-y-2 p-3 rounded-xl border border-slate-200 bg-slate-50">
+        <label htmlFor="geometry-user-api-key" className="text-xs font-bold text-slate-800">
+          API key Gemini cá nhân (Gemini 3.8 Flash)
+        </label>
+        <div className="flex gap-2">
+          <input
+            id="geometry-user-api-key"
+            type={showApiKey ? 'text' : 'password'}
+            autoComplete="off"
+            spellCheck={false}
+            value={userApiKey}
+            onChange={(e) => changeApiKey(e.target.value)}
+            placeholder="Dán API key Gemini của bạn vào đây"
+            className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button type="button" className="rounded-lg px-2 border border-slate-300 bg-white text-xs" onClick={() => setShowApiKey(!showApiKey)}>
+            {showApiKey ? 'Ẩn' : 'Hiện'}
+          </button>
+          <button type="button" className="rounded-lg px-2 border border-slate-300 bg-white text-xs" onClick={clearApiKey}>
+            Xóa
+          </button>
+        </div>
+        <label className="flex items-center gap-2 text-[11px] text-slate-700">
+          <input type="checkbox" checked={saveKeyForTab} onChange={(e) => changeSaveKey(e.target.checked)} />
+          Nhớ key trong phiên tab này (không chọn trên máy dùng chung)
+        </label>
+        <p className="text-[11px] text-slate-600">
+          Key chỉ gửi tới API của ứng dụng khi bấm dựng hình; không ghi vào tài liệu hay cơ sở dữ liệu.
+          {selectedProvider === 'gemini' && !userApiKey.trim()
+            ? ' Cần dán API key cá nhân để kiểm tra Gemini 3.8 Flash.'
+            : ''}
+        </p>
+        <a className="text-[11px] text-blue-700 underline" href="https://aistudio.google.com/api-keys" target="_blank" rel="noopener noreferrer">
+          Mở Google AI Studio để tạo/quản lý API key
+        </a>
       </div>
 
       {/* Ô nhập đề bài */}
@@ -233,21 +318,114 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
       )}
 
       {errorMsg && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-          <span>{errorMsg}</span>
+        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 space-y-1.5">
+          <div className="flex items-center gap-1.5 font-bold text-red-700">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>
+              {failedProvider === 'gemini'
+                ? 'GEMINI THẤT BẠI'
+                : 'LỖI PHÂN TÍCH'}
+            </span>
+          </div>
+          <p className="text-[11px] text-red-700 leading-relaxed">{errorMsg}</p>
+          {failedProvider === 'gemini' && (
+            <p className="text-[10px] text-red-600 italic">
+              API lỗi. Hệ thống không tự chuyển sang parser quy tắc nội bộ.
+            </p>
+          )}
         </div>
       )}
 
       {/* Kết quả phân tích thành công */}
       {lastResult && !isProcessing && (
-        <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>Đã nhận diện thành công:</span>
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2.5">
+          {/* Header trạng thái nguồn kết quả */}
+          {lastResult.generationInfo?.source === 'gemini' ? (
+            <div className="p-2.5 bg-white border border-emerald-300 rounded-lg space-y-1.5 shadow-2xs">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>GEMINI THÀNH CÔNG: Có phản hồi JSON hợp lệ</span>
+              </div>
+              <div className="text-[11px] text-slate-700 grid grid-cols-2 gap-x-2 gap-y-1 bg-slate-50 p-2 rounded border border-slate-200">
+                <div>
+                  Model thực tế: <strong className="font-mono text-emerald-900">{lastResult.generationInfo.model || 'gemini-3.8-flash'}</strong>
+                </div>
+                <div>
+                  Nhóm hình: <strong className="text-emerald-900">{lastResult.shapeCategory}</strong>
+                </div>
+                <div>
+                  Đường cao (altitudes): <strong className="text-emerald-900">{lastResult.altitudes?.length ?? 0}</strong>
+                </div>
+                <div>
+                  Trung tuyến (medians): <strong className="text-emerald-900">{lastResult.medians?.length ?? 0}</strong>
+                </div>
+                <div>
+                  Phân giác (bisectors): <strong className="text-emerald-900">{lastResult.bisectors?.length ?? 0}</strong>
+                </div>
+                <div>
+                  Điểm phụ (auxPoints): <strong className="text-emerald-900">{lastResult.auxPoints?.length ?? 0}</strong>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="p-2.5 bg-white border border-amber-300 rounded-lg space-y-1 shadow-2xs">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-amber-800">
+                <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>QUY TẮC SGK: Hình được phân tích bằng parser nội bộ</span>
+              </div>
+              <p className="text-[11px] text-slate-600">
+                {lastResult.generationInfo?.message || 'Không gọi Gemini AI.'}
+              </p>
+            </div>
+          )}
+
+          {/* Nút xem hình & Xem JSON */}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setShowJsonSpec(!showJsonSpec)}
+              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg text-xs font-medium transition shadow-2xs"
+            >
+              <Code2 className="w-3.5 h-3.5 text-indigo-600" />
+              <span>{showJsonSpec ? 'Ẩn JSON GeometrySpecification' : 'Xem JSON GeometrySpecification AI'}</span>
+            </button>
+            {onViewDrawing && (
+              <button
+                type="button"
+                onClick={onViewDrawing}
+                className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-700 transition"
+              >
+                Xem hình
+              </button>
+            )}
           </div>
 
-          <div className="space-y-1">
+          {/* Khối hiển thị JSON GeometrySpecification */}
+          {showJsonSpec && (
+            <div className="rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-slate-100 text-[10px] font-mono space-y-1.5">
+              <div className="flex items-center justify-between text-slate-400 border-b border-slate-800 pb-1">
+                <span>JSON GeometrySpecification ({lastResult.generationInfo?.model || 'AI'})</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(JSON.stringify(lastResult, null, 2));
+                    setCopiedJson(true);
+                    setTimeout(() => setCopiedJson(false), 2000);
+                  }}
+                  className="flex items-center gap-1 hover:text-white transition"
+                >
+                  {copiedJson ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedJson ? 'Đã chép' : 'Sao chép'}</span>
+                </button>
+              </div>
+              <pre className="max-h-60 overflow-auto whitespace-pre-wrap leading-tight text-[10px] text-emerald-300">
+                {JSON.stringify(lastResult, null, 2)}
+              </pre>
+            </div>
+          )}
+
+          <div className="space-y-1 pt-1">
+            <div className="text-[11px] font-bold text-slate-700">Các thực thể nhận diện:</div>
             {lastResult.detectedEntities.map((ent, i) => (
               <div key={i} className="text-[11px] text-emerald-900 flex items-center gap-1.5 font-medium">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
