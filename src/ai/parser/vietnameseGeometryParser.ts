@@ -3,6 +3,7 @@
  * Bộ phân tích ngôn ngữ tự nhiên tiếng Việt và cấu trúc hình học SGK Toán THCS (Lớp 6, 7, 8, 9)
  */
 import { GeometrySpecification, ShapeCategory } from '../types';
+import { completeCompositeTriangle } from './completeCompositeTriangle';
 import { TriangleType, QuadType, CirclePresetType, LineRayType, AngleType } from '../../types';
 
 export class VietnameseGeometryParser {
@@ -56,7 +57,7 @@ export class VietnameseGeometryParser {
         spec = this.parseTriangleProblem(constrRaw, text);
         break;
     }
-    return this.enrichSpecification(spec, constrRaw, text);
+    return completeCompositeTriangle(this.enrichSpecification(spec, constrRaw, text), constrRaw);
   }
 
   /**

@@ -12,6 +12,9 @@ on:
       - 'src/renderers/GeometrySvg.tsx'
       - 'src/utils/resolveAuxiliaryPoints.ts'
       - 'scripts/test_geometry_ai_aux.ts'
+      - 'scripts/test_geometry_ai_composite.ts'
+      - 'scripts/test_geometry_tikz.ts'
+      - 'src/export/tikzExport.ts'
       - 'package.json'
       - '.github/workflows/geometry-ai-checks.yml'
 
@@ -31,5 +34,9 @@ jobs:
         run: npm run lint
       - name: Planar geometry regression tests
         run: npm run test:geometry-ai
+      - name: Composite geometry regression tests
+        run: npm run test:geometry-ai-composite
+      - name: TikZ export regression tests
+        run: npm run test:geometry-tikz
       - name: Production bundle check
         run: npm run build
