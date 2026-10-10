@@ -1,4 +1,9 @@
 import test from 'node:test';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { GeometrySvg } from '../src/renderers/GeometrySvg';
+import { aspectFitSceneViewBox } from '../src/utils/geometrySceneBounds';
+import { getRightAngleMarkerPath } from '../src/utils/geometryMath';
 import assert from 'node:assert/strict';
 import { VietnameseGeometryParser } from '../src/ai/parser/vietnameseGeometryParser';
 import { GeometrySpecificationAdapter } from '../src/ai/adapter/geometrySpecificationAdapter';
@@ -138,4 +143,51 @@ test('Hồi quy Đợt 2: Tam giác nhọn nội tiếp (O) + BD, CE cắt nhau 
   // 7. T nằm trên đường thẳng BC (tích có hướng = 0)
   const crossProd = (resolved.T.x - B.x) * (C.y - B.y) - (resolved.T.y - B.y) * (C.x - B.x);
   assert.ok(Math.abs(crossProd) < 1e-5, `T phải nằm trên đường thẳng BC, crossProd=${crossProd}`);
+});
+
+
+test('Bỏ đề trên hình và giữ T, không hiện điểm trợ giúp x', () => {
+  const prompt = 'Cho tam giác ABC nhọn nội tiếp đường tròn (O). Kẻ tiếp tuyến của (O) tại A, tiếp tuyến này cắt đường thẳng BC tại T.';
+  const doc = GeometrySpecificationAdapter.specToChartDocument(VietnameseGeometryParser.parse(prompt));
+  const svg = renderToStaticMarkup(React.createElement(GeometrySvg, {
+    data: doc.data.geometry!, settings: doc.settings,
+  }));
+  assert.ok(!svg.includes(doc.title), 'Không in tiêu đề đề bài vào trong hình');
+  assert.ok(svg.includes('preserveAspectRatio="xMidYMid meet"'), 'SVG không làm méo góc và đường tròn');
+  assert.match(svg, />T<\/text>/, 'Hiện giao điểm T');
+  assert.doesNotMatch(svg, />x<\/text>/, 'Ẩn trợ điểm x khi T có mặt');
+});
+
+test('Bố cục tiếp tuyến ngắn hơn mà tam giác vẫn nhọn', () => {
+  const spec = VietnameseGeometryParser.parse('Cho tam giác ABC nhọn nội tiếp đường tròn (O). Kẻ tiếp tuyến tại A cắt đường thẳng BC tại T.');
+  const t = GeometrySpecificationAdapter.specToChartDocument(spec).data.geometry!.triangle!;
+  const [A, B, C] = t.points!;
+  const dot = (u: {x:number;y:number}, v: {x:number;y:number}) => u.x*v.x + u.y*v.y;
+  const vec = (p: {x:number;y:number}, q: {x:number;y:number}) => ({x:q.x-p.x,y:q.y-p.y});
+  assert.ok(dot(vec(A,B),vec(A,C)) > 0 && dot(vec(B,A),vec(B,C)) > 0 && dot(vec(C,A),vec(C,B)) > 0,
+    'ABC vẫn là tam giác nhọn');
+  assert.ok(Math.hypot(A.x-B.x,A.y-B.y) < Math.hypot(A.x-C.x,A.y-C.y), 'AB vẫn nhỏ hơn AC');
+  const O = getTriangleCircumcircle(A,B,C).center;
+  const result = resolveAuxiliaryPoints({A,B,C,O},t.auxPoints||[]);
+  assert.ok(result.T);
+  assert.ok(Math.abs(result.T.x-B.x) < Math.hypot(B.x-C.x,B.y-C.y), 'T gần BC hơn để hình chính lớn');
+  assert.ok(Math.abs(dot(vec(A,O),vec(A,result.T))) < 1e-5, 'OA vuông góc AT');
+});
+
+test('Viewport giữ đúng tỉ lệ và bao trọn điểm ngoài', () => {
+  const bounds = aspectFitSceneViewBox({minX:-300,maxX:480,minY:20,maxY:410},600,450);
+  assert.ok(Math.abs(bounds.width/bounds.height - 600/450) < 1e-8, 'viewBox phải giữ tỉ lệ chuẩn');
+  assert.ok(bounds.minX <= -300 && bounds.minY <= 20);
+  assert.ok(bounds.minX+bounds.width >= 480 && bounds.minY+bounds.height >= 410);
+});
+
+test('Ký hiệu góc vuông phải có hai cạnh vuông góc thật', () => {
+  const A={x:100,y:100}, O={x:160,y:180}, T={x:20,y:160};
+  const path=getRightAngleMarkerPath(A,O,T,10);
+  assert.match(path,/^M /);
+  const numbers=Array.from(path.matchAll(/-?\d+(?:\.\d+)?/g), x => Number(x[0]));
+  const [x1,y1,x2,y2,x3,y3]=numbers;
+  const first={x:x2-x1,y:y2-y1}, second={x:x3-x2,y:y3-y2};
+  assert.ok(Math.abs(first.x*second.x+first.y*second.y) < 1e-8, 'Hai nét ở góc kí hiệu phải vuông');
+  assert.equal(getRightAngleMarkerPath(A,{x:200,y:100},{x:160,y:140}), '', 'Không vẽ dấu vuông vào góc không phải 90 độ');
 });
