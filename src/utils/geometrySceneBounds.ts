@@ -247,3 +247,29 @@ export function getGeometrySceneBoundingBox(
     expandedViewBox: expanded.viewBox,
   };
 }
+
+
+/** Expand the scene to the physical SVG aspect ratio without stretching angles or circles. */
+export function aspectFitSceneViewBox(
+  bounds: Pick<SceneBoundingBoxResult, 'minX' | 'maxX' | 'minY' | 'maxY'>,
+  canvasWidth: number,
+  canvasHeight: number
+): { minX: number; minY: number; width: number; height: number } {
+  const width = Math.max(1, canvasWidth);
+  const height = Math.max(1, canvasHeight);
+  const minX = Math.min(0, bounds.minX), maxX = Math.max(width, bounds.maxX);
+  const minY = Math.min(0, bounds.minY), maxY = Math.max(height, bounds.maxY);
+  let outW = maxX - minX, outH = maxY - minY;
+  let x = minX, y = minY;
+  const aspect = width / height;
+  if (outW / outH < aspect) {
+    const margin = (outH * aspect - outW) / 2;
+    x -= margin;
+    outW += 2 * margin;
+  } else {
+    const margin = (outW / aspect - outH) / 2;
+    y -= margin;
+    outH += 2 * margin;
+  }
+  return { minX: x, minY: y, width: outW, height: outH };
+}
