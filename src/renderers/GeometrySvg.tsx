@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   BaseChartSettings,
   GeometryData,
@@ -21,7 +21,6 @@ import {
 import { resolveAuxiliaryPoints } from '../utils/resolveAuxiliaryPoints';
 import { getGeometrySceneBoundingBox, aspectFitSceneViewBox } from '../utils/geometrySceneBounds';
 import { SvgPatternDefs } from './patterns/SvgPatterns';
-import { layoutGeometryPointLabels } from '../utils/smartGeometryLayout';
 import { SGK_STYLE, getMathFontFamily } from '../constants/style';
 import {
   dist,
@@ -120,36 +119,14 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
 
   // Tính toán Bounding Box và ViewBox SVG toàn cảnh (tự động mở rộng khi có điểm ngoài như T)
   const sceneBounds = getGeometrySceneBoundingBox(data, width, height, 40);
-  // Measure the actual diagram so the viewBox fits every shape and its labels.
-  const geometryContentRef = useRef<SVGGElement>(null);
-  const [measuredBounds, setMeasuredBounds] = useState<{
-    minX: number; maxX: number; minY: number; maxY: number;
-  } | null>(null);
-  // Keep SVG coordinates stable during point dragging.
-  const [draggingVertex, setDraggingVertex] = useState<number | null>(null);
-  useLayoutEffect(() => {
-    if (draggingVertex !== null) return;
-    const group = geometryContentRef.current;
-    if (!group || typeof group.getBBox !== 'function') return;
-    try {
-      const box = group.getBBox();
-      if (![box.x, box.y, box.width, box.height].every(Number.isFinite) ||
-          box.width < 0.001 || box.height < 0.001) return;
-      const next = { minX: box.x, minY: box.y, maxX: box.x + box.width, maxY: box.y + box.height };
-      setMeasuredBounds(prev =>
-        prev && Object.keys(next).every(key =>
-          Math.abs(prev[key as keyof typeof prev] - next[key as keyof typeof next]) < 0.5
-        ) ? prev : next
-      );
-    } catch { /* Embedded SVGs and test runtimes may not provide geometry measurement. */ }
-  }, [data, fontSize, draggingVertex, width, height]);
-  const aspectView = aspectFitSceneViewBox(measuredBounds || sceneBounds, width, height);
+  const aspectView = aspectFitSceneViewBox(sceneBounds, width, height);
   const { minX: vbMinX, minY: vbMinY, width: vbWidth, height: vbHeight } = aspectView;
   const vbMaxX = vbMinX + vbWidth;
   const vbMaxY = vbMinY + vbHeight;
   const svgViewBox = `${vbMinX} ${vbMinY} ${vbWidth} ${vbHeight}`;
 
   // State cho việc kéo điểm trực tiếp trên SVG
+  const [draggingVertex, setDraggingVertex] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
   // Khởi tạo toạ độ tam giác nếu chưa có
@@ -439,32 +416,6 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     const displayedLines = effectiveAuxLines.filter(
       (l) => l.enabled !== false && !(hasTangentInt && (l.from === helperName || l.to === helperName))
     );
-    const baseLabels = Object.entries(namedPoints)
-      .filter(([name]) => !name.includes('\\') && name.length <= 3)
-      .map(([name, point]) => ({ name, point }));
-    const auxLabels = auxPoints.filter(p => p.showLabel !== false && p.name &&
-      !(hasTangentInt && (p.name === helperName || p.type === 'tangent')))
-      .map(p => ({ name: p.name, point: pointsMap[p.name] }))
-      .filter((p): p is { name: string; point: Point2D } => Boolean(p.point));
-    const auxiliarySegments = displayedLines.flatMap(line => {
-      const start = pointsMap[line.from], end = pointsMap[line.to];
-      return start && end ? [{ start, end }] : [];
-    });
-    const vertexSegments = subType === 'triangle'
-      ? [
-        { start: trianglePoints[0], end: trianglePoints[1] },
-        { start: trianglePoints[1], end: trianglePoints[2] },
-        { start: trianglePoints[2], end: trianglePoints[0] },
-      ]
-      : subType === 'quadrilateral'
-        ? quadPoints.map((point, i) => ({ start: point, end: quadPoints[(i + 1) % quadPoints.length] }))
-        : [];
-    const auxiliaryLabelLayout = layoutGeometryPointLabels(
-      [...baseLabels, ...auxLabels],
-      [...vertexSegments, ...auxiliarySegments],
-      Object.values(pointsMap), fontSize
-    );
-
     return (
       <g id="auxiliary-elements-layer">
         {/* 1. Ký hiệu góc bằng nhau (Equal Angle Arcs) */}
@@ -680,10 +631,8 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
               )}
               {p.showLabel !== false && p.name && (
                 <text
-                  x={auxiliaryLabelLayout[p.name]?.x ?? pt.x + 8}
-                  y={auxiliaryLabelLayout[p.name]?.y ?? pt.y - 8}
-                  textAnchor={auxiliaryLabelLayout[p.name]?.textAnchor}
-                  dominantBaseline={auxiliaryLabelLayout[p.name]?.dominantBaseline}
+                  x={pt.x + 8}
+                  y={pt.y - 8}
                   fontSize={fontSize}
                   fontStyle="italic"
                   fontWeight="bold"
@@ -744,14 +693,9 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     const lStyleC = t.labelStyles?.C || {};
 
     // Vị trí nhãn đỉnh thông minh
-    const triangleLabelLayout = layoutGeometryPointLabels(
-      [{ name: nameA, point: pA }, { name: nameB, point: pB }, { name: nameC, point: pC }],
-      [{ start: pA, end: pB }, { start: pB, end: pC }, { start: pC, end: pA }],
-      [pA, pB, pC], fontSize
-    );
-    const labelA = triangleLabelLayout[nameA];
-    const labelB = triangleLabelLayout[nameB];
-    const labelC = triangleLabelLayout[nameC];
+    const labelA = getSmartVertexLabelPosition(pA, pB, pC, 20);
+    const labelB = getSmartVertexLabelPosition(pB, pC, pA, 20);
+    const labelC = getSmartVertexLabelPosition(pC, pA, pB, 20);
 
     // ==========================================
     // 1. ĐƯỜNG CAO (Altitudes)
@@ -1738,17 +1682,10 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     const lStyleD = q.labelStyles?.D || {};
 
     // Vị trí nhãn đỉnh thông minh (hướng ra ngoài tứ giác)
-    const quadLabelLayout = layoutGeometryPointLabels(
-      [{ name: nameA, point: pA }, { name: nameB, point: pB },
-       { name: nameC, point: pC }, { name: nameD, point: pD }],
-      [{ start: pA, end: pB }, { start: pB, end: pC },
-       { start: pC, end: pD }, { start: pD, end: pA }],
-      [pA, pB, pC, pD], fontSize
-    );
-    const labelA = quadLabelLayout[nameA];
-    const labelB = quadLabelLayout[nameB];
-    const labelC = quadLabelLayout[nameC];
-    const labelD = quadLabelLayout[nameD];
+    const labelA = getSmartVertexLabelPosition(pA, pD, pB, 20);
+    const labelB = getSmartVertexLabelPosition(pB, pA, pC, 20);
+    const labelC = getSmartVertexLabelPosition(pC, pB, pD, 20);
+    const labelD = getSmartVertexLabelPosition(pD, pC, pA, 20);
 
     // ==========================================
     // 1. TÔ MIỀN TỨ GIÁC (Fill)
@@ -4493,14 +4430,6 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     const pDash = getDashArray(polygon?.strokeStyle);
 
     const pointsString = points.map((p) => `${p.x},${p.y}`).join(' ');
-    const polygonLabelLayout = layoutGeometryPointLabels(
-      [{ name: centerName, point: center }, ...points.map((point, i) => ({
-        name: vertexNames[i] || `A_{${i + 1}}`, point,
-      }))],
-      points.map((point, i) => ({ start: point, end: points[(i + 1) % points.length] })),
-      [...points, center], fontSize
-    );
-
     // 1. Đường tròn ngoại tiếp (Circumcircle)
     let circumcircleSvg: React.ReactNode = null;
     if (polygon?.showCircumcircle) {
@@ -4782,10 +4711,8 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
             <circle cx={center.x} cy={center.y} r={3.5} fill={pStroke} />
             {showLabels && (
               <text
-                x={polygonLabelLayout[centerName]?.x ?? center.x + 8}
-                y={polygonLabelLayout[centerName]?.y ?? center.y - 8}
-                textAnchor={polygonLabelLayout[centerName]?.textAnchor}
-                dominantBaseline={polygonLabelLayout[centerName]?.dominantBaseline}
+                x={center.x + 8}
+                y={center.y - 8}
                 fontSize={fontSize}
                 fontStyle="italic"
                 fontWeight="bold"
@@ -4803,7 +4730,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
           <g id="polygon-vertices">
             {points.map((p, i) => {
               const vName = vertexNames[i] || `A_{${i + 1}}`;
-              const labelPos = polygonLabelLayout[vName] || getSmartVertexLabelPosition(p, center, points[(i + 1) % points.length], 18);
+              const labelPos = getSmartVertexLabelPosition(p, center, points[(i + 1) % points.length], 18);
               return (
                 <g key={`poly-v-${i}`} className="cursor-grab active:cursor-grabbing">
                   {/* Vùng cảm ứng kéo đỉnh */}
@@ -5097,22 +5024,6 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
       namedSymPoints[reflNames[idx] || `A'${idx + 1}`] = p;
     });
 
-    const symmetrySegments = [
-      ...origPoints.map((point, i) => ({
-        start: point, end: origPoints[(i + 1) % origPoints.length],
-      })),
-      ...reflPoints.map((point, i) => ({
-        start: point, end: reflPoints[(i + 1) % reflPoints.length],
-      })),
-      ...origPoints.flatMap((point, i) => reflPoints[i] ? [{ start: point, end: reflPoints[i] }] : []),
-    ];
-    const symmetryLabelLayout = layoutGeometryPointLabels(
-      [...origPoints.map((point, i) => ({ name: origNames[i] || `A${i + 1}`, point })),
-       ...reflPoints.map((point, i) => ({ name: reflNames[i] || `A'${i + 1}`, point })),
-       { name: centerName, point: centerPoint }],
-      symmetrySegments, [...origPoints, ...reflPoints, centerPoint], fontSize
-    );
-
     return (
       <g id="symmetry-group">
         {/* Đường nối và ký hiệu vuông góc/bằng nhau */}
@@ -5148,10 +5059,8 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
                 <circle cx={p.x} cy={p.y} r={draggingVertex === idx ? 4.5 : 3} fill={origColor} />
                 {showOrigLabels && (
                   <text
-                    x={symmetryLabelLayout[name]?.x ?? p.x - 10}
-                    y={symmetryLabelLayout[name]?.y ?? p.y - 10}
-                    textAnchor={symmetryLabelLayout[name]?.textAnchor}
-                    dominantBaseline={symmetryLabelLayout[name]?.dominantBaseline}
+                    x={p.x - 10}
+                    y={p.y - 10}
                     fontSize={fontSize}
                     fontStyle="italic"
                     fontWeight="bold"
@@ -5175,10 +5084,8 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
                 <circle cx={p.x} cy={p.y} r={3} fill={reflColor} />
                 {showReflLabels && (
                   <text
-                    x={symmetryLabelLayout[name]?.x ?? p.x + 10}
-                    y={symmetryLabelLayout[name]?.y ?? p.y - 10}
-                    textAnchor={symmetryLabelLayout[name]?.textAnchor}
-                    dominantBaseline={symmetryLabelLayout[name]?.dominantBaseline}
+                    x={p.x + 10}
+                    y={p.y - 10}
                     fontSize={fontSize}
                     fontStyle="italic"
                     fontWeight="bold"
@@ -5222,15 +5129,13 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
 
       <rect x={vbMinX} y={vbMinY} width={vbWidth} height={vbHeight} fill={settings.backgroundColor || '#ffffff'} />
 
-      <g id="geometry-content" ref={geometryContentRef}>
-        {subType === 'triangle' && renderTriangle()}
-        {subType === 'quadrilateral' && renderQuadrilateral()}
-        {subType === 'line-ray' && renderLineRay()}
-        {subType === 'circle' && renderCircle()}
-        {subType === 'angle' && renderAngle()}
-        {subType === 'polygon' && renderRegularPolygon()}
-        {subType === 'symmetry' && renderSymmetry()}
-      </g>
+      {subType === 'triangle' && renderTriangle()}
+      {subType === 'quadrilateral' && renderQuadrilateral()}
+      {subType === 'line-ray' && renderLineRay()}
+      {subType === 'circle' && renderCircle()}
+      {subType === 'angle' && renderAngle()}
+      {subType === 'polygon' && renderRegularPolygon()}
+      {subType === 'symmetry' && renderSymmetry()}
     </svg>
   );
 };
