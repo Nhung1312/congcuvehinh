@@ -84,8 +84,15 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
     }
   };
   const handleImagePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const pasted = Array.from(event.clipboardData?.items || [])
-      .find(item => item.kind === 'file' && item.type.startsWith('image/'))?.getAsFile();
+    const items = event.clipboardData.items;
+    let pasted: File | null = null;
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index];
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        pasted = item.getAsFile();
+        break;
+      }
+    }
     if (pasted) {
       event.preventDefault();
       void selectImage(pasted);
