@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import {
   BaseChartSettings,
   GeometryData,
@@ -21,6 +21,7 @@ import {
 import { resolveAuxiliaryPoints } from '../utils/resolveAuxiliaryPoints';
 import { getGeometrySceneBoundingBox, aspectFitSceneViewBox } from '../utils/geometrySceneBounds';
 import { SvgPatternDefs } from './patterns/SvgPatterns';
+import { layoutGeometryPointLabels } from '../utils/smartGeometryLayout';
 import { SGK_STYLE, getMathFontFamily } from '../constants/style';
 import {
   dist,
@@ -119,14 +120,36 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
 
   // Tính toán Bounding Box và ViewBox SVG toàn cảnh (tự động mở rộng khi có điểm ngoài như T)
   const sceneBounds = getGeometrySceneBoundingBox(data, width, height, 40);
-  const aspectView = aspectFitSceneViewBox(sceneBounds, width, height);
+  // Measure the actual diagram so the viewBox fits every shape and its labels.
+  const geometryContentRef = useRef<SVGGElement>(null);
+  const [measuredBounds, setMeasuredBounds] = useState<{
+    minX: number; maxX: number; minY: number; maxY: number;
+  } | null>(null);
+  // Keep SVG coordinates stable during point dragging.
+  const [draggingVertex, setDraggingVertex] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    if (draggingVertex !== null) return;
+    const group = geometryContentRef.current;
+    if (!group || typeof group.getBBox !== 'function') return;
+    try {
+      const box = group.getBBox();
+      if (![box.x, box.y, box.width, box.height].every(Number.isFinite) ||
+          box.width < 0.001 || box.height < 0.001) return;
+      const next = { minX: box.x, minY: box.y, maxX: box.x + box.width, maxY: box.y + box.height };
+      setMeasuredBounds(prev =>
+        prev && Object.keys(next).every(key =>
+          Math.abs(prev[key as keyof typeof prev] - next[key as keyof typeof next]) < 0.5
+        ) ? prev : next
+      );
+    } catch { /* Embedded SVGs and test runtimes may not provide geometry measurement. */ }
+  }, [data, fontSize, draggingVertex, width, height]);
+  const aspectView = aspectFitSceneViewBox(measuredBounds || sceneBounds, width, height);
   const { minX: vbMinX, minY: vbMinY, width: vbWidth, height: vbHeight } = aspectView;
   const vbMaxX = vbMinX + vbWidth;
   const vbMaxY = vbMinY + vbHeight;
   const svgViewBox = `${vbMinX} ${vbMinY} ${vbWidth} ${vbHeight}`;
 
   // State cho việc kéo điểm trực tiếp trên SVG
-  const [draggingVertex, setDraggingVertex] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
   // Khởi tạo toạ độ tam giác nếu chưa có
@@ -5138,13 +5161,15 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
 
       <rect x={vbMinX} y={vbMinY} width={vbWidth} height={vbHeight} fill={settings.backgroundColor || '#ffffff'} />
 
-      {subType === 'triangle' && renderTriangle()}
-      {subType === 'quadrilateral' && renderQuadrilateral()}
-      {subType === 'line-ray' && renderLineRay()}
-      {subType === 'circle' && renderCircle()}
-      {subType === 'angle' && renderAngle()}
-      {subType === 'polygon' && renderRegularPolygon()}
-      {subType === 'symmetry' && renderSymmetry()}
+      <g id="geometry-content" ref={geometryContentRef}>
+        {subType === 'triangle' && renderTriangle()}
+        {subType === 'quadrilateral' && renderQuadrilateral()}
+        {subType === 'line-ray' && renderLineRay()}
+        {subType === 'circle' && renderCircle()}
+        {subType === 'angle' && renderAngle()}
+        {subType === 'polygon' && renderRegularPolygon()}
+        {subType === 'symmetry' && renderSymmetry()}
+      </g>
     </svg>
   );
 };
