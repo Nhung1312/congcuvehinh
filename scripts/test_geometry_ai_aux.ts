@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import type { GeometrySpecification } from '../src/ai/types';
 import { GeometrySpecificationAdapter } from '../src/ai/adapter/geometrySpecificationAdapter';
 import { resolveAuxiliaryPoints } from '../src/utils/resolveAuxiliaryPoints';
-import { midpoint, projectPointToLine, constrainTrianglePointDrag, dist } from '../src/utils/geometryMath';
+import { midpoint, projectPointToLine, constrainTrianglePointDrag, constrainQuadPointDrag, constrainCircleDrag, getQuadPresetPoints, getTriangleCircumcircle, dist } from '../src/utils/geometryMath';
 import { VietnameseGeometryParser } from '../src/ai/parser/vietnameseGeometryParser';
 
 const baseSpec = (changes: Partial<GeometrySpecification> = {}): GeometrySpecification => ({
@@ -258,4 +258,56 @@ test('Không biến kết luận cần chứng minh thành giả thiết', () =>
   // Không biến AM thành đường cao
   assert.equal(tri.altitudes?.length, 1, 'Chỉ có đường cao AH từ giả thiết');
   assert.equal(tri.altitudes?.[0].label, 'H');
+});
+
+test('Kéo tam giác tù phải giữ góc tù đúng đỉnh, không biến thành tam giác nhọn', () => {
+  const pts: [{ x: number; y: number }, { x: number; y: number }, { x: number; y: number }] = [
+    { x: 40, y: 60 }, { x: 160, y: 60 }, { x: 5, y: 150 },
+  ];
+  const updated = constrainTrianglePointDrag('obtuse', pts, 2, { x: 90, y: 140 }, 'A');
+  const [A, B, C] = updated;
+  const dot = (B.x - A.x) * (C.x - A.x) + (B.y - A.y) * (C.y - A.y);
+  assert.ok(dot < 0, 'Góc A phải vẫn tù khi kéo C');
+  assert.notDeepEqual(C, { x: 90, y: 140 }, 'Không cho con trỏ phá tính chất góc tù');
+});
+
+test('Tam giác vuông xoay vẫn giữ vuông góc chính xác khi kéo một cạnh', () => {
+  const pts: [{ x: number; y: number }, { x: number; y: number }, { x: number; y: number }] = [
+    { x: 10, y: 20 }, { x: 100, y: 80 }, { x: -30, y: 80 },
+  ];
+  const moved = constrainTrianglePointDrag('right', pts, 1, { x: 120, y: 150 }, 'A');
+  const [A, B, C] = moved;
+  const dot = (B.x - A.x) * (C.x - A.x) + (B.y - A.y) * (C.y - A.y);
+  assert.ok(Math.abs(dot) < 1e-8, 'Không làm tròn tọa độ làm mất góc 90 độ');
+});
+
+test('Các tứ giác đặc biệt giữ quan hệ cơ bản khi kéo', () => {
+  const parallel = constrainQuadPointDrag('parallelogram', getQuadPresetPoints('parallelogram'), 1, { x: 390, y: 190 });
+  const [A, B, C, D] = parallel;
+  assert.ok(Math.abs((B.x - A.x) - (C.x - D.x)) < 1e-8);
+  assert.ok(Math.abs((B.y - A.y) - (C.y - D.y)) < 1e-8);
+  const rectangle = constrainQuadPointDrag('rectangle', getQuadPresetPoints('rectangle'), 1, { x: 380, y: 170 });
+  const [P, Q, R] = rectangle;
+  assert.ok(Math.abs((Q.x - P.x) * (R.x - Q.x) + (Q.y - P.y) * (R.y - Q.y)) < 1e-8);
+  const rhombus = constrainQuadPointDrag('rhombus', getQuadPresetPoints('rhombus'), 1, { x: 460, y: 180 });
+  const sides = rhombus.map((p, i) => dist(p, rhombus[(i + 1) % 4]));
+  assert.ok(Math.max(...sides) - Math.min(...sides) < 1e-8);
+});
+
+test('Tứ giác nội tiếp: kéo một đỉnh trùng tâm không làm mất tính nội tiếp', () => {
+  const pts = getQuadPresetPoints('cyclic');
+  const reference = getTriangleCircumcircle(pts[1], pts[2], pts[3]);
+  const updated = constrainQuadPointDrag('cyclic', pts, 0, reference.center);
+  assert.deepEqual(updated[0], pts[0], 'Hướng chiếu không xác định: giữ nguyên vị trí đỉnh');
+});
+
+test('Đường tròn: không cho bán kính bằng 0 và giữ điểm trên đường tròn khi kéo', () => {
+  const center = { x: 210, y: 210 }, radial = { x: 310, y: 210 };
+  const basic = constrainCircleDrag('basic', [center, radial], 1, center);
+  assert.equal(dist(basic[0], basic[1]), 100, 'Không cho kéo A trùng tâm O');
+  const inscribed = [center, radial, { x: 210, y: 310 }];
+  const moved = constrainCircleDrag('inscribed-angle', inscribed, 2, center);
+  assert.deepEqual(moved[2], inscribed[2], 'Không đặt điểm trên đường tròn vào tâm');
+  const translated = constrainCircleDrag('basic', [center, radial], 0, { x: 250, y: 250 });
+  assert.equal(dist(translated[0], translated[1]), 100, 'Dịch tâm giữ nguyên bán kính');
 });

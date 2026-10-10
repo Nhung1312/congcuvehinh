@@ -489,8 +489,45 @@ export const constrainTrianglePointDrag = (
     { ...pts[2] },
   ];
 
-  if (type === 'general' || type === 'obtuse') {
+  if (type === 'general') {
     result[dragIdx] = newPoint;
+    return result;
+  }
+
+  if (type === 'obtuse') {
+    // Chỉ cho kéo trong miền giữ đúng đỉnh tù và chiều tam giác.
+    const dotAt = (a: [Point2D, Point2D, Point2D], i: number) => {
+      const v = a[i], p = a[(i + 1) % 3], q = a[(i + 2) % 3];
+      return (p.x - v.x) * (q.x - v.x) + (p.y - v.y) * (q.y - v.y);
+    };
+    const namedIdx = specialVertex ? vertexNames.indexOf(specialVertex) : -1;
+    const apex = namedIdx >= 0 ? namedIdx : ([0, 1, 2].find(i => dotAt(pts, i) < 0) ?? 0);
+    const signedArea = (a: [Point2D, Point2D, Point2D]) =>
+      (a[1].x - a[0].x) * (a[2].y - a[0].y) - (a[1].y - a[0].y) * (a[2].x - a[0].x);
+    const orientation = Math.sign(signedArea(pts));
+    const valid = (a: [Point2D, Point2D, Point2D]) => {
+      const v = a[apex], p = a[(apex + 1) % 3], q = a[(apex + 2) % 3];
+      const ux = p.x - v.x, uy = p.y - v.y, wx = q.x - v.x, wy = q.y - v.y;
+      const lengthProduct = Math.hypot(ux, uy) * Math.hypot(wx, wy);
+      return lengthProduct > 400 && dotAt(a, apex) < -0.01 * lengthProduct
+        && Math.abs(signedArea(a)) > 0.02 * lengthProduct
+        && Math.sign(signedArea(a)) === orientation;
+    };
+    if (!valid(pts)) return result;
+    result[dragIdx] = newPoint;
+    if (valid(result)) return result;
+    const old = pts[dragIdx];
+    let low = 0, high = 1, accepted: Point2D = { ...old };
+    for (let i = 0; i < 32; i++) {
+      const t = (low + high) / 2;
+      const candidate = {
+        x: old.x + (newPoint.x - old.x) * t,
+        y: old.y + (newPoint.y - old.y) * t,
+      };
+      result[dragIdx] = candidate;
+      if (valid(result)) { accepted = candidate; low = t; } else { high = t; }
+    }
+    result[dragIdx] = accepted;
     return result;
   }
 
@@ -555,8 +592,8 @@ export const constrainTrianglePointDrag = (
     }
 
     result[dragIdx] = {
-      x: Math.round(rPoint.x + proj * norm.x),
-      y: Math.round(rPoint.y + proj * norm.y),
+      x: rPoint.x + proj * norm.x,
+      y: rPoint.y + proj * norm.y,
     };
 
     // Nếu là vuông cân: ép cạnh kia bằng đúng độ dài cạnh đang kéo
@@ -564,8 +601,8 @@ export const constrainTrianglePointDrag = (
       const targetLen = Math.abs(proj);
       const otherDir = { x: baseVec.x / baseLen, y: baseVec.y / baseLen };
       result[otherLegIdx] = {
-        x: Math.round(rPoint.x + targetLen * otherDir.x),
-        y: Math.round(rPoint.y + targetLen * otherDir.y),
+        x: rPoint.x + targetLen * otherDir.x,
+        y: rPoint.y + targetLen * otherDir.y,
       };
     }
     return result;
@@ -614,8 +651,8 @@ export const constrainTrianglePointDrag = (
       if (Math.abs(proj) < 25) proj = 25;
 
       result[apex] = {
-        x: Math.round(midBase.x + proj * norm.x),
-        y: Math.round(midBase.y + proj * norm.y),
+        x: midBase.x + proj * norm.x,
+        y: midBase.y + proj * norm.y,
       };
       return result;
     } else {
@@ -638,8 +675,8 @@ export const constrainTrianglePointDrag = (
       const compN = rel.x * nAxis.x + rel.y * nAxis.y;
 
       result[otherBase] = {
-        x: Math.round(pts[apex].x + compU * uAxis.x - compN * nAxis.x),
-        y: Math.round(pts[apex].y + compU * uAxis.y - compN * nAxis.y),
+        x: pts[apex].x + compU * uAxis.x - compN * nAxis.x,
+        y: pts[apex].y + compU * uAxis.y - compN * nAxis.y,
       };
       return result;
     }
@@ -846,9 +883,8 @@ export const constrainQuadPointDrag = (
         x: circle.center.x + (vec.x / len) * circle.radius,
         y: circle.center.y + (vec.y / len) * circle.radius,
       };
-    } else {
-      result[dragIdx] = newPoint;
     }
+    // Kéo trùng tâm không xác định phương chiếu lên đường tròn.
     return result;
   }
 
@@ -1326,6 +1362,12 @@ export const constrainCircleDrag = (
     return points.map((p, i) => (i === 0 ? newPoint : { x: p.x + dx, y: p.y + dy }));
   }
 
+  // Không kéo điểm bán kính về tâm: bán kính bằng 0 làm hình suy biến.
+  if (dragIdx === 1 && dist(center, newPoint) < 5 &&
+      type !== 'two-tangents' && type !== 'two-circles' && type !== 'exterior-angle') {
+    return result;
+  }
+
   // 2. Kéo điểm A (Bán kính) (dragIdx = 1) trong basic, diameter-chord, tangent-point
   if (dragIdx === 1) {
     if (type === 'basic' || type === 'diameter-chord' || type === 'tangent-point') {
@@ -1362,6 +1404,7 @@ export const constrainCircleDrag = (
     if (type === 'inscribed-angle' || type === 'tangent-chord-angle' || type === 'interior-angle') {
       // Khóa điểm trên đường tròn
       const r = dist(center, points[1]);
+      if (dist(center, newPoint) < 1e-4) return result;
       const v = vecNorm(vecSub(newPoint, center));
       result[1] = {
         x: center.x + v.x * r,
@@ -1395,6 +1438,7 @@ export const constrainCircleDrag = (
     ) {
       // Khóa điểm nằm trên đường tròn (O, R)
       const r = dist(center, points[1]) || 110;
+      if (dist(center, newPoint) < 1e-4) return result;
       const v = vecNorm(vecSub(newPoint, center));
       result[dragIdx] = {
         x: center.x + v.x * r,
