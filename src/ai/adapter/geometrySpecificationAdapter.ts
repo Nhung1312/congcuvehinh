@@ -173,7 +173,7 @@ export class GeometrySpecificationAdapter {
         from: line.from,
         to: line.to,
         style: line.style || 'solid',
-        label: line.label,
+        label: 'label' in line ? line.label : undefined,
         enabled: true,
       });
     }
@@ -318,7 +318,7 @@ export class GeometrySpecificationAdapter {
       .map(item => {
         const names = Array.isArray(item.segment) ? item.segment.join('') : item.segment;
         const sorted = names.split('').sort().join('');
-        const side = sorted === 'AB' ? 'AB' : sorted === 'AC' ? 'AC' : sorted === 'BC' ? 'BC' : null;
+        const side: 'AB' | 'AC' | 'BC' | null = sorted === 'AB' ? 'AB' : sorted === 'AC' ? 'AC' : sorted === 'BC' ? 'BC' : null;
         return side ? {
           side,
           enabled: true,
