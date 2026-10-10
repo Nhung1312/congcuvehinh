@@ -3,9 +3,16 @@ import { ChartDocument } from '../types';
 /**
  * Xuất chuỗi XML chuẩn từ SVG DOM element
  */
-export function getSvgXmlString(svgElement: SVGSVGElement): string {
+export function getSvgXmlString(svgElement: SVGSVGElement, outputSize?: { width: number; height: number }): string {
   const clonedSvg = svgElement.cloneNode(true) as SVGSVGElement;
-  
+  if (outputSize) {
+    // PNG target dimensions must also be the source SVG intrinsic dimensions.
+    // Otherwise drawImage stretches circles to ellipses and distorts 90° signs.
+    clonedSvg.setAttribute('width', String(outputSize.width));
+    clonedSvg.setAttribute('height', String(outputSize.height));
+    clonedSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  }
+
   // Đảm bảo xmlns và viewBox đầy đủ
   if (!clonedSvg.getAttribute('xmlns')) {
     clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
@@ -31,14 +38,15 @@ export async function svgToPngBlob(
 ): Promise<Blob> {
   return new Promise((resolve, reject) => {
     try {
-      const svgString = getSvgXmlString(svgElement);
+      const width = svgElement.viewBox.baseVal.width || svgElement.clientWidth || 600;
+      const height = svgElement.viewBox.baseVal.height || svgElement.clientHeight || 450;
+      // Ensure the raster image has exactly the same aspect ratio as the vector viewport.
+      const svgString = getSvgXmlString(svgElement, { width, height });
       const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
       const url = URL.createObjectURL(svgBlob);
 
       const img = new Image();
       img.onload = () => {
-        const width = svgElement.viewBox.baseVal.width || svgElement.clientWidth || 600;
-        const height = svgElement.viewBox.baseVal.height || svgElement.clientHeight || 450;
 
         const canvas = document.createElement('canvas');
         canvas.width = width * scale;

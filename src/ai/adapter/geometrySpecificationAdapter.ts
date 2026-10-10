@@ -398,6 +398,25 @@ export class GeometrySpecificationAdapter {
       }
     }
 
+    // Balance new, unconstrained acute composite diagrams without changing their
+    // geometric hypotheses. A very distant external T otherwise shrinks ABC.
+    // This only applies when creating an AI diagram, never to edited/saved points.
+    const tangentCut = Boolean(
+      triSpec.circumscribedCircle &&
+      (spec.auxPoints || []).some(p =>
+        p.type === 'intersection' &&
+        typeof p.line1 === 'string' && p.line1.includes('x') &&
+        typeof p.line2 === 'string' && p.line2.length === 2
+      )
+    );
+    if (triType === 'general' && tangentCut &&
+        !Object.keys(triSpec.sideLengths || {}).length &&
+        !Object.keys(triSpec.angles || {}).length &&
+        !(spec.equalSegments || []).length) {
+      // Still acute, AB < AC, with the tangent–BC intersection much closer.
+      points = [{ x: 175, y: 150 }, { x: 130, y: 340 }, { x: 430, y: 340 }];
+    }
+
     const roleOf = (name: string): 'A' | 'B' | 'C' => {
       const index = triSpec.vertices.indexOf(name);
       return index === 1 ? 'B' : index === 2 ? 'C' : 'A';
