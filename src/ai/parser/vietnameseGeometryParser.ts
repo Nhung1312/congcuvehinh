@@ -259,6 +259,10 @@ export class VietnameseGeometryParser {
     }
 
     // Phân tích trung tuyến (Medians)
+    // Nối AM tới M là trung điểm BC chính là trung tuyến AM; không tự thêm nếu thiếu AM.
+    const isExplicitOppositeMedian = (mid: string, segment: string) =>
+      [...segment].sort().join('') === [vB, vC].sort().join('') &&
+      new RegExp('\\b' + vA + mid + '\\b', 'i').test(raw);
     const medians: GeometrySpecification['medians'] = [];
     const medRegex = /(?:trung\s+tuyến|kẻ\s+trung\s+tuyến)\s+([A-Z])([A-Z])(?!\w)|(?:trung\s+điểm\s+([A-Z])(?:\s+của\s+([A-Z]{2}))?)/gi;
     let matchMed;
@@ -284,7 +288,7 @@ export class VietnameseGeometryParser {
         const seg = (matchMed[4] || `${vB}${vC}`).toUpperCase();
         if (mid !== vA && mid !== vB && mid !== vC) {
           // Chỉ thêm medians chuyên biệt khi đề bài thực sự có từ "trung tuyến"
-          const hasExplicitMedianWord = text.includes('trung tuyến');
+          const hasExplicitMedianWord = text.includes('trung tuyến') || isExplicitOppositeMedian(mid, seg);
           if (hasExplicitMedianWord && !medians.some(m => m.midpoint === mid)) {
             medians.push({
               from: vA,
@@ -307,7 +311,7 @@ export class VietnameseGeometryParser {
       const mid = midMatch[1].toUpperCase();
       const seg = (midMatch[2] || `${vB}${vC}`).toUpperCase();
       if (mid !== vA && mid !== vB && mid !== vC) {
-        const hasExplicitMedianWord = text.includes('trung tuyến');
+        const hasExplicitMedianWord = text.includes('trung tuyến') || isExplicitOppositeMedian(mid, seg);
         if (hasExplicitMedianWord) {
           medians.push({
             from: vA,
