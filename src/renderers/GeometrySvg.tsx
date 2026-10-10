@@ -18,6 +18,7 @@ import {
   CustomEqualSidesMarker,
   CustomEqualAnglesMarker,
 } from '../types';
+import { resolveAuxiliaryPoints } from '../utils/resolveAuxiliaryPoints';
 import { SvgPatternDefs } from './patterns/SvgPatterns';
 import { SGK_STYLE, getMathFontFamily } from '../constants/style';
 import {
@@ -341,56 +342,8 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
       equalAnglesMarkers = [],
     } = auxData;
 
-    // Bảng toạ độ mở rộng kết hợp các điểm phụ
-    const pointsMap: Record<string, Point2D> = { ...namedPoints };
-
-    // 1. Tính toán toạ độ các điểm phụ (Auxiliary Points)
-    auxPoints.forEach((ap) => {
-      if (!ap.name) return;
-      if (ap.type === 'midpoint' && ap.segment && ap.segment.length >= 2) {
-        const p1 = resolvePointCoordinate(ap.segment[0], pointsMap);
-        const p2 = resolvePointCoordinate(ap.segment[1], pointsMap);
-        if (p1 && p2) pointsMap[ap.name] = midpoint(p1, p2);
-      } else if (ap.type === 'ratio' && ap.segment && ap.segment.length >= 2) {
-        const p1 = resolvePointCoordinate(ap.segment[0], pointsMap);
-        const p2 = resolvePointCoordinate(ap.segment[1], pointsMap);
-        const r = ap.ratio !== undefined ? ap.ratio : 0.5;
-        if (p1 && p2) {
-          pointsMap[ap.name] = {
-            x: p1.x + (p2.x - p1.x) * r,
-            y: p1.y + (p2.y - p1.y) * r,
-          };
-        }
-      } else if (ap.type === 'projection' && ap.fromPoint && ap.targetLine && ap.targetLine.length >= 2) {
-        const pFrom = resolvePointCoordinate(ap.fromPoint, pointsMap);
-        const pLine1 = resolvePointCoordinate(ap.targetLine[0], pointsMap);
-        const pLine2 = resolvePointCoordinate(ap.targetLine[1], pointsMap);
-        if (pFrom && pLine1 && pLine2) {
-          const proj = projectPointToLine(pFrom, pLine1, pLine2);
-          if (proj) pointsMap[ap.name] = proj.point;
-        }
-      } else if (ap.type === 'intersection' && ap.line1 && ap.line2 && ap.line1.length >= 2 && ap.line2.length >= 2) {
-        const p1 = resolvePointCoordinate(ap.line1[0], pointsMap);
-        const p2 = resolvePointCoordinate(ap.line1[1], pointsMap);
-        const p3 = resolvePointCoordinate(ap.line2[0], pointsMap);
-        const p4 = resolvePointCoordinate(ap.line2[1], pointsMap);
-        if (p1 && p2 && p3 && p4) {
-          const inter = lineIntersection(p1, p2, p3, p4);
-          if (inter) pointsMap[ap.name] = inter;
-        }
-      } else if (ap.type === 'free' && ap.freeX !== undefined && ap.freeY !== undefined) {
-        pointsMap[ap.name] = { x: ap.freeX, y: ap.freeY };
-      } else if (ap.type === 'on-circle' && ap.angle !== undefined) {
-        const centerName = ap.centerPoint || 'O';
-        const pCenter = resolvePointCoordinate(centerName, pointsMap) || { x: 320, y: 240 };
-        const rad = ap.radius || (circle?.radius) || 140;
-        const angRad = (ap.angle * Math.PI) / 180;
-        pointsMap[ap.name] = {
-          x: pCenter.x + rad * Math.cos(angRad),
-          y: pCenter.y + rad * Math.sin(angRad),
-        };
-      }
-    });
+    // Giải chuỗi H → D/E dù điểm phụ được trả về không đúng thứ tự.
+    const pointsMap = resolveAuxiliaryPoints(namedPoints, auxPoints, circle?.radius);
 
     return (
       <g id="auxiliary-elements-layer">
@@ -1341,6 +1294,32 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
       );
     }
 
+    // Chân đường cao/trung tuyến/phân giác là gốc cho các phép dựng nhiều bước.
+    const auxiliaryAnchors: Record<string, Point2D> = {};
+    const opposite = (vertex: string): [Point2D, Point2D, Point2D] => {
+      if (vertex === 'B') return [pB, pA, pC];
+      if (vertex === 'C') return [pC, pA, pB];
+      return [pA, pB, pC];
+    };
+    for (const alt of altitudes) {
+      if (!alt.enabled) continue;
+      const [from, side1, side2] = opposite(alt.fromVertex);
+      const label = alt.label || (alt.fromVertex === 'B' ? 'K' : alt.fromVertex === 'C' ? 'L' : 'H');
+      auxiliaryAnchors[label] = projectPointToLine(from, side1, side2).point;
+    }
+    for (const med of medians) {
+      if (!med.enabled) continue;
+      const [, side1, side2] = opposite(med.fromVertex);
+      const label = med.label || (med.fromVertex === 'B' ? 'N' : med.fromVertex === 'C' ? 'P' : 'M');
+      auxiliaryAnchors[label] = midpoint(side1, side2);
+    }
+    for (const bis of bisectors) {
+      if (!bis.enabled) continue;
+      const [from, side1, side2] = opposite(bis.fromVertex);
+      const label = bis.label || (bis.fromVertex === 'B' ? 'E' : bis.fromVertex === 'C' ? 'F' : 'D');
+      auxiliaryAnchors[label] = angleBisectorPoint(from, side1, side2);
+    }
+
     return (
       <g id="triangle-group">
         {/* 0. TÔ MIỀN BÊN TRONG TAM GIÁC (Tùy chỉnh độc lập) */}
@@ -1506,6 +1485,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
             BC: midpoint(pB, pC),
             CA: midpoint(pC, pA),
             AC: midpoint(pA, pC),
+            ...auxiliaryAnchors,
           },
           t
         )}
@@ -1528,6 +1508,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
             BC: midpoint(pB, pC),
             CA: midpoint(pC, pA),
             AC: midpoint(pA, pC),
+            ...auxiliaryAnchors,
           },
           data
         )}

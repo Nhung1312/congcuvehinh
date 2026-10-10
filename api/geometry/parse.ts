@@ -1,119 +1,120 @@
 /**
- * Vercel Serverless Function: Gemini 3.8 Flash geometry parser.
- * Supports both Web Standard Request (Fetch API) and Node.js (req, res) runtimes.
- * Never stores or logs API keys. Never uses shared keys.
+ * Gemini geometry endpoint for Vercel Node.js Functions.
+ * Match the Web Fetch signature already used by api/health.ts.
+ * Import Gemini lazily so module loading errors return diagnostic JSON
+ * instead of crashing the entire serverless function at startup.
+ *
+ * Never echo, store or log a user's API key.
  */
-import { parseGeometryWithGemini } from '../../src/server/geminiGeometryService';
 
-interface ParseOutcome {
-  status: number;
-  data: Record<string, any>;
+const JSON_HEADERS = {
+  'Content-Type': 'application/json; charset=utf-8',
+  'Cache-Control': 'no-store',
+};
+
+function json(data: Record<string, unknown>, status = 200): Response {
+  return new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
 }
 
-async function executeGeometryParse(
-  promptInput: unknown,
-  apiKeyInput: unknown
-): Promise<ParseOutcome> {
-  if (typeof promptInput !== 'string' || !promptInput.trim() || promptInput.length > 6000) {
-    return {
-      status: 400,
-      data: { error: 'Vui lòng nhập đề bài hình học (từ 1 đến 6000 ký tự).' },
-    };
-  }
+function safeErrorMessage(error: unknown, apiKey: string): string {
+  const raw = error instanceof Error ? error.message : 'Yêu cầu Gemini thất bại.';
+  // Extra protection in case the upstream provider includes the credential.
+  const sanitized = apiKey ? raw.split(apiKey).join('[REDACTED]') : raw;
+  return sanitized.slice(0, 1200);
+}
 
-  if (typeof apiKeyInput !== 'string' || !apiKeyInput.trim() || apiKeyInput.length > 256) {
-    return {
-      status: 400,
-      data: { error: 'Vui lòng dán API key Gemini cá nhân để kiểm tra AI.' },
-    };
-  }
+async function loadGeminiService() {
+  // A dynamic import permits a clean SERVICE_INIT_FAILED response if runtime
+  // dependency resolution fails on Vercel, rather than FUNCTION_INVOCATION_FAILED.
+  return import('../../src/server/geminiGeometryService');
+}
 
+async function handle(request: Request): Promise<Response> {
   try {
-    const spec = await parseGeometryWithGemini(promptInput.trim(), apiKeyInput.trim());
-    if (spec.generationInfo?.source !== 'gemini') {
-      throw new Error('Gemini không trả về dữ liệu hình học hợp lệ.');
+    if (request.method === 'GET') {
+      // GET is a no-key diagnostic and makes NO calls to Gemini's API.
+      try {
+        const module = await loadGeminiService();
+        if (typeof module.parseGeometryWithGemini !== 'function') {
+          return json({ status: 'unavailable', code: 'SERVICE_INIT_FAILED' }, 503);
+        }
+        return json({
+          status: 'ok',
+          service: 'geometry-ai-parser',
+          model: 'gemini-3.8-flash',
+          geminiApi: 'not_checked',
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        // GET has no credentials, but still exclude paths and arbitrary long messages.
+        const detail = message.slice(0, 350).replace(/AIza[\\w-]+/g, '[REDACTED]');
+        return json({
+          status: 'unavailable',
+          code: 'SERVICE_INIT_FAILED',
+          error: 'Vercel không nạp được dịch vụ Gemini.',
+          diagnostic: detail,
+        }, 503);
+      }
     }
-    return {
-      status: 200,
-      data: { success: true, spec },
-    };
-  } catch (err: any) {
-    const rawMsg = err?.message || 'Không gọi được Gemini 3.8 Flash.';
-    return {
-      status: 502,
-      data: {
-        code: 'GEMINI_UNAVAILABLE',
-        error: rawMsg || 'Không gọi được Gemini 3.8 Flash. Kiểm tra API key, hạn mức và quyền truy cập model.',
-      },
-    };
-  }
-}
 
-/** Web Standard Request handler (Vercel Fetch / Edge / Modern serverless runtime) */
-async function handleWebRequest(request: Request): Promise<Response> {
-  const headers = {
-    'Content-Type': 'application/json',
-    'Cache-Control': 'no-store',
-  };
+    if (request.method !== 'POST') {
+      return json({ code: 'METHOD_NOT_ALLOWED', error: 'Chỉ hỗ trợ GET kiểm tra và POST phân tích hình.' }, 405);
+    }
 
-  if (request.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Chỉ hỗ trợ POST.' }), {
-      status: 405,
-      headers,
-    });
-  }
-
-  let body: any = {};
-  try {
-    body = await request.json();
-  } catch {
-    return new Response(JSON.stringify({ error: 'Nội dung JSON không hợp lệ.' }), {
-      status: 400,
-      headers,
-    });
-  }
-
-  const outcome = await executeGeometryParse(body?.prompt, body?.apiKey);
-  return new Response(JSON.stringify(outcome.data), {
-    status: outcome.status,
-    headers,
-  });
-}
-
-/**
- * Universal default export:
- * Can be called as handler(req, res) in Node.js runtime,
- * or as handler(request) / { fetch: ... } in Web Standard runtime.
- */
-export default async function handler(req: any, res?: any) {
-  // Check if called with Node.js (req, res) convention
-  if (res && typeof res.status === 'function') {
+    let body: Record<string, unknown>;
     try {
-      if (typeof res.setHeader === 'function') {
-        res.setHeader('Cache-Control', 'no-store');
+      const parsed = await request.json();
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return json({ code: 'INVALID_JSON', error: 'Nội dung yêu cầu không hợp lệ.' }, 400);
       }
-      if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Chỉ hỗ trợ POST.' });
-      }
-      const body = req.body || {};
-      const outcome = await executeGeometryParse(body?.prompt, body?.apiKey);
-      return res.status(outcome.status).json(outcome.data);
-    } catch (err: any) {
-      return res.status(502).json({
-        code: 'GEMINI_UNAVAILABLE',
-        error: err?.message || 'Lỗi xử lý request Gemini.',
-      });
+      body = parsed as Record<string, unknown>;
+    } catch {
+      return json({ code: 'INVALID_JSON', error: 'Nội dung JSON không hợp lệ.' }, 400);
     }
+
+    const prompt = body.prompt;
+    const key = body.apiKey;
+    if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 6000) {
+      return json({ code: 'INVALID_PROMPT', error: 'Vui lòng nhập đề bài từ 1 đến 6000 ký tự.' }, 400);
+    }
+    if (typeof key !== 'string' || !key.trim() || key.length > 256) {
+      return json({ code: 'MISSING_API_KEY', error: 'Vui lòng nhập API key Gemini cá nhân.' }, 400);
+    }
+
+    let parseGeometryWithGemini: typeof import('../../src/server/geminiGeometryService').parseGeometryWithGemini;
+    try {
+      ({ parseGeometryWithGemini } = await loadGeminiService());
+    } catch {
+      return json({
+        code: 'SERVICE_INIT_FAILED',
+        error: 'Dịch vụ Gemini không khởi tạo trên Vercel. Cần kiểm tra Function Logs.',
+      }, 503);
+    }
+
+    try {
+      const spec = await parseGeometryWithGemini(prompt.trim(), key.trim());
+      if (spec.generationInfo?.source !== 'gemini') {
+        return json({
+          code: 'INVALID_AI_RESULT',
+          error: 'Gemini không trả về dữ liệu GeometrySpecification hợp lệ.',
+        }, 502);
+      }
+      return json({ success: true, spec });
+    } catch (error) {
+      return json({
+        code: 'GEMINI_REQUEST_FAILED',
+        error: safeErrorMessage(error, key.trim()),
+      }, 502);
+    }
+  } catch {
+    // Never log request bodies or keys in error handling.
+    return json({
+      code: 'GEOMETRY_API_ERROR',
+      error: 'API vẽ hình gặp lỗi nội bộ. Cần xem Function Logs trên Vercel.',
+    }, 500);
   }
-
-  // Otherwise, handle as Web Standard Request
-  return handleWebRequest(req);
 }
 
-// Attach fetch method to match the pattern used in api/health.ts
-handler.fetch = (request: Request) => handleWebRequest(request);
-
-// Export named HTTP method for Vercel Web Standard Functions
-export async function POST(request: Request): Promise<Response> {
-  return handleWebRequest(request);
-}
+export default {
+  fetch: handle,
+};
