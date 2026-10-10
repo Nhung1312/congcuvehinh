@@ -1,21 +1,18 @@
-/** Trial-status endpoint with lazy-loaded logic to isolate startup errors. */
-export default {
-  async fetch(request: Request): Promise<Response> {
-    if (request.method !== 'GET') {
-      return Response.json({ error: 'Chỉ hỗ trợ GET.' }, { status: 405 });
-    }
-    try {
-      const { getGeometryTrialStatus } = await import('../../src/server/geometryTrialService');
-      return Response.json(getGeometryTrialStatus(request.headers.get('cookie')), {
-        headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie' },
-      });
-    } catch (error) {
-      // No secrets or stack traces are returned. Check Vercel runtime logs for details.
-      console.error('[Geometry trial status] Function module/runtime error:', error instanceof Error ? error.name : 'unknown');
-      return Response.json({
-        code: 'TRIAL_STATUS_UNAVAILABLE',
-        error: 'Không đọc được trạng thái dùng thử; cần kiểm tra Vercel Function runtime.',
-      }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
-    }
-  },
-};
+/** Vercel Node.js Function: return trial status safely, without invoking Gemini. */
+import { getGeometryTrialStatus } from '../../src/server/geometryTrialService';
+
+export default function handler(req: any, res: any) {
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('Vary', 'Cookie');
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Chỉ hỗ trợ GET.' });
+  try {
+    return res.status(200).json(getGeometryTrialStatus(req.headers?.cookie));
+  } catch (error) {
+    // No secrets are logged or exposed by the status endpoint.
+    console.error('[Geometry trial status] Runtime failed:', error instanceof Error ? error.name : 'unknown');
+    return res.status(503).json({
+      code: 'TRIAL_STATUS_UNAVAILABLE',
+      error: 'Chưa đọc được số lượt dùng thử. Vui lòng kiểm tra Vercel runtime.',
+    });
+  }
+}
