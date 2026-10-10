@@ -1,4 +1,8 @@
 import test from 'node:test';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { GeometrySvg } from '../src/renderers/GeometrySvg';
+import { fitTriangleViewBox, getTriangleVisibleGeometry } from '../src/utils/geometryViewBox';
 import assert from 'node:assert/strict';
 import { VietnameseGeometryParser } from '../src/ai/parser/vietnameseGeometryParser';
 import { GeometrySpecificationAdapter } from '../src/ai/adapter/geometrySpecificationAdapter';
@@ -57,4 +61,32 @@ test('Tiếp tuyến Ax độc lập vẫn hiển thị tia và dấu vuông gó
 test('Không biến mục tiêu chứng minh tiếp tuyến thành phép dựng', () => {
   const spec = VietnameseGeometryParser.parse('Cho tam giác ABC nội tiếp đường tròn (O). Chứng minh AT là tiếp tuyến của (O) tại A.');
   assert.equal(spec.auxPoints?.some(p => p.type === 'tangent'),false);
+});
+
+test('Khung tự giãn chứa điểm T và không giãn theo điểm trợ giúp x đã ẩn', () => {
+  const problem = 'Cho tam giác ABC nhọn nội tiếp đường tròn (O). Kẻ tiếp tuyến của đường tròn (O) tại A, tiếp tuyến này cắt đường thẳng BC tại T.';
+  const spec = VietnameseGeometryParser.parse(problem);
+  const triangle = GeometrySpecificationAdapter.specToChartDocument(spec).data.geometry!.triangle!;
+  const points = triangle.points!;
+  const full = getTriangleVisibleGeometry(triangle, points);
+  assert.ok(full.resolved.T, 'T is a mathematically computed intersection');
+  assert.ok(triangle.auxPoints?.some(p => p.name === 'x' && p.showPoint === false && p.showLabel === false));
+  const box = fitTriangleViewBox(triangle, points, 600, 450);
+  const T = full.resolved.T;
+  assert.ok(T.x > box.x + 15 && T.x < box.x + box.width - 15);
+  assert.ok(T.y > box.y + 15 && T.y < box.y + box.height - 15);
+});
+
+test('SVG trực tiếp bỏ đề bài phía trên và giữ nhãn T', () => {
+  const spec = VietnameseGeometryParser.parse(
+    'Cho tam giác ABC nhọn nội tiếp đường tròn (O). Kẻ tiếp tuyến của đường tròn (O) tại A, tiếp tuyến này cắt đường thẳng BC tại T.'
+  );
+  const doc = GeometrySpecificationAdapter.specToChartDocument(spec);
+  const html = renderToStaticMarkup(React.createElement(GeometrySvg, {
+    data: doc.data.geometry!, settings: doc.settings,
+  }));
+  assert.ok(!html.includes(spec.title), 'No full assignment text in geometry SVG');
+  assert.match(html, /svg-math-canvas/);
+  assert.match(html, />T<\/text>/, 'T label must be drawn');
+  assert.doesNotMatch(html, />x<\/text>/, 'Construction helper x must be hidden');
 });

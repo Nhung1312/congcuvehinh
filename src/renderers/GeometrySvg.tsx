@@ -19,6 +19,7 @@ import {
   CustomEqualAnglesMarker,
 } from '../types';
 import { resolveAuxiliaryPoints } from '../utils/resolveAuxiliaryPoints';
+import { fitTriangleViewBox } from '../utils/geometryViewBox';
 import { SvgPatternDefs } from './patterns/SvgPatterns';
 import { SGK_STYLE, getMathFontFamily } from '../constants/style';
 import {
@@ -108,8 +109,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
 
   const width = settings.width || 560;
   const height = settings.height || 440;
-  const title = settings.title;
-  const showTitle = settings.showTitle !== false && Boolean(title);
+  // The assignment text remains available in document metadata, not on the geometry itself.
   const examMode = settings.examMode;
   const fontFamily = getMathFontFamily(settings.fontFamily);
 
@@ -165,6 +165,11 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     triangle?.points && triangle.points.length === 3
       ? triangle.points
       : getInitialTrianglePoints(triangle?.type || 'general');
+  // Fit all constructed points, including an intersection T outside the triangle.
+  // Recompute as the user drags vertices; never move the source coordinates to fit.
+  const viewport = subType === 'triangle'
+    ? fitTriangleViewBox(triangle || { type: 'general', vertexNames: ['A', 'B', 'C'] }, trianglePoints, width, height)
+    : { x: 0, y: 0, width, height };
 
   // Lấy toạ độ đỉnh tứ giác hiện tại
   const quadPoints: [Point2D, Point2D, Point2D, Point2D] =
@@ -200,12 +205,16 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
   const handlePointerMove = (e: React.PointerEvent) => {
     if (draggingVertex === null || !svgRef.current) return;
 
-    const svgRect = svgRef.current.getBoundingClientRect();
-    const scaleX = width / svgRect.width;
-    const scaleY = height / svgRect.height;
-
-    let newX = Math.round((e.clientX - svgRect.left) * scaleX);
-    let newY = Math.round((e.clientY - svgRect.top) * scaleY);
+    // The SVG may have an expanded viewBox, so map the pointer through the actual
+    // SVG coordinate transform (rather than assuming a fixed 0..width pixel range).
+    const screenMatrix = svgRef.current.getScreenCTM();
+    if (!screenMatrix) return;
+    const clientPoint = svgRef.current.createSVGPoint();
+    clientPoint.x = e.clientX;
+    clientPoint.y = e.clientY;
+    const localPoint = clientPoint.matrixTransform(screenMatrix.inverse());
+    let newX = Math.round(localPoint.x);
+    let newY = Math.round(localPoint.y);
 
     // Giới hạn trong khung vẽ
     newX = Math.max(30, Math.min(width - 30, newX));
@@ -5020,7 +5029,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
       ref={svgRef}
       id="svg-math-canvas"
       xmlns="http://www.w3.org/2000/svg"
-      viewBox={`0 0 ${width} ${height}`}
+      viewBox={`${viewport.x} ${viewport.y} ${viewport.width} ${viewport.height}`}
       width={width}
       height={height}
       onPointerMove={handlePointerMove}
@@ -5036,18 +5045,6 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
 
       <rect width={width} height={height} fill={settings.backgroundColor || '#ffffff'} />
 
-      {showTitle && (
-        <text
-          x={width / 2}
-          y={SGK_STYLE.margin.titleY}
-          textAnchor="middle"
-          fontSize={settings.fontSize ? settings.fontSize + 2 : SGK_STYLE.fontSize.title}
-          fontWeight="bold"
-          fill="#000000"
-        >
-          {title}
-        </text>
-      )}
 
       {subType === 'triangle' && renderTriangle()}
       {subType === 'quadrilateral' && renderQuadrilateral()}
