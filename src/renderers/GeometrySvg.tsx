@@ -19,7 +19,7 @@ import {
   CustomEqualAnglesMarker,
 } from '../types';
 import { resolveAuxiliaryPoints } from '../utils/resolveAuxiliaryPoints';
-import { getGeometrySceneBoundingBox } from '../utils/geometrySceneBounds';
+import { getGeometrySceneBoundingBox, aspectFitSceneViewBox } from '../utils/geometrySceneBounds';
 import { SvgPatternDefs } from './patterns/SvgPatterns';
 import { SGK_STYLE, getMathFontFamily } from '../constants/style';
 import {
@@ -109,8 +109,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
 
   const width = settings.width || 560;
   const height = settings.height || 440;
-  const title = settings.title;
-  const showTitle = settings.showTitle !== false && Boolean(title);
+  // The original problem text is metadata and must not obscure the diagram.
   const examMode = settings.examMode;
   const fontFamily = getMathFontFamily(settings.fontFamily);
 
@@ -120,12 +119,10 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
 
   // Tính toán Bounding Box và ViewBox SVG toàn cảnh (tự động mở rộng khi có điểm ngoài như T)
   const sceneBounds = getGeometrySceneBoundingBox(data, width, height, 40);
-  const vbMinX = sceneBounds.minX < 0 ? sceneBounds.minX : 0;
-  const vbMinY = sceneBounds.minY < 0 ? sceneBounds.minY : 0;
-  const vbMaxX = sceneBounds.maxX > width ? sceneBounds.maxX : width;
-  const vbMaxY = sceneBounds.maxY > height ? sceneBounds.maxY : height;
-  const vbWidth = vbMaxX - vbMinX;
-  const vbHeight = vbMaxY - vbMinY;
+  const aspectView = aspectFitSceneViewBox(sceneBounds, width, height);
+  const { minX: vbMinX, minY: vbMinY, width: vbWidth, height: vbHeight } = aspectView;
+  const vbMaxX = vbMinX + vbWidth;
+  const vbMaxY = vbMinY + vbHeight;
   const svgViewBox = `${vbMinX} ${vbMinY} ${vbWidth} ${vbHeight}`;
 
   // State cho việc kéo điểm trực tiếp trên SVG
@@ -211,12 +208,15 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
   const handlePointerMove = (e: React.PointerEvent) => {
     if (draggingVertex === null || !svgRef.current) return;
 
-    const svgRect = svgRef.current.getBoundingClientRect();
-    const scaleX = vbWidth / svgRect.width;
-    const scaleY = vbHeight / svgRect.height;
-
-    let newX = Math.round(vbMinX + (e.clientX - svgRect.left) * scaleX);
-    let newY = Math.round(vbMinY + (e.clientY - svgRect.top) * scaleY);
+    // Preserve pointer accuracy under CSS scaling, letterboxing and custom viewBox.
+    const matrix = svgRef.current.getScreenCTM();
+    if (!matrix) return;
+    const point = svgRef.current.createSVGPoint();
+    point.x = e.clientX;
+    point.y = e.clientY;
+    const localPoint = point.matrixTransform(matrix.inverse());
+    let newX = Math.round(localPoint.x);
+    let newY = Math.round(localPoint.y);
 
     // Giới hạn trong khung vẽ mở rộng
     newX = Math.max(vbMinX + 30, Math.min(vbMaxX - 30, newX));
@@ -5047,6 +5047,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
       id="svg-math-canvas"
       xmlns="http://www.w3.org/2000/svg"
       viewBox={svgViewBox}
+      preserveAspectRatio="xMidYMid meet"
       width={width}
       height={height}
       onPointerMove={handlePointerMove}
@@ -5061,19 +5062,6 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
       <SvgPatternDefs />
 
       <rect x={vbMinX} y={vbMinY} width={vbWidth} height={vbHeight} fill={settings.backgroundColor || '#ffffff'} />
-
-      {showTitle && (
-        <text
-          x={vbMinX + vbWidth / 2}
-          y={vbMinY + SGK_STYLE.margin.titleY}
-          textAnchor="middle"
-          fontSize={settings.fontSize ? settings.fontSize + 2 : SGK_STYLE.fontSize.title}
-          fontWeight="bold"
-          fill="#000000"
-        >
-          {title}
-        </text>
-      )}
 
       {subType === 'triangle' && renderTriangle()}
       {subType === 'quadrilateral' && renderQuadrilateral()}
