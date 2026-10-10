@@ -32,10 +32,6 @@ export class GeminiGeometryProvider implements IAIGeometryProvider {
     if (!data?.spec) {
       throw new Error('Máy chủ AI không trả về dữ liệu hình học hợp lệ.');
     }
-    const spec = data.spec as GeometrySpecification;
-    if (data.trial && typeof data.trial.remaining === 'number') {
-      spec.trial = data.trial;
-    }
-    return spec;
+    return data.spec as GeometrySpecification;
   }
 }
