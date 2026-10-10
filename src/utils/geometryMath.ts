@@ -245,8 +245,13 @@ export const getRightAngleMarkerPath = (
   target2: Point2D,
   size: number = 10
 ): string => {
-  const u = vecNorm(vecSub(target1, vertex));
-  const v = vecNorm(vecSub(target2, vertex));
+  const d1 = vecSub(target1, vertex), d2 = vecSub(target2, vertex);
+  const length1 = vecLen(d1), length2 = vecLen(d2);
+  // Reject degenerate rays and false right-angle annotations.
+  if (length1 < 1e-6 || length2 < 1e-6 || !Number.isFinite(length1 + length2)) return '';
+  const normalizedDot = dotProd(d1, d2) / (length1 * length2);
+  if (!Number.isFinite(normalizedDot) || Math.abs(normalizedDot) > 0.015) return '';
+  const u = vecScale(d1, 1 / length1), v = vecScale(d2, 1 / length2);
 
   const p1: Point2D = { x: vertex.x + u.x * size, y: vertex.y + u.y * size };
   const pCorner: Point2D = {
