@@ -5043,7 +5043,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     >
       <SvgPatternDefs />
 
-      <rect width={width} height={height} fill={settings.backgroundColor || '#ffffff'} />
+      <rect x={viewport.x} y={viewport.y} width={viewport.width} height={viewport.height} fill={settings.backgroundColor || '#ffffff'} />
 
 
       {subType === 'triangle' && renderTriangle()}
