@@ -39,6 +39,14 @@ QUY TẮC PHÂN LOẠI & NHẬN DIỆN THỰC THỂ HÌNH HỌC:
    - bisectors: mảng các đường phân giác TỪ ĐỈNH TAM GIÁC. Mỗi phần tử: { from: "A", toSegment: "BC", foot: "D", showEqualAngleArcs: true, style: "solid" }
    - perpBisectors: mảng đường trung trực cạnh. Mỗi phần tử: { segment: "BC", label: "d", showRightAngle: true, showTicks: true }
 
+LƯU Ý CẤU TRÚC BẮT BUỘC:
+- altitudes, medians, bisectors, perpBisectors, auxPoints, auxLines, rightAngles, parallels, equalSegments, equalAngles là các MẢNG Ở CẤP GỐC JSON (cùng cấp triangle), KHÔNG nằm trong triangle.
+- Nếu đề có AH là đường cao từ A tới BC tại H, BẮT BUỘC xuất altitudes: [{from:"A",toLine:"BC",foot:"H"}].
+- Nếu đề có AM là trung tuyến từ A tới BC tại M, BẮT BUỘC xuất medians: [{from:"A",toSegment:"BC",midpoint:"M"}].
+- Nếu đề có HD vuông góc AB tại D sau khi dựng H, xuất auxPoints chứa {name:"D",type:"projection",fromPoint:"H",targetLine:"AB"}; tương tự E.
+- Không chỉ ghi các đối tượng trong detectedEntities hoặc title mà để các mảng phép dựng rỗng.
+- Khi đã biểu diễn đường cao/trung tuyến trong mảng riêng thì không tạo lại cùng đối tượng trong auxLines/auxPoints, trừ khi cần biểu diễn quan hệ bổ sung.
+
 3. ĐỐI VỚI TỨ GIÁC (quadrilateral):
    - type: "rectangle", "square", "parallelogram", "rhombus", "trapezoid", "isosceles-trapezoid", "right-trapezoid".
    - vertices: mảng 4 đỉnh ["A", "B", "C", "D"].
@@ -229,6 +237,19 @@ const GEOMETRY_RESPONSE_SCHEMA = {
         },
       },
     },
+    polygon: {
+      type: Type.OBJECT,
+      properties: {
+        type: { type: Type.STRING, enum: ['equilateral-triangle', 'square', 'pentagon', 'hexagon', 'octagon', 'custom'] },
+        sidesCount: { type: Type.INTEGER },
+        vertexNames: { type: Type.ARRAY, items: { type: Type.STRING } },
+        centerName: { type: Type.STRING },
+        showCircumcircle: { type: Type.BOOLEAN },
+        showIncircle: { type: Type.BOOLEAN },
+        showApothem: { type: Type.BOOLEAN },
+        showRadii: { type: Type.BOOLEAN },
+      },
+    },
     symmetry: {
       type: Type.OBJECT,
       properties: {
@@ -329,6 +350,9 @@ const GEOMETRY_RESPONSE_SCHEMA = {
           line2: { type: Type.STRING, description: 'Đường thẳng 2 khi tìm giao điểm' },
           centerPoint: { type: Type.STRING },
           angle: { type: Type.NUMBER },
+          radius: { type: Type.NUMBER },
+          freeX: { type: Type.NUMBER },
+          freeY: { type: Type.NUMBER },
         },
         required: ['name', 'type'],
       },
@@ -386,6 +410,28 @@ const GEOMETRY_RESPONSE_SCHEMA = {
           tickType: { type: Type.STRING, enum: ['1', '2', '3', 'o', 'x'] },
         },
         required: ['segments'],
+      },
+    },
+    equalAngles: {
+      type: Type.ARRAY,
+      description: 'Nhóm các góc bằng nhau, mỗi góc có vertex/ray1/ray2',
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          angles: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                vertex: { type: Type.STRING },
+                ray1: { type: Type.STRING },
+                ray2: { type: Type.STRING },
+              },
+              required: ['vertex', 'ray1', 'ray2'],
+            },
+          },
+        },
+        required: ['angles'],
       },
     },
     detectedEntities: {
@@ -523,4 +569,5 @@ function validateAndNormalizeSpec(spec: GeometrySpecification, originalPrompt: s
   if (spec.rightAngles && !Array.isArray(spec.rightAngles)) spec.rightAngles = [];
   if (spec.parallels && !Array.isArray(spec.parallels)) spec.parallels = [];
   if (spec.equalSegments && !Array.isArray(spec.equalSegments)) spec.equalSegments = [];
+  if (spec.equalAngles && !Array.isArray(spec.equalAngles)) spec.equalAngles = [];
 }
