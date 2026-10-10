@@ -228,7 +228,7 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
             spellCheck={false}
             value={userApiKey}
             onChange={(e) => changeApiKey(e.target.value)}
-            placeholder="Dán API key Gemini của bạn vào đây"
+            placeholder="Để trống để dùng key hệ thống hoặc dán API key cá nhân của bạn"
             className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <button type="button" className="rounded-lg px-2 border border-slate-300 bg-white text-xs" onClick={() => setShowApiKey(!showApiKey)}>
@@ -243,10 +243,9 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
           Nhớ key trong phiên tab này (không chọn trên máy dùng chung)
         </label>
         <p className="text-[11px] text-slate-600">
-          Key chỉ gửi tới API của ứng dụng khi bấm dựng hình; không ghi vào tài liệu hay cơ sở dữ liệu.
-          {selectedProvider === 'gemini' && !userApiKey.trim()
-            ? ' Cần dán API key cá nhân để kiểm tra Gemini 3.8 Flash.'
-            : ''}
+          {userApiKey.trim()
+            ? '✓ Đang ưu tiên dùng API key cá nhân bạn vừa nhập (chỉ gửi trong phiên gọi này).'
+            : '✓ Chưa nhập key: Hệ thống tự động dùng API key server tích hợp sẵn để phân tích.'}
         </p>
         <a className="text-[11px] text-blue-700 underline" href="https://aistudio.google.com/api-keys" target="_blank" rel="noopener noreferrer">
           Mở Google AI Studio để tạo/quản lý API key
@@ -349,6 +348,9 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
               <div className="text-[11px] text-slate-700 grid grid-cols-2 gap-x-2 gap-y-1 bg-slate-50 p-2 rounded border border-slate-200">
                 <div>
                   Model thực tế: <strong className="font-mono text-emerald-900">{lastResult.generationInfo.model || 'gemini-3.8-flash'}</strong>
+                </div>
+                <div>
+                  Nguồn API key: <strong className="text-emerald-900">{lastResult.generationInfo.keySource || (userApiKey.trim() ? 'Key cá nhân' : 'Key hệ thống (server)')}</strong>
                 </div>
                 <div>
                   Nhóm hình: <strong className="text-emerald-900">{lastResult.shapeCategory}</strong>

@@ -205,5 +205,5 @@ export interface GeometrySpecification {
   detectedEntities: string[];
   explanation: string;
   /** Nguồn thực sự được dùng để dựng hình; không chứa API key. */
-  generationInfo?: { source: 'gemini' | 'rules'; model?: string; message?: string };
+  generationInfo?: { source: 'gemini' | 'rules'; model?: string; message?: string; keySource?: string };
 }

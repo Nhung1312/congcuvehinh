@@ -7,7 +7,8 @@ import { test } from 'node:test';
 import type { GeometrySpecification } from '../src/ai/types';
 import { GeometrySpecificationAdapter } from '../src/ai/adapter/geometrySpecificationAdapter';
 import { resolveAuxiliaryPoints } from '../src/utils/resolveAuxiliaryPoints';
-import { midpoint, projectPointToLine } from '../src/utils/geometryMath';
+import { midpoint, projectPointToLine, constrainTrianglePointDrag, dist } from '../src/utils/geometryMath';
+import { VietnameseGeometryParser } from '../src/ai/parser/vietnameseGeometryParser';
 
 const baseSpec = (changes: Partial<GeometrySpecification> = {}): GeometrySpecification => ({
   title: 'Kiểm thử dựng hình phẳng',
@@ -104,4 +105,59 @@ test('Không sinh điểm giả khi có tham chiếu khuyết hoặc vòng phụ
   ]);
   assert.equal(points.D, undefined);
   assert.equal(points.E, undefined);
+});
+
+test('Đề bài tam giác ABC vuông tại A, đường cao AH, hình chiếu D, E, trung điểm M, nối DE và AM', () => {
+  const prompt = 'Cho tam giác ABC vuông tại A. Kẻ AH vuông góc với BC tại H. Từ H kẻ HD vuông góc với AB tại D và HE vuông góc với AC tại E. Gọi M là trung điểm của BC. Nối DE và AM.';
+  const spec = VietnameseGeometryParser.parse(prompt);
+  const tri = triangleFor(spec);
+
+  assert.equal(tri.type, 'right');
+  assert.equal(tri.altitudes?.[0].label, 'H');
+  assert.equal(tri.medians?.[0].label, 'M');
+  assert.ok(tri.auxPoints?.some((p: any) => p.name === 'D' && p.type === 'projection' && p.fromPoint === 'H'));
+  assert.ok(tri.auxPoints?.some((p: any) => p.name === 'E' && p.type === 'projection' && p.fromPoint === 'H'));
+  assert.ok(tri.auxLines?.some((l: any) => l.from === 'D' && l.to === 'E'));
+  assert.ok(tri.auxLines?.some((l: any) => l.from === 'H' && l.to === 'D'));
+  assert.ok(tri.auxLines?.some((l: any) => l.from === 'H' && l.to === 'E'));
+  assert.ok(tri.rightAngleMarkers?.some((r: any) => r.vertex === 'A'));
+  assert.ok(tri.rightAngleMarkers?.some((r: any) => r.vertex === 'D'));
+  assert.ok(tri.rightAngleMarkers?.some((r: any) => r.vertex === 'E'));
+});
+
+test('Kéo điểm B hoặc C trong tam giác vuông bảo toàn tuyệt đối góc vuông tại A', () => {
+  const pts: [{ x: number; y: number }, { x: number; y: number }, { x: number; y: number }] = [
+    { x: 170, y: 340 }, // A (đỉnh vuông)
+    { x: 170, y: 150 }, // B
+    { x: 450, y: 340 }, // C
+  ];
+
+  // Kéo điểm B sang vị trí bất kỳ
+  const resB = constrainTrianglePointDrag('right', pts, 1, { x: 230, y: 100 }, 'A');
+  const dotB = (resB[1].x - resB[0].x) * (resB[2].x - resB[0].x) + (resB[1].y - resB[0].y) * (resB[2].y - resB[0].y);
+  assert.equal(dotB, 0, 'Tích vô hướng AB . AC phải luôn bằng 0 (góc 90 độ)');
+
+  // Kéo điểm C sang vị trí bất kỳ
+  const resC = constrainTrianglePointDrag('right', pts, 2, { x: 480, y: 380 }, 'A');
+  const dotC = (resC[1].x - resC[0].x) * (resC[2].x - resC[0].x) + (resC[1].y - resC[0].y) * (resC[2].y - resC[0].y);
+  assert.equal(dotC, 0, 'Tích vô hướng AB . AC phải luôn bằng 0 khi kéo C');
+
+  // Kéo đỉnh vuông A: toàn bộ tam giác tịnh tiến, góc vuông giữ nguyên
+  const resA = constrainTrianglePointDrag('right', pts, 0, { x: 200, y: 360 }, 'A');
+  const dotA = (resA[1].x - resA[0].x) * (resA[2].x - resA[0].x) + (resA[1].y - resA[0].y) * (resA[2].y - resA[0].y);
+  assert.equal(dotA, 0, 'Tích vô hướng AB . AC phải luôn bằng 0 khi tịnh tiến A');
+});
+
+test('Kéo đỉnh tam giác cân bảo toàn hai cạnh bên bằng nhau', () => {
+  const pts: [{ x: number; y: number }, { x: number; y: number }, { x: number; y: number }] = [
+    { x: 285, y: 110 }, // A (đỉnh cân)
+    { x: 145, y: 340 }, // B
+    { x: 425, y: 340 }, // C
+  ];
+
+  // Kéo đỉnh A: A di chuyển trên đường trung trực đáy BC
+  const resApex = constrainTrianglePointDrag('isosceles', pts, 0, { x: 310, y: 90 }, 'A');
+  const ab = dist(resApex[0], resApex[1]);
+  const ac = dist(resApex[0], resApex[2]);
+  assert.ok(Math.abs(ab - ac) < 1e-4, 'AB phải bằng AC khi kéo đỉnh cân');
 });

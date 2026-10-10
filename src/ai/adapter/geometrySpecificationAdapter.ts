@@ -243,25 +243,26 @@ export class GeometrySpecificationAdapter {
     ];
 
     if (triType === 'right' || triType === 'right-isosceles') {
-      const leg = triType === 'right-isosceles' ? 210 : 270;
+      const leg1 = triType === 'right-isosceles' ? 220 : 190;
+      const leg2 = triType === 'right-isosceles' ? 220 : 280;
       // Đảm bảo góc vuông nằm đúng tại specialVertex, không mặc định B.
       if (specialRole === 0) {
         points = [
           { x: 170, y: 340 },
-          { x: 170, y: 340 - leg },
-          { x: 170 + leg, y: 340 },
+          { x: 170, y: 340 - leg1 },
+          { x: 170 + leg2, y: 340 },
         ];
       } else if (specialRole === 2) {
         points = [
           { x: 170, y: 340 },
-          { x: 170 + leg, y: 340 },
-          { x: 170 + leg, y: 340 - leg },
+          { x: 170 + leg2, y: 340 },
+          { x: 170 + leg2, y: 340 - leg1 },
         ];
       } else {
         points = [
-          { x: 170, y: 340 - leg },
+          { x: 170, y: 340 - leg1 },
           { x: 170, y: 340 },
-          { x: 170 + leg, y: 340 },
+          { x: 170 + leg2, y: 340 },
         ];
       }
     } else if (triType === 'equilateral') {
@@ -345,11 +346,11 @@ export class GeometrySpecificationAdapter {
 
     const hasSideLengths = Boolean(triSpec.sideLengths && Object.keys(triSpec.sideLengths).length > 0);
 
-    // Thales Theorem Detection
+    // Thales Theorem Detection - chỉ kích hoạt khi thực sự là bài toán Ta-lét hoặc MN song song BC
     const isThales = Boolean(
-      spec.parallels && spec.parallels.length > 0 ||
-      (spec.title && (spec.title.toLowerCase().includes('ta-lét') || spec.title.toLowerCase().includes('thales') || spec.title.toLowerCase().includes('song song'))) ||
-      (spec.explanation && (spec.explanation.toLowerCase().includes('ta-lét') || spec.explanation.toLowerCase().includes('thales')))
+      (spec.title && (spec.title.toLowerCase().includes('ta-lét') || spec.title.toLowerCase().includes('thales'))) ||
+      (spec.explanation && (spec.explanation.toLowerCase().includes('ta-lét') || spec.explanation.toLowerCase().includes('thales'))) ||
+      (spec.parallels && spec.parallels.some(p => p.line1 === 'MN' && (p.line2 === 'BC' || p.line2 === `${vB}${vC}`)))
     );
 
     return {
@@ -641,3 +642,13 @@ export class GeometrySpecificationAdapter {
     };
   }
 }
+
+/**
+ * Hàm helper tiện ích chuyển GeometrySpecification sang ChartDocument
+ */
+export const geometrySpecificationToChartDocument = (
+  spec: GeometrySpecification,
+  currentSettings?: BaseChartSettings
+): ChartDocument => {
+  return GeometrySpecificationAdapter.specToChartDocument(spec, currentSettings);
+};

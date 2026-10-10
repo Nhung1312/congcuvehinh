@@ -29,23 +29,32 @@ export class VietnameseGeometryParser {
     // Phát hiện danh mục hình chính
     const category = this.detectCategory(text);
 
+    let spec: GeometrySpecification;
     switch (category) {
       case 'symmetry':
-        return this.parseSymmetryProblem(raw, text);
+        spec = this.parseSymmetryProblem(raw, text);
+        break;
       case 'polygon':
-        return this.parsePolygonProblem(raw, text);
+        spec = this.parsePolygonProblem(raw, text);
+        break;
       case 'circle':
-        return this.parseCircleProblem(raw, text);
+        spec = this.parseCircleProblem(raw, text);
+        break;
       case 'quadrilateral':
-        return this.parseQuadProblem(raw, text);
+        spec = this.parseQuadProblem(raw, text);
+        break;
       case 'angle':
-        return this.parseAngleProblem(raw, text);
+        spec = this.parseAngleProblem(raw, text);
+        break;
       case 'line-ray':
-        return this.parseLineRayProblem(raw, text);
+        spec = this.parseLineRayProblem(raw, text);
+        break;
       case 'triangle':
       default:
-        return this.parseTriangleProblem(raw, text);
+        spec = this.parseTriangleProblem(raw, text);
+        break;
     }
+    return this.enrichSpecification(spec, raw, text);
   }
 
   /**
@@ -813,5 +822,102 @@ export class VietnameseGeometryParser {
       detectedEntities,
       explanation: `Đã dựng hình đối xứng qua ${type === 'axial' ? 'trục d' : 'tâm I'} kèm các đoạn dóng nét đứt, ký hiệu vuông góc và khoảng cách bằng nhau.`,
     };
+  }
+
+  /**
+   * Bổ sung các điểm và đường phụ thuộc nhiều bước (hình chiếu, trung điểm, nối đoạn, góc vuông)
+   */
+  private static enrichSpecification(
+    spec: GeometrySpecification,
+    rawPrompt: string,
+    text: string
+  ): GeometrySpecification {
+    if (!Array.isArray(spec.auxPoints)) spec.auxPoints = [];
+    if (!Array.isArray(spec.auxLines)) spec.auxLines = [];
+    if (!Array.isArray(spec.rightAngles)) spec.rightAngles = [];
+    if (!Array.isArray(spec.altitudes)) spec.altitudes = [];
+    if (!Array.isArray(spec.medians)) spec.medians = [];
+
+    const altitudeFeet = new Set(spec.altitudes.map(a => a.foot));
+
+    // 1. Góc vuông tam giác tại specialVertex
+    if (spec.shapeCategory === 'triangle' && spec.triangle) {
+      if (spec.triangle.type === 'right' || spec.triangle.type === 'right-isosceles') {
+        const sV = spec.triangle.specialVertex || spec.triangle.vertices[0];
+        const otherVerts = (spec.triangle.vertices || ['A', 'B', 'C']).filter(v => v !== sV);
+        if (otherVerts.length === 2 && !spec.rightAngles.some(r => r.vertex === sV)) {
+          spec.rightAngles.push({ vertex: sV, ray1: otherVerts[0], ray2: otherVerts[1] });
+        }
+      }
+    }
+
+    // 2. Hình chiếu vuông góc: HD vuông góc AB tại D, HE vuông góc AC tại E
+    const projRegex = /(?:[Tt]ừ\s+([A-Z])\s+[kK]ẻ\s+)?\b([A-Z])([A-Z])\b\s*(?:vuông\s*góc|⊥)\s*(?:với\s+)?\b([A-Z]{2})\b(?:\s+tại\s+([A-Z]))?|\b([A-Z])\b\s+là\s+hình\s+chiếu\s+(?:vuông\s+góc\s+)?của\s+([A-Z])\s+(?:trên|lên)\s+\b([A-Z]{2})\b/g;
+    let projMatch;
+    while ((projMatch = projRegex.exec(rawPrompt)) !== null) {
+      let fromP: string;
+      let name: string;
+      let targetLine: string;
+
+      if (projMatch[6] && projMatch[7] && projMatch[8]) {
+        name = projMatch[6].toUpperCase();
+        fromP = projMatch[7].toUpperCase();
+        targetLine = projMatch[8].toUpperCase();
+      } else {
+        fromP = (projMatch[1] || projMatch[2]).toUpperCase();
+        name = (projMatch[5] || projMatch[3]).toUpperCase();
+        targetLine = (projMatch[4] || '').toUpperCase();
+      }
+
+      if (fromP && name && targetLine && fromP !== name && targetLine.length === 2 && !targetLine.includes(name)) {
+        if (!altitudeFeet.has(name) && !spec.auxPoints.some(p => p.name === name)) {
+          spec.auxPoints.push({
+            name,
+            type: 'projection',
+            fromPoint: fromP,
+            targetLine,
+          });
+        }
+        const hasProjLine = spec.auxLines.some(
+          l => (l.from === fromP && l.to === name) || (l.from === name && l.to === fromP)
+        );
+        if (!hasProjLine && !altitudeFeet.has(name)) {
+          spec.auxLines.push({ from: fromP, to: name, style: 'solid' });
+        }
+        const hasRA = spec.rightAngles.some(r => r.vertex === name);
+        if (!hasRA) {
+          spec.rightAngles.push({ vertex: name, ray1: fromP, ray2: targetLine[0] });
+        }
+      }
+    }
+
+    // 3. Nối các đoạn thẳng (Nối DE, Nối AM...)
+    const connectRegex = /\b[Nn]ối\s+([A-Z])([A-Z])(?:\s+và\s+([A-Z])([A-Z]))?\b/g;
+    let connMatch;
+    while ((connMatch = connectRegex.exec(rawPrompt)) !== null) {
+      const pairs = [
+        [connMatch[1], connMatch[2]],
+        [connMatch[3], connMatch[4]],
+      ];
+      for (const [p1, p2] of pairs) {
+        if (!p1 || !p2 || p1 === p2) continue;
+        const pA = p1.toUpperCase();
+        const pB = p2.toUpperCase();
+        const isAlreadyInMedians = spec.medians.some(
+          m => (m.from === pA && m.midpoint === pB) || (m.from === pB && m.midpoint === pA)
+        );
+        const isAlreadyInAltitudes = spec.altitudes.some(
+          a => (a.from === pA && a.foot === pB) || (a.from === pB && a.foot === pA)
+        );
+        const isAlreadyInAuxLines = spec.auxLines.some(
+          l => (l.from === pA && l.to === pB) || (l.from === pB && l.to === pA)
+        );
+        if (!isAlreadyInMedians && !isAlreadyInAltitudes && !isAlreadyInAuxLines) {
+          spec.auxLines.push({ from: pA, to: pB, style: 'solid' });
+        }
+      }
+    }
+
+    return spec;
   }
 }

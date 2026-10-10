@@ -471,6 +471,183 @@ export const getQuadPresetPoints = (
   }
 };
 
+/**
+ * 11b. Ràng buộc hình học thông minh khi kéo đỉnh tam giác (bảo toàn cấu trúc hình)
+ * Áp dụng cho: tam giác vuông, vuông cân, cân, đều
+ */
+export const constrainTrianglePointDrag = (
+  type: string,
+  pts: [Point2D, Point2D, Point2D],
+  dragIdx: number,
+  newPoint: Point2D,
+  specialVertex?: string,
+  vertexNames: string[] = ['A', 'B', 'C']
+): [Point2D, Point2D, Point2D] => {
+  const result: [Point2D, Point2D, Point2D] = [
+    { ...pts[0] },
+    { ...pts[1] },
+    { ...pts[2] },
+  ];
+
+  if (type === 'general' || type === 'obtuse') {
+    result[dragIdx] = newPoint;
+    return result;
+  }
+
+  // Xác định đỉnh đặc biệt (đỉnh vuông hoặc đỉnh cân)
+  let specialIdx = 0;
+  if (specialVertex) {
+    const idx = vertexNames.indexOf(specialVertex);
+    if (idx >= 0) specialIdx = idx;
+  } else {
+    const d01 = dist(pts[0], pts[1]);
+    const d12 = dist(pts[1], pts[2]);
+    const d20 = dist(pts[2], pts[0]);
+    if (d12 >= d01 && d12 >= d20) specialIdx = 0;
+    else if (d20 >= d01 && d20 >= d12) specialIdx = 1;
+    else specialIdx = 2;
+  }
+
+  // 1. TAM GIÁC VUÔNG & VUÔNG CÂN: Luôn duy trì góc 90 độ tại đỉnh vuông
+  if (type === 'right' || type === 'right-isosceles') {
+    const rIdx = specialIdx;
+    const leg1Idx = (rIdx + 1) % 3;
+    const leg2Idx = (rIdx + 2) % 3;
+
+    // Kéo đỉnh góc vuông: di chuyển cả tam giác để bảo toàn góc vuông và hình dạng
+    if (dragIdx === rIdx) {
+      const dx = newPoint.x - pts[rIdx].x;
+      const dy = newPoint.y - pts[rIdx].y;
+      return [
+        { x: pts[0].x + dx, y: pts[0].y + dy },
+        { x: pts[1].x + dx, y: pts[1].y + dy },
+        { x: pts[2].x + dx, y: pts[2].y + dy },
+      ];
+    }
+
+    const otherLegIdx = dragIdx === leg1Idx ? leg2Idx : leg1Idx;
+    const rPoint = pts[rIdx];
+    const otherPoint = pts[otherLegIdx];
+
+    // Cạnh góc vuông còn lại xác định phương chuẩn
+    const baseVec = { x: otherPoint.x - rPoint.x, y: otherPoint.y - rPoint.y };
+    const baseLen = Math.hypot(baseVec.x, baseVec.y);
+    if (baseLen < 1e-4) {
+      result[dragIdx] = newPoint;
+      return result;
+    }
+
+    // Vector đơn vị vuông góc với cạnh kia
+    const norm = { x: -baseVec.y / baseLen, y: baseVec.x / baseLen };
+
+    // Chiếu vector kéo (newPoint - rPoint) lên phương vuông góc
+    const dragVec = { x: newPoint.x - rPoint.x, y: newPoint.y - rPoint.y };
+    let proj = dragVec.x * norm.x + dragVec.y * norm.y;
+
+    // Giữ cùng chiều nửa mặt phẳng để tam giác không bị lật ngược
+    const origVec = { x: pts[dragIdx].x - rPoint.x, y: pts[dragIdx].y - rPoint.y };
+    const origProj = origVec.x * norm.x + origVec.y * norm.y;
+    if (origProj !== 0 && Math.sign(proj) !== Math.sign(origProj)) {
+      proj = Math.sign(origProj) * Math.max(25, Math.abs(proj));
+    }
+    if (Math.abs(proj) < 25) {
+      proj = (origProj >= 0 ? 1 : -1) * 25;
+    }
+
+    result[dragIdx] = {
+      x: Math.round(rPoint.x + proj * norm.x),
+      y: Math.round(rPoint.y + proj * norm.y),
+    };
+
+    // Nếu là vuông cân: ép cạnh kia bằng đúng độ dài cạnh đang kéo
+    if (type === 'right-isosceles') {
+      const targetLen = Math.abs(proj);
+      const otherDir = { x: baseVec.x / baseLen, y: baseVec.y / baseLen };
+      result[otherLegIdx] = {
+        x: Math.round(rPoint.x + targetLen * otherDir.x),
+        y: Math.round(rPoint.y + targetLen * otherDir.y),
+      };
+    }
+    return result;
+  }
+
+  // 2. TAM GIÁC ĐỀU: Cả 3 cạnh bằng nhau, 3 góc 60 độ
+  if (type === 'equilateral') {
+    const center = {
+      x: (pts[0].x + pts[1].x + pts[2].x) / 3,
+      y: (pts[0].y + pts[1].y + pts[2].y) / 3,
+    };
+    const dragVec = { x: newPoint.x - center.x, y: newPoint.y - center.y };
+    const radius = Math.max(35, Math.hypot(dragVec.x, dragVec.y));
+    const startAngle = Math.atan2(dragVec.y, dragVec.x);
+
+    // Xác định chiều quay (cw / ccw)
+    const cross = (pts[1].x - pts[0].x) * (pts[2].y - pts[0].y) - (pts[1].y - pts[0].y) * (pts[2].x - pts[0].x);
+    const sign = cross >= 0 ? 1 : -1;
+
+    for (let i = 0; i < 3; i++) {
+      const offset = (i - dragIdx) * sign * (2 * Math.PI / 3);
+      result[i] = {
+        x: Math.round(center.x + radius * Math.cos(startAngle + offset)),
+        y: Math.round(center.y + radius * Math.sin(startAngle + offset)),
+      };
+    }
+    return result;
+  }
+
+  // 3. TAM GIÁC CÂN: Hai cạnh bên luôn bằng nhau
+  if (type === 'isosceles') {
+    const apex = specialIdx;
+    const b1 = (apex + 1) % 3;
+    const b2 = (apex + 2) % 3;
+
+    if (dragIdx === apex) {
+      // Đỉnh cân luôn nằm trên đường trung trực của đáy (b1, b2)
+      const midBase = { x: (pts[b1].x + pts[b2].x) / 2, y: (pts[b1].y + pts[b2].y) / 2 };
+      const baseVec = { x: pts[b2].x - pts[b1].x, y: pts[b2].y - pts[b1].y };
+      const baseLen = Math.hypot(baseVec.x, baseVec.y);
+      if (baseLen < 1e-4) return result;
+      const norm = { x: -baseVec.y / baseLen, y: baseVec.x / baseLen };
+
+      const v = { x: newPoint.x - midBase.x, y: newPoint.y - midBase.y };
+      let proj = v.x * norm.x + v.y * norm.y;
+      if (Math.abs(proj) < 25) proj = 25;
+
+      result[apex] = {
+        x: Math.round(midBase.x + proj * norm.x),
+        y: Math.round(midBase.y + proj * norm.y),
+      };
+      return result;
+    } else {
+      // Kéo một trong hai đỉnh đáy: giữ tính đối xứng qua trục đi qua đỉnh apex
+      const otherBase = dragIdx === b1 ? b2 : b1;
+      const midBaseOrig = { x: (pts[b1].x + pts[b2].x) / 2, y: (pts[b1].y + pts[b2].y) / 2 };
+      const axis = { x: midBaseOrig.x - pts[apex].x, y: midBaseOrig.y - pts[apex].y };
+      const axisLen = Math.hypot(axis.x, axis.y);
+      if (axisLen < 1e-4) {
+        result[dragIdx] = newPoint;
+        return result;
+      }
+      const uAxis = { x: axis.x / axisLen, y: axis.y / axisLen };
+      const nAxis = { x: -uAxis.y, y: uAxis.x };
+
+      result[dragIdx] = newPoint;
+      // Điểm đối diện phản xạ đối xứng qua trục
+      const rel = { x: newPoint.x - pts[apex].x, y: newPoint.y - pts[apex].y };
+      const compU = rel.x * uAxis.x + rel.y * uAxis.y;
+      const compN = rel.x * nAxis.x + rel.y * nAxis.y;
+
+      result[otherBase] = {
+        x: Math.round(pts[apex].x + compU * uAxis.x - compN * nAxis.x),
+        y: Math.round(pts[apex].y + compU * uAxis.y - compN * nAxis.y),
+      };
+      return result;
+    }
+  }
+
+  return result;
+};
+
 // 12. Ràng buộc hình học thông minh khi kéo đỉnh tứ giác
 export const constrainQuadPointDrag = (
   type: string,

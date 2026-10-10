@@ -6,10 +6,17 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import type { GeometrySpecification } from '../ai/types';
 
-/** A new Gemini client is created for each caller's personal key. */
-function getGeminiClient(userApiKey?: string): GoogleGenAI | null {
-  const key = userApiKey?.trim();
-  return key ? new GoogleGenAI({ apiKey: key }) : null;
+/** Gemini client được khởi tạo: ưu tiên API key cá nhân của người dùng, nếu không có sẽ dùng server GEMINI_API_KEY */
+function getGeminiClient(userApiKey?: string): { client: GoogleGenAI; keySource: 'user' | 'server' } | null {
+  const userKey = userApiKey?.trim();
+  if (userKey) {
+    return { client: new GoogleGenAI({ apiKey: userKey }), keySource: 'user' };
+  }
+  const envKey = process.env.GEMINI_API_KEY?.trim();
+  if (envKey) {
+    return { client: new GoogleGenAI({ apiKey: envKey }), keySource: 'server' };
+  }
+  return null;
 }
 
 const SYSTEM_INSTRUCTION = `Bạn là chuyên gia Sư phạm Hình học Toán THCS Việt Nam (Toán lớp 6, 7, 8, 9) và là bộ phân tích ngôn ngữ tự nhiên thành Cấu trúc Dữ liệu Hình học phẳng (Geometry Specification JSON).
@@ -34,20 +41,26 @@ QUY TẮC PHÂN LOẠI & NHẬN DIỆN THỰC THỂ HÌNH HỌC:
    - equalSides: cặp cạnh bằng nhau ví dụ ["AB", "AC"].
    - circumscribedCircle: true nếu đề bài có đường tròn ngoại tiếp tam giác.
    - inscribedCircle: true nếu đề bài có đường tròn nội tiếp tam giác.
-   - altitudes: mảng các đường cao TỪ ĐỈNH TAM GIÁC (A, B, C). Mỗi phần tử: { from: "A", toLine: "BC", foot: "H", showRightAngle: true, style: "dashed" }
-   - medians: mảng các đường trung tuyến TỪ ĐỈNH TAM GIÁC (A, B, C). Mỗi phần tử: { from: "A", toSegment: "BC", midpoint: "M", showTicks: true, style: "dashed" }
-   - bisectors: mảng các đường phân giác TỪ ĐỈNH TAM GIÁC. Mỗi phần tử: { from: "A", toSegment: "BC", foot: "D", showEqualAngleArcs: true, style: "solid" }
-   - perpBisectors: mảng đường trung trực cạnh. Mỗi phần tử: { segment: "BC", label: "d", showRightAngle: true, showTicks: true }
 
-LƯU Ý CẤU TRÚC BẮT BUỘC:
-- altitudes, medians, bisectors, perpBisectors, auxPoints, auxLines, rightAngles, parallels, equalSegments, equalAngles là các MẢNG Ở CẤP GỐC JSON (cùng cấp triangle), KHÔNG nằm trong triangle.
-- Nếu đề có AH là đường cao từ A tới BC tại H, BẮT BUỘC xuất altitudes: [{from:"A",toLine:"BC",foot:"H"}].
-- Nếu đề có AM là trung tuyến từ A tới BC tại M, BẮT BUỘC xuất medians: [{from:"A",toSegment:"BC",midpoint:"M"}].
+3. CÁC ĐƯỜNG ĐẶC BIỆT CỦA TAM GIÁC (LƯU Ý: LÀ CÁC MẢNG Ở CẤP GỐC JSON, BẮT BUỘC XUẤT KHI ĐỀ CÓ):
+   - altitudes: mảng các đường cao TỪ ĐỈNH TAM GIÁC.
+     Nếu đề có "đường cao AH" hoặc "kẻ AH vuông góc BC tại H":
+     BẮT BUỘC xuất: altitudes: [{ from: "A", toLine: "BC", foot: "H", showRightAngle: true, style: "dashed" }]
+   - medians: mảng các đường trung tuyến.
+     Nếu đề có "trung tuyến AM" hoặc "gọi M là trung điểm BC, nối AM":
+     BẮT BUỘC xuất: medians: [{ from: "A", toSegment: "BC", midpoint: "M", showTicks: true, style: "dashed" }]
+   - bisectors: mảng các đường phân giác.
+     Nếu đề có "phân giác AD":
+     BẮT BUỘC xuất: bisectors: [{ from: "A", toSegment: "BC", foot: "D", showEqualAngleArcs: true, style: "solid" }]
+   - perpBisectors: mảng đường trung trực cạnh:
+     perpBisectors: [{ segment: "BC", label: "d", showRightAngle: true, showTicks: true }]
+
+LƯU Ý BẮT BUỘC:
+- altitudes, medians, bisectors, perpBisectors, auxPoints, auxLines, rightAngles, parallels, equalSegments, equalAngles là các MẢNG Ở CẤP GỐC JSON (cùng cấp với triangle).
+- Không được chỉ ghi tên thực thể trong detectedEntities hay title mà để mảng altitudes, medians rỗng!
 - Nếu đề có HD vuông góc AB tại D sau khi dựng H, xuất auxPoints chứa {name:"D",type:"projection",fromPoint:"H",targetLine:"AB"}; tương tự E.
-- Không chỉ ghi các đối tượng trong detectedEntities hoặc title mà để các mảng phép dựng rỗng.
-- Khi đã biểu diễn đường cao/trung tuyến trong mảng riêng thì không tạo lại cùng đối tượng trong auxLines/auxPoints, trừ khi cần biểu diễn quan hệ bổ sung.
 
-3. ĐỐI VỚI TỨ GIÁC (quadrilateral):
+4. ĐỐI VỚI TỨ GIÁC (quadrilateral):
    - type: "rectangle", "square", "parallelogram", "rhombus", "trapezoid", "isosceles-trapezoid", "right-trapezoid".
    - vertices: mảng 4 đỉnh ["A", "B", "C", "D"].
    - parallelSides: ví dụ ["AB", "CD"] nếu là hình thang / hình bình hành.
@@ -55,7 +68,7 @@ LƯU Ý CẤU TRÚC BẮT BUỘC:
    - diagonalIntersection: "O" (hoặc tên điểm giao).
    - showCircumcircle: true nếu tứ giác nội tiếp đường tròn.
 
-4. ĐỐI VỚI ĐƯỜNG TRÒN (circle):
+5. ĐỐI VỚI ĐƯỜNG TRÒN (circle):
    - presetType:
      * "basic": đường tròn tâm O bán kính R (điểm A trên đường tròn).
      * "diameter-chord": đường kính AB hoặc dây cung CD, đoạn vuông góc OH từ tâm đến dây.
@@ -93,6 +106,99 @@ LƯU Ý CẤU TRÚC BẮT BUỘC:
 
 9. explanation:
    - Tóm tắt ngắn gọn hình học chuẩn SGK.
+
+VÍ DỤ MẪU BẮT BUỘC TUÂN THỦ (FEW-SHOT EXAMPLES):
+
+Ví dụ 1:
+Đề bài: "Cho tam giác ABC vuông tại A. Kẻ AH vuông góc với BC tại H. Từ H kẻ HD vuông góc với AB tại D và HE vuông góc với AC tại E. Gọi M là trung điểm của BC. Nối DE và AM."
+JSON trả về:
+{
+  "title": "Tam giác ABC vuông tại A với đường cao AH, hình chiếu D, E, trung tuyến AM và đoạn nối DE",
+  "shapeCategory": "triangle",
+  "triangle": {
+    "type": "right",
+    "vertices": ["A", "B", "C"],
+    "specialVertex": "A"
+  },
+  "altitudes": [
+    { "from": "A", "toLine": "BC", "foot": "H", "showRightAngle": true, "style": "dashed" }
+  ],
+  "medians": [
+    { "from": "A", "toSegment": "BC", "midpoint": "M", "showTicks": true, "style": "dashed" }
+  ],
+  "bisectors": [],
+  "perpBisectors": [],
+  "auxPoints": [
+    { "name": "D", "type": "projection", "fromPoint": "H", "targetLine": "AB" },
+    { "name": "E", "type": "projection", "fromPoint": "H", "targetLine": "AC" }
+  ],
+  "auxLines": [
+    { "from": "H", "to": "D", "style": "solid" },
+    { "from": "H", "to": "E", "style": "solid" },
+    { "from": "D", "to": "E", "style": "solid" }
+  ],
+  "rightAngles": [
+    { "vertex": "A", "ray1": "B", "ray2": "C" },
+    { "vertex": "H", "ray1": "A", "ray2": "B" },
+    { "vertex": "D", "ray1": "H", "ray2": "A" },
+    { "vertex": "E", "ray1": "H", "ray2": "A" }
+  ],
+  "parallels": [],
+  "equalSegments": [],
+  "equalAngles": [],
+  "detectedEntities": [
+    "Tam giác ABC vuông tại A",
+    "Đường cao AH vuông góc BC tại H",
+    "HD vuông góc AB tại D (D là hình chiếu của H trên AB)",
+    "HE vuông góc AC tại E (E là hình chiếu của H trên AC)",
+    "M là trung điểm của BC",
+    "Đoạn nối DE",
+    "Trung tuyến AM"
+  ],
+  "explanation": "Hình vẽ tam giác ABC vuông tại A có đường cao AH. D và E lần lượt là hình chiếu vuông góc của H trên hai cạnh góc vuông AB và AC, tạo thành hình chữ nhật ADHE. M là trung điểm cạnh huyền BC, các đoạn thẳng DE và AM được nối."
+}
+
+Ví dụ 2:
+Đề bài: "Cho tam giác ABC nhọn có hai đường cao BD và CE cắt nhau tại H. Gọi M là trung điểm BC. Nối DE."
+JSON trả về:
+{
+  "title": "Tam giác ABC nhọn có hai đường cao BD, CE cắt nhau tại trực tâm H",
+  "shapeCategory": "triangle",
+  "triangle": {
+    "type": "general",
+    "vertices": ["A", "B", "C"]
+  },
+  "altitudes": [
+    { "from": "B", "toLine": "AC", "foot": "D", "showRightAngle": true, "style": "dashed" },
+    { "from": "C", "toLine": "AB", "foot": "E", "showRightAngle": true, "style": "dashed" }
+  ],
+  "medians": [],
+  "bisectors": [],
+  "perpBisectors": [],
+  "auxPoints": [
+    { "name": "H", "type": "intersection", "line1": "BD", "line2": "CE" },
+    { "name": "M", "type": "midpoint", "segment": "BC" }
+  ],
+  "auxLines": [
+    { "from": "D", "to": "E", "style": "solid" }
+  ],
+  "rightAngles": [
+    { "vertex": "D", "ray1": "B", "ray2": "A" },
+    { "vertex": "E", "ray1": "C", "ray2": "A" }
+  ],
+  "parallels": [],
+  "equalSegments": [],
+  "equalAngles": [],
+  "detectedEntities": [
+    "Tam giác ABC nhọn",
+    "Đường cao BD vuông góc AC tại D",
+    "Đường cao CE vuông góc AB tại E",
+    "Trực tâm H là giao điểm của BD và CE",
+    "M là trung điểm BC",
+    "Đoạn nối DE"
+  ],
+  "explanation": "Tam giác nhọn ABC với hai đường cao BD và CE cắt nhau tại trực tâm H, M là trung điểm cạnh đáy BC và đoạn thẳng DE nối hai chân đường cao."
+}
 
 QUAN TRỌNG:
 - Không trả lời bất kỳ văn bản giải thích nào ngoài JSON.
@@ -451,11 +557,15 @@ const GEOMETRY_RESPONSE_SCHEMA = {
  * Phân tích đề bài hình học bằng Gemini 3.8 Flash
  */
 export async function parseGeometryWithGemini(prompt: string, userApiKey?: string): Promise<GeometrySpecification> {
-  const client = getGeminiClient(userApiKey);
+  const clientInfo = getGeminiClient(userApiKey);
 
-  if (!client) throw new Error('Vui lòng nhập API key Gemini cá nhân.');
+  if (!clientInfo) {
+    throw new Error('Chưa có API key Gemini. Vui lòng nhập API key cá nhân vào ô nhập liệu hoặc cấu hình GEMINI_API_KEY trên máy chủ.');
+  }
 
-  // Gemini 3.8 Flash (model ID chính thức); lỗi API sẽ chuyển sang parser nội bộ như trước đây.
+  const { client, keySource } = clientInfo;
+
+  // Gemini 3.8 Flash (model ID chính thức)
   const modelsToTry = [
     'gemini-3.8-flash',
   ];
@@ -463,41 +573,79 @@ export async function parseGeometryWithGemini(prompt: string, userApiKey?: strin
   let lastErrorMsg = '';
 
   for (const modelName of modelsToTry) {
-    try {
-      const response = await client.models.generateContent({
-        model: modelName,
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              {
-                text: `Hãy phân tích đề bài hình học THCS sau đây và trả về cấu trúc Geometry Specification JSON chuẩn xác:\n\n"${prompt}"`,
-              },
-            ],
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const response = await client.models.generateContent({
+          model: modelName,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: `Hãy phân tích đề bài hình học THCS sau đây và trả về cấu trúc Geometry Specification JSON chuẩn xác:\n\n"${prompt}"`,
+                },
+              ],
+            },
+          ],
+          config: {
+            systemInstruction: SYSTEM_INSTRUCTION,
+            responseMimeType: 'application/json',
+            responseSchema: GEOMETRY_RESPONSE_SCHEMA,
           },
-        ],
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
-          responseMimeType: 'application/json',
-          responseSchema: GEOMETRY_RESPONSE_SCHEMA,
-        },
-      });
+        });
 
-      const responseText = response.text;
-      if (!responseText) {
-        throw new Error('Gemini không trả về nội dung');
-      }
+        const responseText = response.text;
+        if (!responseText) {
+          throw new Error('Gemini không trả về nội dung');
+        }
 
-      const parsed: GeometrySpecification = JSON.parse(responseText);
-      validateAndNormalizeSpec(parsed, prompt);
-      parsed.generationInfo = { source: 'gemini', model: modelName };
-      return parsed;
-    } catch (err: any) {
-      let raw = err?.message || 'Lỗi gọi mô hình Gemini 3.8 Flash';
-      if (userApiKey) {
-        raw = raw.split(userApiKey).join('***');
+        let cleanText = responseText.trim();
+        if (cleanText.startsWith('```json')) {
+          cleanText = cleanText.slice(7).replace(/```$/, '').trim();
+        } else if (cleanText.startsWith('```')) {
+          cleanText = cleanText.slice(3).replace(/```$/, '').trim();
+        }
+
+        const parsed: GeometrySpecification = JSON.parse(cleanText);
+        validateAndNormalizeSpec(parsed, prompt);
+        parsed.generationInfo = {
+          source: 'gemini',
+          model: modelName,
+          keySource: keySource === 'user' ? 'API key cá nhân' : 'API key hệ thống (server)',
+        };
+        return parsed;
+      } catch (err: any) {
+        let raw = err?.message || 'Lỗi gọi mô hình Gemini 3.8 Flash';
+        if (userApiKey) {
+          raw = raw.split(userApiKey).join('***');
+        }
+
+        const isHighDemandOrTransient = raw.includes('503') || raw.includes('high demand') || raw.includes('UNAVAILABLE');
+
+        // Nếu gặp lỗi quá tải tạm thời (503), thử lại sau 1-1.5 giây
+        if (isHighDemandOrTransient && attempt < maxAttempts) {
+          console.warn(`[Gemini 3.8 Flash] Đang chịu tải tạm thời (503), tự động thử lại lần ${attempt + 1}/${maxAttempts} sau 1.2s...`);
+          await new Promise((res) => setTimeout(res, 1200 * attempt));
+          continue;
+        }
+
+        // Chẩn đoán mã lỗi thông dụng
+        if (raw.includes('API_KEY_INVALID') || raw.includes('API key not valid')) {
+          lastErrorMsg = 'API key không hợp lệ hoặc không tồn tại trên Google AI Studio.';
+        } else if (raw.includes('RESOURCE_EXHAUSTED') || raw.includes('429') || raw.includes('Quota exceeded')) {
+          lastErrorMsg = 'Vượt quá hạn mức yêu cầu (Rate Limit / Quota Exceeded) của Google Gemini. Vui lòng thử lại sau giây lát.';
+        } else if (raw.includes('PERMISSION_DENIED') || raw.includes('403')) {
+          lastErrorMsg = 'Quyền truy cập bị từ chối: API key này không có quyền truy cập model gemini-3.8-flash.';
+        } else if (raw.includes('NOT_FOUND') || raw.includes('404')) {
+          lastErrorMsg = 'Không tìm thấy model gemini-3.8-flash với tài khoản API key này.';
+        } else if (isHighDemandOrTransient) {
+          lastErrorMsg = 'Mô hình Gemini 3.8 Flash của Google đang chịu tải cao tạm thời (503 Service Unavailable / Spikes in demand). Vui lòng thử lại sau vài giây.';
+        } else {
+          lastErrorMsg = raw;
+        }
+        break;
       }
-      lastErrorMsg = raw;
     }
   }
 
@@ -560,14 +708,138 @@ function validateAndNormalizeSpec(spec: GeometrySpecification, originalPrompt: s
   }
 
   // Khử trùng và chuẩn hóa các mảng đối tượng phụ nếu Gemini trả về null/undefined
-  if (spec.altitudes && !Array.isArray(spec.altitudes)) spec.altitudes = [];
-  if (spec.medians && !Array.isArray(spec.medians)) spec.medians = [];
-  if (spec.bisectors && !Array.isArray(spec.bisectors)) spec.bisectors = [];
-  if (spec.perpBisectors && !Array.isArray(spec.perpBisectors)) spec.perpBisectors = [];
-  if (spec.auxPoints && !Array.isArray(spec.auxPoints)) spec.auxPoints = [];
-  if (spec.auxLines && !Array.isArray(spec.auxLines)) spec.auxLines = [];
-  if (spec.rightAngles && !Array.isArray(spec.rightAngles)) spec.rightAngles = [];
-  if (spec.parallels && !Array.isArray(spec.parallels)) spec.parallels = [];
-  if (spec.equalSegments && !Array.isArray(spec.equalSegments)) spec.equalSegments = [];
-  if (spec.equalAngles && !Array.isArray(spec.equalAngles)) spec.equalAngles = [];
+  if (!Array.isArray(spec.altitudes)) spec.altitudes = [];
+  if (!Array.isArray(spec.medians)) spec.medians = [];
+  if (!Array.isArray(spec.bisectors)) spec.bisectors = [];
+  if (!Array.isArray(spec.perpBisectors)) spec.perpBisectors = [];
+  if (!Array.isArray(spec.auxPoints)) spec.auxPoints = [];
+  if (!Array.isArray(spec.auxLines)) spec.auxLines = [];
+  if (!Array.isArray(spec.rightAngles)) spec.rightAngles = [];
+  if (!Array.isArray(spec.parallels)) spec.parallels = [];
+  if (!Array.isArray(spec.equalSegments)) spec.equalSegments = [];
+  if (!Array.isArray(spec.equalAngles)) spec.equalAngles = [];
+
+  // An toàn dự phòng: nếu đề bài hoặc detectedEntities có các phép dựng mà Gemini vô tình bỏ sót
+  const combinedText = `${originalPrompt} ${(spec.detectedEntities || []).join(' ')} ${(spec.explanation || '')}`;
+  const rawText = combinedText.toLowerCase();
+
+  if (spec.shapeCategory === 'triangle' && spec.triangle) {
+    const [vA, vB, vC] = spec.triangle.vertices || ['A', 'B', 'C'];
+    const oppBC = `${vB}${vC}`;
+
+    // 1. Nhận diện đỉnh góc vuông nếu chưa có
+    if (spec.triangle.type === 'right' || spec.triangle.type === 'right-isosceles') {
+      if (!spec.triangle.specialVertex) {
+        const rightMatch = combinedText.match(/vuông\s+(?:cân\s+)?tại\s+([A-Za-z])/i);
+        if (rightMatch) {
+          spec.triangle.specialVertex = rightMatch[1].toUpperCase();
+        } else {
+          spec.triangle.specialVertex = vA;
+        }
+      }
+      // Bổ sung ký hiệu góc vuông tại đỉnh vuông của tam giác nếu chưa có
+      const sV = spec.triangle.specialVertex;
+      const otherVerts = (spec.triangle.vertices || ['A', 'B', 'C']).filter(v => v !== sV);
+      if (otherVerts.length === 2 && !spec.rightAngles.some(r => r.vertex === sV)) {
+        spec.rightAngles.push({ vertex: sV, ray1: otherVerts[0], ray2: otherVerts[1] });
+      }
+    }
+
+    // 2. Kiểm tra đường cao AH nếu Gemini chưa điền vào altitudes
+    if (spec.altitudes.length === 0) {
+      if (rawText.includes('đường cao ah') || (rawText.includes('ah') && (rawText.includes('vuông góc') || rawText.includes('chân đường cao')))) {
+        spec.altitudes.push({
+          from: vA,
+          toLine: oppBC,
+          foot: 'H',
+          showRightAngle: true,
+          style: 'dashed',
+        });
+      }
+    }
+
+    // 3. Kiểm tra trung tuyến AM nếu Gemini chưa điền vào medians
+    if (spec.medians.length === 0) {
+      if (rawText.includes('trung tuyến am') || (rawText.includes('m là trung điểm') && (rawText.includes('am') || rawText.includes('nối am')))) {
+        spec.medians.push({
+          from: vA,
+          toSegment: oppBC,
+          midpoint: 'M',
+          showTicks: true,
+          style: 'dashed',
+        });
+      }
+    }
+  }
+
+  // 4. Nhận diện các hình chiếu vuông góc (Projections)
+  // Mẫu: "từ H kẻ HD vuông góc AB tại D", "kẻ HE vuông góc AC tại E", "HD vuông góc với AB tại D", "hình chiếu của H trên AB là D"
+  const altitudeFeet = new Set((spec.altitudes || []).map(a => a.foot));
+  const projRegex = /(?:[Tt]ừ\s+([A-Z])\s+[kK]ẻ\s+)?\b([A-Z])([A-Z])\b\s*(?:vuông\s*góc|⊥)\s*(?:với\s+)?\b([A-Z]{2})\b(?:\s+tại\s+([A-Z]))?|\b([A-Z])\b\s+là\s+hình\s+chiếu\s+(?:vuông\s+góc\s+)?của\s+([A-Z])\s+(?:trên|lên)\s+\b([A-Z]{2})\b/g;
+  let projMatch;
+  while ((projMatch = projRegex.exec(combinedText)) !== null) {
+    let fromP: string;
+    let name: string;
+    let targetLine: string;
+
+    if (projMatch[6] && projMatch[7] && projMatch[8]) {
+      name = projMatch[6].toUpperCase();
+      fromP = projMatch[7].toUpperCase();
+      targetLine = projMatch[8].toUpperCase();
+    } else {
+      fromP = (projMatch[1] || projMatch[2]).toUpperCase();
+      name = (projMatch[5] || projMatch[3]).toUpperCase();
+      targetLine = (projMatch[4] || '').toUpperCase();
+    }
+
+    if (fromP && name && targetLine && fromP !== name && targetLine.length === 2 && !targetLine.includes(name)) {
+      if (!altitudeFeet.has(name) && !spec.auxPoints.some(p => p.name === name)) {
+        spec.auxPoints.push({
+          name,
+          type: 'projection',
+          fromPoint: fromP,
+          targetLine,
+        });
+      }
+      // Đảm bảo có đoạn nối fromP -> name
+      const hasProjLine = spec.auxLines.some(
+        l => (l.from === fromP && l.to === name) || (l.from === name && l.to === fromP)
+      );
+      if (!hasProjLine && !altitudeFeet.has(name)) {
+        spec.auxLines.push({ from: fromP, to: name, style: 'solid' });
+      }
+      // Đảm bảo có ký hiệu góc vuông tại điểm hình chiếu name
+      const hasRA = spec.rightAngles.some(r => r.vertex === name);
+      if (!hasRA) {
+        spec.rightAngles.push({ vertex: name, ray1: fromP, ray2: targetLine[0] });
+      }
+    }
+  }
+
+  // 5. Nhận diện các đoạn thẳng nối phụ (Nối DE, Nối AM...)
+  const connectRegex = /\b[Nn]ối\s+([A-Z])([A-Z])(?:\s+và\s+([A-Z])([A-Z]))?\b/g;
+  let connMatch;
+  while ((connMatch = connectRegex.exec(combinedText)) !== null) {
+    const pairs = [
+      [connMatch[1], connMatch[2]],
+      [connMatch[3], connMatch[4]],
+    ];
+    for (const [p1, p2] of pairs) {
+      if (!p1 || !p2 || p1 === p2) continue;
+      const pA = p1.toUpperCase();
+      const pB = p2.toUpperCase();
+      const isAlreadyInMedians = spec.medians.some(
+        m => (m.from === pA && m.midpoint === pB) || (m.from === pB && m.midpoint === pA)
+      );
+      const isAlreadyInAltitudes = spec.altitudes.some(
+        a => (a.from === pA && a.foot === pB) || (a.from === pB && a.foot === pA)
+      );
+      const isAlreadyInAuxLines = spec.auxLines.some(
+        l => (l.from === pA && l.to === pB) || (l.from === pB && l.to === pA)
+      );
+      if (!isAlreadyInMedians && !isAlreadyInAltitudes && !isAlreadyInAuxLines) {
+        spec.auxLines.push({ from: pA, to: pB, style: 'solid' });
+      }
+    }
+  }
 }

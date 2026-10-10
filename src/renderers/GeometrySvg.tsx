@@ -34,6 +34,7 @@ import {
   lineIntersection,
   getParallelArrowsPath,
   getQuadPresetPoints,
+  constrainTrianglePointDrag,
   constrainQuadPointDrag,
   getLineRayPresetPoints,
   getAnglePresetPoints,
@@ -226,9 +227,16 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
           });
         }
       } else if (onUpdateTrianglePoints && draggingVertex < 3) {
-        const updatedPoints: [Point2D, Point2D, Point2D] = [...trianglePoints];
-        updatedPoints[draggingVertex] = { x: newX, y: newY };
-        onUpdateTrianglePoints(updatedPoints);
+        const tType = triangle?.type || 'general';
+        const constrainedPoints = constrainTrianglePointDrag(
+          tType,
+          trianglePoints,
+          draggingVertex,
+          { x: newX, y: newY },
+          triangle?.specialVertex,
+          triangle?.vertexNames
+        );
+        onUpdateTrianglePoints(constrainedPoints);
       }
     } else if (subType === 'quadrilateral' && onUpdateQuadPoints) {
       const qType = quadrilateral?.type || 'rectangle';

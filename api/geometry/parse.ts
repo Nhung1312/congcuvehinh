@@ -21,15 +21,16 @@ async function executeGeometryParse(
     };
   }
 
-  if (typeof apiKeyInput !== 'string' || !apiKeyInput.trim() || apiKeyInput.length > 256) {
+  const clientKey = typeof apiKeyInput === 'string' && apiKeyInput.trim() ? apiKeyInput.trim() : undefined;
+  if (!clientKey && !process.env.GEMINI_API_KEY?.trim()) {
     return {
       status: 400,
-      data: { error: 'Vui lòng dán API key Gemini cá nhân để kiểm tra AI.' },
+      data: { error: 'Chưa có API key Gemini. Vui lòng dán API key cá nhân vào ô nhập liệu hoặc cấu hình GEMINI_API_KEY.' },
     };
   }
 
   try {
-    const spec = await parseGeometryWithGemini(promptInput.trim(), apiKeyInput.trim());
+    const spec = await parseGeometryWithGemini(promptInput.trim(), clientKey);
     if (spec.generationInfo?.source !== 'gemini') {
       throw new Error('Gemini không trả về dữ liệu hình học hợp lệ.');
     }
