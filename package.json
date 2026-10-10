@@ -11,7 +11,8 @@
     "lint": "tsc --noEmit",
     "test:geometry-ai": "tsx --test scripts/test_geometry_ai_aux.ts",
     "test:geometry-ai-composite": "tsx --test scripts/test_geometry_ai_composite.ts",
-    "test:geometry-tikz": "tsx --test scripts/test_geometry_tikz.ts"
+    "test:geometry-tikz": "tsx --test scripts/test_geometry_tikz.ts",
+    "test:geometry-image": "tsx --test scripts/test_geometry_image.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
