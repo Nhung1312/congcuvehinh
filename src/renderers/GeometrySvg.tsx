@@ -387,29 +387,22 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     // Giải chuỗi H → D/E dù điểm phụ được trả về không đúng thứ tự.
     const pointsMap = resolveAuxiliaryPoints(namedPoints, auxPoints, circle?.radius);
 
-    // Kiểm tra xem có giao điểm thực tế nào trên tiếp tuyến không (ẩn hoàn toàn x nếu đã có T)
-    const hasTangentInt = auxPoints.some(
-      (o) =>
-        o.type === 'intersection' &&
-        ((typeof o.line1 === 'string' && o.line1.includes('x')) ||
-          (typeof o.line2 === 'string' && o.line2.includes('x')))
-    );
-
-    // Xử lý tự động bán kính OA khi có tiếp tuyến tại A của đường tròn (O)
+    // Only tangent-line intersections should hide helper x, never arbitrary AC intersections.
     const centerPointName = triangle?.circumscribedCircle?.centerName || 'O';
-    const tangentPoint = auxPoints.find((p) => p.type === 'tangent');
-    const tangentIntPoint = auxPoints.find(
-      (p) =>
-        p.type === 'intersection' &&
-        typeof p.line1 === 'string' &&
-        (p.line1.includes('x') || p.line1.includes('A'))
+    const tangentPoint = auxPoints.find((p) => p.type === 'tangent' && p.fromPoint && p.name);
+    const helperName = tangentPoint?.name || 'x';
+    const isTangentLine = (value: unknown): value is string =>
+      typeof value === 'string' && (
+        tangentPoint ? value === `${tangentPoint.fromPoint}${helperName}` : /^[A-Z]x$/.test(value)
+      );
+    const tangentIntPoint = auxPoints.find((p) =>
+      p.type === 'intersection' && (isTangentLine(p.line1) || isTangentLine(p.line2))
     );
-    const tangentAt =
-      tangentPoint?.fromPoint ||
-      (tangentIntPoint && typeof tangentIntPoint.line1 === 'string'
-        ? tangentIntPoint.line1.replace('x', '')
-        : undefined) ||
-      'A';
+    const hasTangentInt = Boolean(tangentIntPoint);
+    const tangentLine = tangentIntPoint &&
+      (isTangentLine(tangentIntPoint.line1) ? tangentIntPoint.line1 : tangentIntPoint.line2);
+    const tangentAt = tangentPoint?.fromPoint ||
+      (typeof tangentLine === 'string' ? tangentLine[0] : undefined) || 'A';
 
     const hasTangentCase =
       !!tangentPoint ||
@@ -444,7 +437,32 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     }
 
     const displayedLines = effectiveAuxLines.filter(
-      (l) => l.enabled !== false && !(hasTangentInt && (l.from === 'x' || l.to === 'x'))
+      (l) => l.enabled !== false && !(hasTangentInt && (l.from === helperName || l.to === helperName))
+    );
+    const baseLabels = Object.entries(namedPoints)
+      .filter(([name]) => !name.includes('\\') && name.length <= 3)
+      .map(([name, point]) => ({ name, point }));
+    const auxLabels = auxPoints.filter(p => p.showLabel !== false && p.name &&
+      !(hasTangentInt && (p.name === helperName || p.type === 'tangent')))
+      .map(p => ({ name: p.name, point: pointsMap[p.name] }))
+      .filter((p): p is { name: string; point: Point2D } => Boolean(p.point));
+    const auxiliarySegments = displayedLines.flatMap(line => {
+      const start = pointsMap[line.from], end = pointsMap[line.to];
+      return start && end ? [{ start, end }] : [];
+    });
+    const vertexSegments = subType === 'triangle'
+      ? [
+        { start: trianglePoints[0], end: trianglePoints[1] },
+        { start: trianglePoints[1], end: trianglePoints[2] },
+        { start: trianglePoints[2], end: trianglePoints[0] },
+      ]
+      : subType === 'quadrilateral'
+        ? quadPoints.map((point, i) => ({ start: point, end: quadPoints[(i + 1) % quadPoints.length] }))
+        : [];
+    const auxiliaryLabelLayout = layoutGeometryPointLabels(
+      [...baseLabels, ...auxLabels],
+      [...vertexSegments, ...auxiliarySegments],
+      Object.values(pointsMap), fontSize
     );
 
     return (
@@ -648,7 +666,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
         {/* 6. Điểm phụ và Nhãn điểm phụ (Auxiliary Points & Labels) */}
         {auxPoints
           .filter((p) => {
-            if (hasTangentInt && (p.name === 'x' || p.type === 'tangent')) return false;
+            if (hasTangentInt && (p.name === helperName || p.type === 'tangent')) return false;
             return p.showPoint !== false || p.showLabel !== false;
           })
           .map((p, idx) => {
@@ -662,8 +680,10 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
               )}
               {p.showLabel !== false && p.name && (
                 <text
-                  x={pt.x + 8}
-                  y={pt.y - 8}
+                  x={auxiliaryLabelLayout[p.name]?.x ?? pt.x + 8}
+                  y={auxiliaryLabelLayout[p.name]?.y ?? pt.y - 8}
+                  textAnchor={auxiliaryLabelLayout[p.name]?.textAnchor}
+                  dominantBaseline={auxiliaryLabelLayout[p.name]?.dominantBaseline}
                   fontSize={fontSize}
                   fontStyle="italic"
                   fontWeight="bold"
