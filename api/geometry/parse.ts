@@ -4,6 +4,7 @@
  * Never stores or logs API keys. Never uses shared keys.
  */
 import { parseGeometryWithGemini } from '../../src/server/geminiGeometryService';
+import { validateGeometryImageInput } from '../../src/ai/geometryImageInput';
 
 interface ParseOutcome {
   status: number;
@@ -12,12 +13,20 @@ interface ParseOutcome {
 
 async function executeGeometryParse(
   promptInput: unknown,
-  apiKeyInput: unknown
+  apiKeyInput: unknown,
+  imageInput?: unknown
 ): Promise<ParseOutcome> {
-  if (typeof promptInput !== 'string' || !promptInput.trim() || promptInput.length > 6000) {
+  let image;
+  try {
+    image = validateGeometryImageInput(imageInput);
+  } catch (err: any) {
+    return { status: 400, data: { error: err?.message || 'Ảnh đề bài không hợp lệ.' } };
+  }
+  if (typeof promptInput !== 'string' || promptInput.length > 6000 ||
+      (!promptInput.trim() && !image)) {
     return {
       status: 400,
-      data: { error: 'Vui lòng nhập đề bài hình học (từ 1 đến 6000 ký tự).' },
+      data: { error: 'Hãy nhập đề bài (tối đa 6000 ký tự) hoặc dán/chọn một ảnh đề.' },
     };
   }
 
@@ -30,7 +39,7 @@ async function executeGeometryParse(
   }
 
   try {
-    const spec = await parseGeometryWithGemini(promptInput.trim(), clientKey);
+    const spec = await parseGeometryWithGemini(promptInput.trim(), clientKey, image);
     if (spec.generationInfo?.source !== 'gemini') {
       throw new Error('Gemini không trả về dữ liệu hình học hợp lệ.');
     }
@@ -74,7 +83,7 @@ async function handleWebRequest(request: Request): Promise<Response> {
     });
   }
 
-  const outcome = await executeGeometryParse(body?.prompt, body?.apiKey);
+  const outcome = await executeGeometryParse(body?.prompt, body?.apiKey, body?.image);
   return new Response(JSON.stringify(outcome.data), {
     status: outcome.status,
     headers,
@@ -97,7 +106,7 @@ export default async function handler(req: any, res?: any) {
         return res.status(405).json({ error: 'Chỉ hỗ trợ POST.' });
       }
       const body = req.body || {};
-      const outcome = await executeGeometryParse(body?.prompt, body?.apiKey);
+      const outcome = await executeGeometryParse(body?.prompt, body?.apiKey, body?.image);
       return res.status(outcome.status).json(outcome.data);
     } catch (err: any) {
       return res.status(502).json({

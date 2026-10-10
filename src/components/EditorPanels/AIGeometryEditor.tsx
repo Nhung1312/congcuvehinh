@@ -2,7 +2,7 @@
  * AIGeometryEditor.tsx
  * Giao diện công cụ 🤖 AI TỰ DỰNG HÌNH TOÁN THCS
  */
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Sparkles,
   Bot,
@@ -19,6 +19,8 @@ import {
   Code2,
   Copy,
   Check,
+  ImagePlus,
+  Trash2,
 } from 'lucide-react';
 import { ChartDocument, BaseChartSettings, ToolType } from '../../types';
 import { AI_GEOMETRY_PRESETS, GeometryProblemPreset } from '../../ai/aiPresets';
@@ -27,6 +29,8 @@ import { GeminiGeometryProvider } from '../../ai/providers/GeminiGeometryProvide
 import { ClaudeGeometryProvider } from '../../ai/providers/ClaudeGeometryProvider';
 import { GeometrySpecificationAdapter } from '../../ai/adapter/geometrySpecificationAdapter';
 import { GeometrySpecification } from '../../ai/types';
+import { validateGeometryImageInput, type GeometryImageInput } from '../../ai/geometryImageInput';
+import { prepareGeometryQuestionImage } from '../../ai/geometryImageClient';
 
 interface AIGeometryEditorProps {
   currentDoc: ChartDocument;
@@ -43,9 +47,57 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
   onSwitchToManualTool,
   onViewDrawing,
 }) => {
-  const [prompt, setPrompt] = useState<string>(
-    'Cho tam giác ABC nhọn. Kẻ đường cao AH từ đỉnh A xuống cạnh BC (H thuộc BC).'
-  );
+  // Remember the exact question across Preview refreshes (API keys remain separate).
+  const promptStorageKey = 'congcuvehinh-ai-question-text-v1';
+  const imageStorageKey = 'congcuvehinh-ai-question-image-tab-v1';
+  const [prompt, setPrompt] = useState<string>(() => {
+    try { return window.localStorage.getItem(promptStorageKey) || ''; } catch { return ''; }
+  });
+  const [questionImage, setQuestionImage] = useState<GeometryImageInput | undefined>(() => {
+    try {
+      const stored = window.sessionStorage.getItem(imageStorageKey);
+      return stored ? validateGeometryImageInput(JSON.parse(stored)) : undefined;
+    } catch { return undefined; }
+  });
+  const [imageBusy, setImageBusy] = useState(false);
+  const imageFileRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    try { window.localStorage.setItem(promptStorageKey, prompt); } catch { /* storage disabled */ }
+  }, [prompt]);
+  useEffect(() => {
+    try {
+      if (questionImage) window.sessionStorage.setItem(imageStorageKey, JSON.stringify(questionImage));
+      else window.sessionStorage.removeItem(imageStorageKey);
+    } catch { /* private browsing/quota; image remains in the active editor */ }
+  }, [questionImage]);
+  const selectImage = async (file?: File) => {
+    if (!file) return;
+    setImageBusy(true);
+    setErrorMsg(null);
+    try {
+      const image = await prepareGeometryQuestionImage(file);
+      setQuestionImage(image);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Không thể đọc ảnh đề.');
+    } finally {
+      setImageBusy(false);
+    }
+  };
+  const handleImagePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = event.clipboardData.items;
+    let pasted: File | null = null;
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index];
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        pasted = item.getAsFile();
+        break;
+      }
+    }
+    if (pasted) {
+      event.preventDefault();
+      void selectImage(pasted);
+    }
+  };
   const [selectedProvider, setSelectedProvider] = useState<ProviderKey>('gemini');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [stepStatus, setStepStatus] = useState<string | null>(null);
@@ -94,13 +146,18 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
     claude: new ClaudeGeometryProvider(),
   };
 
-  const handleRunAI = async (customPrompt?: string) => {
-    const input = (customPrompt || prompt).trim();
-    if (!input) {
-      setErrorMsg('Vui lòng nhập đề bài hình học.');
+  const handleRunAI = async (customPrompt?: string, overrideImage?: GeometryImageInput | null) => {
+    const input = (customPrompt ?? prompt).trim();
+    const image = overrideImage === undefined ? questionImage : (overrideImage || undefined);
+    if (!input && !image) {
+      setErrorMsg('Vui lòng nhập đề hoặc dán/chọn ảnh đề bài.');
       return;
     }
 
+    if (image && selectedProvider !== 'gemini') {
+      setErrorMsg('Đọc đề từ ảnh cần Gemini. Hãy chọn Gemini 3.8 Flash, hoặc xóa ảnh nếu dùng bộ quy tắc.');
+      return;
+    }
     setIsProcessing(true);
     setErrorMsg(null);
     setFailedProvider(null);
@@ -111,7 +168,7 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
       // Gemini nhận key riêng của khách hàng chỉ trong request đang chạy.
       // Các provider quy tắc không nhận hoặc lưu key.
       const spec = selectedProvider === 'gemini'
-        ? await providers.gemini.parseGeometryProblem(input, userApiKey)
+        ? await providers.gemini.parseGeometryProblem(input, userApiKey, image)
         : await providers[selectedProvider].parseGeometryProblem(input);
       if (selectedProvider !== 'gemini') {
         spec.generationInfo = { source: 'rules', message: 'Bộ quy tắc SGK (không sử dụng Gemini).' };
@@ -144,7 +201,8 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
 
   const handleSelectPreset = (preset: GeometryProblemPreset) => {
     setPrompt(preset.prompt);
-    handleRunAI(preset.prompt);
+    setQuestionImage(undefined);
+    void handleRunAI(preset.prompt, null);
   };
 
   return (
@@ -265,11 +323,60 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
+            onPaste={handleImagePaste}
             rows={4}
-            placeholder="Ví dụ: Cho tam giác ABC nhọn. Kẻ đường cao AH từ đỉnh A xuống BC. Kẻ trung tuyến AM và phân giác AD..."
+            maxLength={6000}
+            placeholder="Nhập đề, hoặc đặt con trỏ vào đây rồi Ctrl+V ảnh chụp đề..."
             className="w-full text-xs font-sans p-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-2xs leading-relaxed"
           />
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={imageFileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            aria-label="Chọn ảnh đề bài"
+            onChange={(e) => {
+              void selectImage(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => imageFileRef.current?.click()}
+            disabled={isProcessing || imageBusy}
+            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-2 rounded-lg border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:opacity-50"
+          >
+            <ImagePlus className="w-4 h-4" />
+            {imageBusy ? 'Đang xử lý ảnh...' : 'Chọn ảnh đề'}
+          </button>
+          <span className="text-[11px] text-slate-600">Hoặc nhấn Ctrl+V khi đang ở ô đề (PNG/JPG/WebP).</span>
+        </div>
+        {questionImage && (
+          <div className="flex items-center gap-3 p-2 rounded-lg border border-emerald-200 bg-emerald-50">
+            <img
+              src={`data:${questionImage.mimeType};base64,${questionImage.data}`}
+              alt="Ảnh đề bài đã dán hoặc tải lên"
+              className="w-20 h-20 object-contain rounded border border-emerald-200 bg-white"
+            />
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-[11px] text-emerald-800">Đã nhận ảnh đề</div>
+              <p className="text-[10px] text-emerald-700">Ảnh được giữ trong tab sau Refresh. Chỉ gửi Gemini khi bạn bấm Dựng hình.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setQuestionImage(undefined)}
+              disabled={isProcessing}
+              className="p-2 rounded-lg border border-red-200 bg-white text-red-600 hover:bg-red-50"
+              title="Xóa ảnh đề"
+              aria-label="Xóa ảnh đề"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+        <p className="text-[10px] text-slate-500">Đề chữ được nhớ trong trình duyệt. Khi dùng ảnh, xóa đề chữ cũ nếu đó là bài khác. Dựng lại sẽ gọi AI thêm một lượt.</p>
       </div>
 
       {/* Nút hành động chính */}
@@ -277,7 +384,7 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
         <button
           type="button"
           onClick={() => handleRunAI()}
-          disabled={isProcessing || !prompt.trim()}
+          disabled={isProcessing || imageBusy || (!prompt.trim() && !questionImage)}
           className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold text-white shadow-md transition ${
             isProcessing
               ? 'bg-blue-400 cursor-not-allowed'
@@ -300,7 +407,7 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
         <button
           type="button"
           onClick={() => handleRunAI()}
-          disabled={isProcessing || !prompt.trim()}
+          disabled={isProcessing || imageBusy || (!prompt.trim() && !questionImage)}
           className="p-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 transition shadow-2xs"
           title="Dựng lại hình vẽ"
         >

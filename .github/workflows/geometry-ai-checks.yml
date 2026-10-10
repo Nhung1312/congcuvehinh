@@ -8,6 +8,10 @@ on:
   pull_request:
     paths:
       - 'src/ai/**'
+      - 'src/components/EditorPanels/AIGeometryEditor.tsx'
+      - 'api/geometry/parse.ts'
+      - 'server.ts'
+      - 'scripts/test_geometry_image.ts'
       - 'src/server/geminiGeometryService.ts'
       - 'src/renderers/GeometrySvg.tsx'
       - 'src/utils/resolveAuxiliaryPoints.ts'
@@ -38,5 +42,7 @@ jobs:
         run: npm run test:geometry-ai-composite
       - name: TikZ export regression tests
         run: npm run test:geometry-tikz
+      - name: Image question & prompt persistence UI tests
+        run: npm run test:geometry-image
       - name: Production bundle check
         run: npm run build

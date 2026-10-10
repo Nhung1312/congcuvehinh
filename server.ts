@@ -3,6 +3,7 @@ import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import { parseGeometryWithGemini } from './src/server/geminiGeometryService';
+import { validateGeometryImageInput } from './src/ai/geometryImageInput';
 
 dotenv.config({ path: '.env.local' });
 dotenv.config();
@@ -11,7 +12,7 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: '3mb' }));
 
   // API routes go here FIRST
   app.get('/api/health', (_req, res) => {
@@ -20,9 +21,15 @@ async function startServer() {
 
   app.post('/api/geometry/parse', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
-    const { prompt, apiKey } = req.body || {};
-    if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 6000) {
-      return res.status(400).json({ error: 'Đề bài phải có từ 1 đến 6000 ký tự.' });
+    const { prompt, apiKey, image: imageInput } = req.body || {};
+    let image;
+    try {
+      image = validateGeometryImageInput(imageInput);
+    } catch (err: any) {
+      return res.status(400).json({ error: err?.message || 'Ảnh đề không hợp lệ.' });
+    }
+    if (typeof prompt !== 'string' || prompt.length > 6000 || (!prompt.trim() && !image)) {
+      return res.status(400).json({ error: 'Hãy nhập đề bài hoặc dán/chọn một ảnh đề (tối đa 6000 ký tự).' });
     }
 
     const clientKey = typeof apiKey === 'string' && apiKey.trim() ? apiKey.trim() : undefined;
@@ -36,7 +43,7 @@ async function startServer() {
     console.log(`[API /geometry/parse] Bắt đầu gọi Gemini 3.8 Flash (${keySourceLabel})...`);
 
     try {
-      const spec = await parseGeometryWithGemini(prompt.trim(), clientKey);
+      const spec = await parseGeometryWithGemini(prompt.trim(), clientKey, image);
       if (spec.generationInfo?.source !== 'gemini') {
         throw new Error('Gemini không trả về kết quả.');
       }

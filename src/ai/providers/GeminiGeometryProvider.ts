@@ -4,20 +4,21 @@
  */
 import { IAIGeometryProvider } from '../AIGeometryProvider';
 import { GeometrySpecification } from '../types';
+import type { GeometryImageInput } from '../geometryImageInput';
 
 export class GeminiGeometryProvider implements IAIGeometryProvider {
   public readonly id = 'gemini';
   public readonly name = 'Gemini 3.8 Flash (Toán THCS)';
   public readonly description = 'Phân tích đề bài tiếng Việt bằng mô hình Gemini 3.8 Flash kết hợp Geometry Engine';
 
-  public async parseGeometryProblem(prompt: string, userApiKey?: string): Promise<GeometrySpecification> {
+  public async parseGeometryProblem(prompt: string, userApiKey?: string, image?: GeometryImageInput): Promise<GeometrySpecification> {
     let response: Response;
     try {
       response = await fetch('/api/geometry/parse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         cache: 'no-store',
-        body: JSON.stringify({ prompt, apiKey: userApiKey?.trim() || undefined }),
+        body: JSON.stringify({ prompt, apiKey: userApiKey?.trim() || undefined, image }),
       });
     } catch {
       throw new Error('Không kết nối được máy chủ AI. Hãy kiểm tra chức năng API trên Vercel.');
