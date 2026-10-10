@@ -44,11 +44,15 @@ async function handle(request: Request): Promise<Response> {
           model: 'gemini-3.8-flash',
           geminiApi: 'not_checked',
         });
-      } catch {
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        // GET has no credentials, but still exclude paths and arbitrary long messages.
+        const detail = message.slice(0, 350).replace(/AIza[\\w-]+/g, '[REDACTED]');
         return json({
           status: 'unavailable',
           code: 'SERVICE_INIT_FAILED',
-          error: 'Vercel không nạp được dịch vụ Gemini. Cần kiểm tra Function Logs.',
+          error: 'Vercel không nạp được dịch vụ Gemini.',
+          diagnostic: detail,
         }, 503);
       }
     }
