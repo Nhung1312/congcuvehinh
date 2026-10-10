@@ -24,7 +24,9 @@ export class VietnameseGeometryParser {
    */
   public static parse(prompt: string): GeometrySpecification {
     const raw = prompt.trim();
-    const text = this.normalizeText(raw);
+    // Tách bỏ các câu kết luận chứng minh để không biến kết luận thành giả thiết
+    const constrRaw = this.stripProofGoals(raw);
+    const text = this.normalizeText(constrRaw);
 
     // Phát hiện danh mục hình chính
     const category = this.detectCategory(text);
@@ -32,29 +34,29 @@ export class VietnameseGeometryParser {
     let spec: GeometrySpecification;
     switch (category) {
       case 'symmetry':
-        spec = this.parseSymmetryProblem(raw, text);
+        spec = this.parseSymmetryProblem(constrRaw, text);
         break;
       case 'polygon':
-        spec = this.parsePolygonProblem(raw, text);
+        spec = this.parsePolygonProblem(constrRaw, text);
         break;
       case 'circle':
-        spec = this.parseCircleProblem(raw, text);
+        spec = this.parseCircleProblem(constrRaw, text);
         break;
       case 'quadrilateral':
-        spec = this.parseQuadProblem(raw, text);
+        spec = this.parseQuadProblem(constrRaw, text);
         break;
       case 'angle':
-        spec = this.parseAngleProblem(raw, text);
+        spec = this.parseAngleProblem(constrRaw, text);
         break;
       case 'line-ray':
-        spec = this.parseLineRayProblem(raw, text);
+        spec = this.parseLineRayProblem(constrRaw, text);
         break;
       case 'triangle':
       default:
-        spec = this.parseTriangleProblem(raw, text);
+        spec = this.parseTriangleProblem(constrRaw, text);
         break;
     }
-    return this.enrichSpecification(spec, raw, text);
+    return this.enrichSpecification(spec, constrRaw, text);
   }
 
   /**
@@ -200,8 +202,10 @@ export class VietnameseGeometryParser {
       triType = 'general';
       detectedEntities.push('Loại tam giác: Tam giác nhọn');
     } else if (text.includes('tù')) {
-      triType = 'general';
-      detectedEntities.push('Loại tam giác: Tam giác tù');
+      triType = 'obtuse';
+      const vertexMatch = text.match(/tù\s+tại\s+([a-z])/i);
+      specialVertex = vertexMatch ? vertexMatch[1].toUpperCase() : vertices[0];
+      detectedEntities.push(`Loại tam giác: Tam giác tù tại ${specialVertex}`);
     }
 
     const [vA, vB, vC] = vertices;
@@ -278,7 +282,10 @@ export class VietnameseGeometryParser {
         const mid = matchMed[3].toUpperCase();
         const seg = (matchMed[4] || `${vB}${vC}`).toUpperCase();
         if (mid !== vA && mid !== vB && mid !== vC) {
-          if (!medians.some(m => m.midpoint === mid)) {
+          // Chỉ thêm trung tuyến nếu đề bài thực sự có từ "trung tuyến" hoặc "nối/kẻ" đoạn nối từ đỉnh tới trung điểm
+          const hasConnectingVerb = text.includes('trung tuyến') ||
+            new RegExp(`(?:trung\\s+tuyến|nối|kẻ).*?\\b${vA}${mid}\\b|\\b${vA}${mid}\\b.*?(?:trung\\s+tuyến|nối|kẻ)`, 'i').test(raw);
+          if (hasConnectingVerb && !medians.some(m => m.midpoint === mid)) {
             medians.push({
               from: vA,
               toSegment: seg,
@@ -287,29 +294,37 @@ export class VietnameseGeometryParser {
               style: 'dashed',
             });
             detectedEntities.push(`Trung tuyến ${vA}${mid} (${mid} là trung điểm ${seg})`);
+          } else {
+            detectedEntities.push(`Điểm ${mid} là trung điểm của ${seg}`);
           }
         }
       }
     }
 
-    // Kiểm tra mẫu "Gọi M là trung điểm của BC... Kẻ AM"
+    // Kiểm tra mẫu "Gọi M là trung điểm của BC... Nối AM / Kẻ AM"
     const midMatch = raw.match(/(?:gọi\s+)?([A-Z])\s+là\s+trung\s+điểm\s+(?:của\s+([A-Z]{2}))?/i);
     if (midMatch && medians.length === 0) {
       const mid = midMatch[1].toUpperCase();
       const seg = (midMatch[2] || `${vB}${vC}`).toUpperCase();
       if (mid !== vA && mid !== vB && mid !== vC) {
-        medians.push({
-          from: vA,
-          toSegment: seg,
-          midpoint: mid,
-          showTicks: true,
-          style: 'dashed',
-        });
-        detectedEntities.push(`Trung tuyến ${vA}${mid} (${mid} là trung điểm ${seg})`);
+        const hasConnectingVerb = text.includes('trung tuyến') ||
+          new RegExp(`(?:trung\\s+tuyến|nối|kẻ).*?\\b${vA}${mid}\\b|\\b${vA}${mid}\\b.*?(?:trung\\s+tuyến|nối|kẻ)`, 'i').test(raw);
+        if (hasConnectingVerb) {
+          medians.push({
+            from: vA,
+            toSegment: seg,
+            midpoint: mid,
+            showTicks: true,
+            style: 'dashed',
+          });
+          detectedEntities.push(`Trung tuyến ${vA}${mid} (${mid} là trung điểm ${seg})`);
+        } else {
+          detectedEntities.push(`Điểm ${mid} là trung điểm của ${seg}`);
+        }
       }
     }
 
-    if (medians.length === 0 && (text.includes('trung tuyến am') || (text.includes('trung điểm m') && text.includes('bc')) || (text.includes('kẻ am') && text.includes('trung điểm')))) {
+    if (medians.length === 0 && (text.includes('trung tuyến am') || (/(?:trung\s+tuyến|nối|kẻ).*?\bam\b/i.test(raw) && text.includes('trung điểm')))) {
       medians.push({
         from: vA,
         toSegment: `${vB}${vC}`,
@@ -402,6 +417,12 @@ export class VietnameseGeometryParser {
       detectedEntities.push(`Định lý Ta-lét: Đoạn thẳng MN song song ${vB}${vC} (M ∈ ${vA}${vB}, N ∈ ${vA}${vC})`);
     }
 
+    const hasCircumcircle = text.includes('nội tiếp đường tròn') || text.includes('đường tròn ngoại tiếp') || (text.includes('(o)') && !text.includes('nằm ngoài'));
+    const hasIncircle = text.includes('nội tiếp tam giác') || text.includes('đường tròn nội tiếp');
+    if (hasCircumcircle) {
+      detectedEntities.push(`Tam giác ${vertices.join('')} nội tiếp đường tròn (O)`);
+    }
+
     return {
       title: (text.includes('ta-lét') || text.includes('thales'))
         ? `Định lý Ta-lét trong tam giác ${vertices.join('')}`
@@ -414,6 +435,8 @@ export class VietnameseGeometryParser {
         equalSides: triType === 'isosceles' || triType === 'right-isosceles' ? [`${vA}${vB}`, `${vA}${vC}`] : undefined,
         sideLengths: Object.keys(sideLengths).length > 0 ? sideLengths : undefined,
         angles: Object.keys(angles).length > 0 ? angles : undefined,
+        circumscribedCircle: hasCircumcircle || undefined,
+        inscribedCircle: hasIncircle || undefined,
       },
       altitudes,
       medians,
@@ -824,6 +847,12 @@ export class VietnameseGeometryParser {
     };
   }
 
+  private static stripProofGoals(text: string): string {
+    return text
+      .replace(/(?:chứng\s*minh\s*(?:rằng)?|cmr\s*:?|chứng\s*tỏ\s*(?:rằng)?)[^.?!;]*(?:[.?!;]|$)/gi, ' ')
+      .replace(/\b(?:tính|tìm)\s+(?:độ\s*dài|diện\s*tích|góc|số\s*đo)[^.?!;]*(?:[.?!;]|$)/gi, ' ');
+  }
+
   /**
    * Bổ sung các điểm và đường phụ thuộc nhiều bước (hình chiếu, trung điểm, nối đoạn, góc vuông)
    */
@@ -837,6 +866,11 @@ export class VietnameseGeometryParser {
     if (!Array.isArray(spec.rightAngles)) spec.rightAngles = [];
     if (!Array.isArray(spec.altitudes)) spec.altitudes = [];
     if (!Array.isArray(spec.medians)) spec.medians = [];
+    if (!Array.isArray(spec.equalSegments)) spec.equalSegments = [];
+
+    // Tách bỏ các câu kết luận cần chứng minh để không biến kết luận thành giả thiết
+    const constructionPrompt = this.stripProofGoals(rawPrompt);
+    const constrText = constructionPrompt.toLowerCase();
 
     const altitudeFeet = new Set(spec.altitudes.map(a => a.foot));
 
@@ -851,10 +885,86 @@ export class VietnameseGeometryParser {
       }
     }
 
-    // 2. Hình chiếu vuông góc: HD vuông góc AB tại D, HE vuông góc AC tại E
+    // 2. Trực tâm H (Giao điểm hai đường cao)
+    if (
+      constrText.includes('trực tâm h') ||
+      (constrText.includes('đường cao') && (constrText.includes('cắt nhau tại h') || constrText.includes('giao nhau tại h')))
+    ) {
+      // Nhận diện hai đường cao BD và CE nếu chưa có
+      const verts = spec.triangle?.vertices || ['A', 'B', 'C'];
+      const vA = verts[0], vB = verts[1], vC = verts[2];
+      if (spec.altitudes.length < 2) {
+        if (constrText.includes('bd') && constrText.includes('ce')) {
+          if (!spec.altitudes.some(a => a.foot === 'D')) {
+            spec.altitudes.push({ from: vB, toLine: `${vA}${vC}`, foot: 'D', showRightAngle: true, style: 'dashed' });
+          }
+          if (!spec.altitudes.some(a => a.foot === 'E')) {
+            spec.altitudes.push({ from: vC, toLine: `${vA}${vB}`, foot: 'E', showRightAngle: true, style: 'dashed' });
+          }
+        }
+      }
+      if (!spec.auxPoints.some(p => p.name === 'H')) {
+        const alt1 = spec.altitudes[0];
+        const alt2 = spec.altitudes[1];
+        if (alt1 && alt2) {
+          spec.auxPoints.push({
+            name: 'H',
+            type: 'intersection',
+            line1: `${alt1.from}${alt1.foot}`,
+            line2: `${alt2.from}${alt2.foot}`,
+          });
+        } else {
+          spec.auxPoints.push({
+            name: 'H',
+            type: 'orthocenter',
+          });
+        }
+      }
+    }
+
+    // 3. Tiếp tuyến Ax của đường tròn (O)
+    if (constrText.includes('tiếp tuyến ax') || (constrText.includes('tiếp tuyến') && constrText.includes('ax'))) {
+      if (!spec.auxPoints.some(p => p.name === 'x')) {
+        spec.auxPoints.push({
+          name: 'x',
+          type: 'tangent',
+          fromPoint: 'A',
+          centerPoint: 'O',
+        });
+      }
+      if (!spec.auxLines.some(l => (l.from === 'A' && l.to === 'x') || (l.from === 'x' && l.to === 'A'))) {
+        spec.auxLines.push({ from: 'A', to: 'x', style: 'solid' });
+      }
+      if (!spec.rightAngles.some(r => r.vertex === 'A' && ((r.ray1 === 'O' && r.ray2 === 'x') || (r.ray1 === 'x' && r.ray2 === 'O')))) {
+        spec.rightAngles.push({ vertex: 'A', ray1: 'O', ray2: 'x' });
+      }
+    }
+
+    // 4. Trung điểm M khi không có đường trung tuyến
+    const midMatch = constructionPrompt.match(/(?:trung\s+điểm\s+([A-Z])(?:\s+của\s+([A-Z]{2}))?|(?:gọi\s+)?([A-Z])\s+là\s+trung\s+điểm\s+(?:của\s+([A-Z]{2}))?)/i);
+    if (midMatch) {
+      const mid = (midMatch[1] || midMatch[3]).toUpperCase();
+      const seg = (midMatch[2] || midMatch[4] || 'BC').toUpperCase();
+      const inMedians = spec.medians.some(m => m.midpoint === mid);
+      if (!inMedians && !spec.auxPoints.some(p => p.name === mid)) {
+        spec.auxPoints.push({
+          name: mid,
+          type: 'midpoint',
+          segment: seg,
+        });
+        if (seg.length === 2 && !spec.equalSegments.some(es => es.segments.includes(`${seg[0]}${mid}`))) {
+          spec.equalSegments.push({
+            segments: [`${seg[0]}${mid}`, `${mid}${seg[1]}`],
+            tickType: 1,
+          });
+        }
+      }
+    }
+
+    // 5. Hình chiếu vuông góc: HD vuông góc AB tại D, HE vuông góc AC tại E
     const projRegex = /(?:[Tt]ừ\s+([A-Z])\s+[kK]ẻ\s+)?\b([A-Z])([A-Z])\b\s*(?:vuông\s*góc|⊥)\s*(?:với\s+)?\b([A-Z]{2})\b(?:\s+tại\s+([A-Z]))?|\b([A-Z])\b\s+là\s+hình\s+chiếu\s+(?:vuông\s+góc\s+)?của\s+([A-Z])\s+(?:trên|lên)\s+\b([A-Z]{2})\b/g;
     let projMatch;
-    while ((projMatch = projRegex.exec(rawPrompt)) !== null) {
+    while ((projMatch = projRegex.exec(constructionPrompt)) !== null) {
       let fromP: string;
       let name: string;
       let targetLine: string;
@@ -891,10 +1001,10 @@ export class VietnameseGeometryParser {
       }
     }
 
-    // 3. Nối các đoạn thẳng (Nối DE, Nối AM...)
+    // 6. Nối các đoạn thẳng (Nối DE, Nối AM...)
     const connectRegex = /\b[Nn]ối\s+([A-Z])([A-Z])(?:\s+và\s+([A-Z])([A-Z]))?\b/g;
     let connMatch;
-    while ((connMatch = connectRegex.exec(rawPrompt)) !== null) {
+    while ((connMatch = connectRegex.exec(constructionPrompt)) !== null) {
       const pairs = [
         [connMatch[1], connMatch[2]],
         [connMatch[3], connMatch[4]],

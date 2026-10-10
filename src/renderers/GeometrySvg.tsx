@@ -1305,8 +1305,8 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     // Chân đường cao/trung tuyến/phân giác là gốc cho các phép dựng nhiều bước.
     const auxiliaryAnchors: Record<string, Point2D> = {};
     const opposite = (vertex: string): [Point2D, Point2D, Point2D] => {
-      if (vertex === 'B') return [pB, pA, pC];
-      if (vertex === 'C') return [pC, pA, pB];
+      if (vertex === nameB || vertex === 'B') return [pB, pA, pC];
+      if (vertex === nameC || vertex === 'C') return [pC, pA, pB];
       return [pA, pB, pC];
     };
     for (const alt of altitudes) {
@@ -1497,29 +1497,31 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
           },
           t
         )}
-        {renderAuxiliaryElements(
-          {
-            A: pA,
-            B: pB,
-            C: pC,
-            [nameA]: pA,
-            [nameB]: pB,
-            [nameC]: pC,
-            O: pCircumO,
-            I: pIncenterI,
-            D: pD_incircle,
-            E: pE_incircle,
-            F: pF_incircle,
-            M: pM_thales || midpoint(pA, pB),
-            N: pN_thales || midpoint(pA, pC),
-            AB: midpoint(pA, pB),
-            BC: midpoint(pB, pC),
-            CA: midpoint(pC, pA),
-            AC: midpoint(pA, pC),
-            ...auxiliaryAnchors,
-          },
-          data
-        )}
+        {data && (data as any) !== t && (data.auxLines?.length || data.auxPoints?.length || data.rightAngleMarkers?.length || data.parallelMarkers?.length || data.equalSidesMarkers?.length || data.equalAnglesMarkers?.length) ? (
+          renderAuxiliaryElements(
+            {
+              A: pA,
+              B: pB,
+              C: pC,
+              [nameA]: pA,
+              [nameB]: pB,
+              [nameC]: pC,
+              O: pCircumO,
+              I: pIncenterI,
+              D: pD_incircle,
+              E: pE_incircle,
+              F: pF_incircle,
+              M: pM_thales || midpoint(pA, pB),
+              N: pN_thales || midpoint(pA, pC),
+              AB: midpoint(pA, pB),
+              BC: midpoint(pB, pC),
+              CA: midpoint(pC, pA),
+              AC: midpoint(pA, pC),
+              ...auxiliaryAnchors,
+            },
+            data
+          )
+        ) : null}
       </g>
     );
   };

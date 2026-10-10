@@ -135,7 +135,9 @@ export class GeometrySpecificationAdapter {
    * Không suy đoán tọa độ; các điểm được tính lại theo vị trí đỉnh lúc render.
    */
   private static buildAuxiliaryData(spec: GeometrySpecification) {
+    const triVertices = new Set(spec.triangle?.vertices || ['A', 'B', 'C']);
     const namedSpecialPoints = new Set([
+      ...triVertices,
       ...(spec.altitudes || []).map(item => item.foot),
       ...(spec.medians || []).map(item => item.midpoint),
       ...(spec.bisectors || []).map(item => item.foot),
@@ -147,9 +149,14 @@ export class GeometrySpecificationAdapter {
       ...(spec.bisectors || []).map(item => segmentKey(item.from, item.foot)),
     ]);
 
-    // Đường cao/trung tuyến đã có renderer và ký hiệu riêng; không vẽ đè lần hai.
+    // Đường cao/trung tuyến/đỉnh tam giác đã có renderer và ký hiệu riêng; không vẽ đè lần hai.
+    const seenPointNames = new Set<string>();
     const auxPoints: NonNullable<TriangleData['auxPoints']> = (spec.auxPoints || [])
-      .filter(point => Boolean(point.name) && !namedSpecialPoints.has(point.name))
+      .filter(point => {
+        if (!point.name || namedSpecialPoints.has(point.name) || seenPointNames.has(point.name)) return false;
+        seenPointNames.add(point.name);
+        return true;
+      })
       .map((point, index) => ({
         ...point,
         id: `ai-point-${index}`,
@@ -280,6 +287,30 @@ export class GeometrySpecificationAdapter {
       points = specialRole === 1 ? [left, top, right]
         : specialRole === 2 ? [left, right, top]
         : [top, left, right];
+    } else if (triType === 'obtuse') {
+      // Tam giác tù: có 1 góc > 90 độ tại specialRole (mặc định đỉnh A)
+      if (specialRole === 1) {
+        // Tù tại B
+        points = [
+          { x: 160, y: 110 },
+          { x: 250, y: 340 },
+          { x: 450, y: 340 },
+        ];
+      } else if (specialRole === 2) {
+        // Tù tại C
+        points = [
+          { x: 420, y: 110 },
+          { x: 130, y: 340 },
+          { x: 330, y: 340 },
+        ];
+      } else {
+        // Tù tại A (đỉnh trên tù, góc BAC > 90°)
+        points = [
+          { x: 260, y: 260 },
+          { x: 120, y: 340 },
+          { x: 440, y: 340 },
+        ];
+      }
     }
 
     const roleOf = (name: string): 'A' | 'B' | 'C' => {
@@ -353,6 +384,31 @@ export class GeometrySpecificationAdapter {
       (spec.parallels && spec.parallels.some(p => p.line1 === 'MN' && (p.line2 === 'BC' || p.line2 === `${vB}${vC}`)))
     );
 
+    // Xác định tỉ số Ta-lét chính xác: không sử dụng 0.45 mặc định khi đề đã xác định tỉ số hoặc trung điểm
+    let thalesRatio = 0.45;
+    if (isThales) {
+      const textAll = `${spec.title || ''} ${spec.explanation || ''} ${(spec.detectedEntities || []).join(' ')}`.toLowerCase();
+      // 1. Nếu có trung điểm (hoặc auxPoint là midpoint): tỉ số là 0.5 (đường trung bình)
+      const hasMidpoint = textAll.includes('trung điểm') || (spec.auxPoints || []).some(p => p.type === 'midpoint');
+      if (hasMidpoint) {
+        thalesRatio = 0.5;
+      }
+      // 2. Nếu auxPoint có chỉ định ratio cụ thể
+      const ratioAux = (spec.auxPoints || []).find(p => typeof p.ratio === 'number' && p.ratio > 0 && p.ratio < 1);
+      if (ratioAux && typeof ratioAux.ratio === 'number') {
+        thalesRatio = ratioAux.ratio;
+      }
+      // 3. Nếu đề có phân số (ví dụ 1/3, 2/3, 1/4, 3/4)
+      const fracMatch = textAll.match(/\b([1-9])\/([1-9])\b/);
+      if (fracMatch) {
+        const num = parseInt(fracMatch[1], 10);
+        const den = parseInt(fracMatch[2], 10);
+        if (den > num) {
+          thalesRatio = num / den;
+        }
+      }
+    }
+
     return {
       ...this.buildAuxiliaryData(spec),
       type: triType,
@@ -368,7 +424,7 @@ export class GeometrySpecificationAdapter {
         ? {
             enabled: true,
             cutSide: 'AB-AC',
-            ratio: 0.45,
+            ratio: thalesRatio,
             pointMName: 'M',
             pointNName: 'N',
             showParallelMarkers: true,

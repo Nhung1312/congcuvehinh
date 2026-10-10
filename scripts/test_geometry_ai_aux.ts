@@ -161,3 +161,101 @@ test('Kéo đỉnh tam giác cân bảo toàn hai cạnh bên bằng nhau', () =
   const ac = dist(resApex[0], resApex[2]);
   assert.ok(Math.abs(ab - ac) < 1e-4, 'AB phải bằng AC khi kéo đỉnh cân');
 });
+
+test('Không tự thêm đường trung tuyến khi đề chỉ cho trung điểm', () => {
+  const prompt = 'Cho tam giác ABC nhọn. Gọi M là trung điểm của BC. Từ M kẻ đường thẳng d vuông góc với BC.';
+  const spec = VietnameseGeometryParser.parse(prompt);
+  const tri = triangleFor(spec);
+
+  // Không có đường trung tuyến AM trong medians
+  assert.equal(tri.medians?.length || 0, 0, 'Không tự thêm trung tuyến AM khi đề chỉ nói M là trung điểm');
+  // M phải nằm trong auxPoints
+  assert.ok(tri.auxPoints?.some((p: any) => p.name === 'M' && p.type === 'midpoint'), 'Điểm M phải được nhận diện là trung điểm');
+});
+
+test('Trực tâm H là giao điểm hai đường cao BD và CE', () => {
+  const prompt = 'Cho tam giác ABC nhọn có hai đường cao BD và CE cắt nhau tại H.';
+  const spec = VietnameseGeometryParser.parse(prompt);
+  const tri = triangleFor(spec);
+
+  assert.equal(tri.altitudes?.length, 2, 'Phải có 2 đường cao BD và CE');
+  assert.ok(tri.auxPoints?.some((p: any) => p.name === 'H'), 'Phải có trực tâm H trong auxPoints');
+
+  const [A, B, C] = tri.points!;
+  const D = projectPointToLine(B, A, C).point;
+  const E = projectPointToLine(C, A, B).point;
+  const resolved = resolveAuxiliaryPoints({ A, B, C, D, E }, tri.auxPoints || []);
+  assert.ok(resolved.H, 'Trực tâm H phải giải được toạ độ');
+
+  // Kiểm tra H thỏa mãn: BH vuông góc AC và CH vuông góc AB
+  const BH = { x: resolved.H.x - B.x, y: resolved.H.y - B.y };
+  const AC = { x: C.x - A.x, y: C.y - A.y };
+  const dotBH_AC = BH.x * AC.x + BH.y * AC.y;
+  assert.ok(Math.abs(dotBH_AC) < 1e-4, 'BH phải vuông góc với AC');
+
+  const CH = { x: resolved.H.x - C.x, y: resolved.H.y - C.y };
+  const AB = { x: B.x - A.x, y: B.y - A.y };
+  const dotCH_AB = CH.x * AB.x + CH.y * AB.y;
+  assert.ok(Math.abs(dotCH_AB) < 1e-4, 'CH phải vuông góc với AB');
+});
+
+test('Bài toán kết hợp Toán 9: tam giác nội tiếp đường tròn (O), 2 đường cao, trực tâm H và tiếp tuyến Ax', () => {
+  const prompt = 'Cho tam giác ABC nhọn nội tiếp đường tròn (O), hai đường cao BD và CE cắt nhau tại H. Kẻ tiếp tuyến Ax của đường tròn (O).';
+  const spec = VietnameseGeometryParser.parse(prompt);
+  const tri = triangleFor(spec);
+
+  // Kiểm tra đường tròn ngoại tiếp
+  assert.ok(tri.circumscribedCircle?.enabled, 'Tam giác phải có đường tròn ngoại tiếp');
+  // Kiểm tra 2 đường cao
+  assert.equal(tri.altitudes?.length, 2, 'Phải có 2 đường cao BD và CE');
+  // Kiểm tra tiếp tuyến Ax
+  assert.ok(tri.auxPoints?.some((p: any) => p.name === 'x' && p.type === 'tangent'), 'Phải có điểm x trên tiếp tuyến');
+  assert.ok(tri.auxLines?.some((l: any) => (l.from === 'A' && l.to === 'x') || (l.from === 'x' && l.to === 'A')), 'Phải có tia tiếp tuyến Ax');
+  assert.ok(tri.rightAngleMarkers?.some((r: any) => r.vertex === 'A'), 'Tiếp tuyến Ax phải có góc vuông tại tiếp điểm A với bán kính OA');
+});
+
+test('Tam giác tù có góc lớn hơn 90 độ', () => {
+  const prompt = 'Cho tam giác ABC tù tại A.';
+  const spec = VietnameseGeometryParser.parse(prompt);
+  assert.equal(spec.triangle?.type, 'obtuse');
+  const tri = triangleFor(spec);
+  assert.equal(tri.type, 'obtuse');
+
+  const [A, B, C] = tri.points!;
+  const AB = { x: B.x - A.x, y: B.y - A.y };
+  const AC = { x: C.x - A.x, y: C.y - A.y };
+  const dot = AB.x * AC.x + AB.y * AC.y;
+  assert.ok(dot < 0, `Tích vô hướng AB . AC phải âm (${dot} < 0) để góc A > 90 độ`);
+});
+
+test('Tỉ số Ta-lét tính đúng theo trung điểm (0.5) hoặc phân số, không mặc định 0.45', () => {
+  // Test 1: Đề Ta-lét có trung điểm -> tỉ số phải là 0.5
+  const promptMid = 'Cho tam giác ABC. M là trung điểm AB, N là trung điểm AC. Đoạn thẳng MN song song BC theo định lý Ta-lét.';
+  const specMid = VietnameseGeometryParser.parse(promptMid);
+  const triMid = triangleFor(specMid);
+  assert.equal(triMid.thales?.ratio, 0.5, 'Tỉ số Ta-lét khi có trung điểm phải là 0.5, không dùng 0.45');
+
+  // Test 2: Đề Ta-lét có tỉ số 1/3
+  const specRatio: GeometrySpecification = {
+    title: 'Định lý Ta-lét trong tam giác ABC tỉ số 1/3',
+    shapeCategory: 'triangle',
+    triangle: { type: 'general', vertices: ['A', 'B', 'C'] },
+    parallels: [{ line1: 'MN', line2: 'BC' }],
+    detectedEntities: [],
+    explanation: 'MN song song BC với tỉ số 1/3',
+  };
+  const triRatio = triangleFor(specRatio);
+  assert.ok(Math.abs(triRatio.thales?.ratio! - 1 / 3) < 1e-4, 'Tỉ số Ta-lét khi đề cho 1/3 phải là 1/3');
+});
+
+test('Không biến kết luận cần chứng minh thành giả thiết', () => {
+  const prompt = 'Cho tam giác ABC nhọn có đường cao AH. M là trung điểm BC. Chứng minh rằng AM vuông góc với BC.';
+  const spec = VietnameseGeometryParser.parse(prompt);
+  const tri = triangleFor(spec);
+
+  // Kết luận "AM vuông góc BC" không được biến thành giả thiết góc vuông tại M
+  assert.ok(!tri.rightAngleMarkers?.some((r: any) => r.vertex === 'M'), 'Không được tạo ký hiệu góc vuông tại M từ câu chứng minh');
+  // Không biến AM thành đường cao
+  assert.equal(tri.altitudes?.length, 1, 'Chỉ có đường cao AH từ giả thiết');
+  assert.equal(tri.altitudes?.[0].label, 'H');
+});

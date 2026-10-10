@@ -39,6 +39,25 @@ function computePoint(point: CustomAuxPoint, points: Record<string, Point2D>, de
     return first && second ? lineIntersection(...first, ...second) : null;
   }
 
+  // Trực tâm (Giao điểm các đường cao)
+  if (point.type === 'orthocenter' || (point as any).type === 'ortho') {
+    const verts = (point as any).triangleVertices || ['A', 'B', 'C'];
+    const pA = resolvePointCoordinate(verts[0], points);
+    const pB = resolvePointCoordinate(verts[1], points);
+    const pC = resolvePointCoordinate(verts[2], points);
+    if (pA && pB && pC) {
+      // Đường cao từ A vuông góc BC: vector hướng perp(BC)
+      const vBC = { x: pC.x - pB.x, y: pC.y - pB.y };
+      const d1 = { x: -vBC.y, y: vBC.x };
+      const pA2 = { x: pA.x + d1.x, y: pA.y + d1.y };
+      // Đường cao từ B vuông góc AC: vector hướng perp(AC)
+      const vAC = { x: pC.x - pA.x, y: pC.y - pA.y };
+      const d2 = { x: -vAC.y, y: vAC.x };
+      const pB2 = { x: pB.x + d2.x, y: pB.y + d2.y };
+      return lineIntersection(pA, pA2, pB, pB2);
+    }
+  }
+
   if (point.type === 'free') {
     return typeof point.freeX === 'number' && typeof point.freeY === 'number'
       && Number.isFinite(point.freeX) && Number.isFinite(point.freeY)
@@ -51,6 +70,23 @@ function computePoint(point: CustomAuxPoint, points: Record<string, Point2D>, de
     if (!center || typeof radius !== 'number' || !Number.isFinite(radius) || radius <= 0) return null;
     const radians = point.angle * Math.PI / 180;
     return { x: center.x + radius * Math.cos(radians), y: center.y + radius * Math.sin(radians) };
+  }
+
+  // Điểm trên tiếp tuyến của đường tròn tại điểm fromPoint: vector tiếp tuyến vuông góc bán kính
+  if (point.type === 'tangent' || (point as any).type === 'tangent-point') {
+    const at = point.fromPoint && resolvePointCoordinate(point.fromPoint, points);
+    const center = resolvePointCoordinate(point.centerPoint || 'O', points);
+    if (at && center) {
+      const rx = at.x - center.x;
+      const ry = at.y - center.y;
+      const rLen = Math.hypot(rx, ry);
+      if (rLen > 1e-4) {
+        // Hướng tiếp tuyến vuông góc bán kính
+        const tanUnit = { x: -ry / rLen, y: rx / rLen };
+        const d = (point as any).length ?? 90;
+        return { x: at.x + tanUnit.x * d, y: at.y + tanUnit.y * d };
+      }
+    }
   }
   return null;
 }

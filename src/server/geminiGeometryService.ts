@@ -200,6 +200,49 @@ JSON trả về:
   "explanation": "Tam giác nhọn ABC với hai đường cao BD và CE cắt nhau tại trực tâm H, M là trung điểm cạnh đáy BC và đoạn thẳng DE nối hai chân đường cao."
 }
 
+Ví dụ 3 (Bài toán kết hợp Toán 9):
+Đề bài: "Cho tam giác ABC nhọn nội tiếp đường tròn (O), hai đường cao BD và CE cắt nhau tại H. Kẻ tiếp tuyến Ax của đường tròn (O)."
+JSON trả về:
+{
+  "title": "Tam giác ABC nhọn nội tiếp đường tròn (O), hai đường cao BD, CE cắt nhau tại H và tiếp tuyến Ax",
+  "shapeCategory": "triangle",
+  "triangle": {
+    "type": "general",
+    "vertices": ["A", "B", "C"],
+    "circumscribedCircle": true
+  },
+  "altitudes": [
+    { "from": "B", "toLine": "AC", "foot": "D", "showRightAngle": true, "style": "dashed" },
+    { "from": "C", "toLine": "AB", "foot": "E", "showRightAngle": true, "style": "dashed" }
+  ],
+  "medians": [],
+  "bisectors": [],
+  "perpBisectors": [],
+  "auxPoints": [
+    { "name": "H", "type": "intersection", "line1": "BD", "line2": "CE" },
+    { "name": "x", "type": "tangent", "fromPoint": "A", "centerPoint": "O" }
+  ],
+  "auxLines": [
+    { "from": "A", "to": "x", "style": "solid" }
+  ],
+  "rightAngles": [
+    { "vertex": "D", "ray1": "B", "ray2": "A" },
+    { "vertex": "E", "ray1": "C", "ray2": "A" },
+    { "vertex": "A", "ray1": "O", "ray2": "x" }
+  ],
+  "parallels": [],
+  "equalSegments": [],
+  "equalAngles": [],
+  "detectedEntities": [
+    "Tam giác ABC nhọn nội tiếp đường tròn (O)",
+    "Đường cao BD vuông góc AC tại D",
+    "Đường cao CE vuông góc AB tại E",
+    "Trực tâm H là giao điểm của BD và CE",
+    "Tiếp tuyến Ax của đường tròn (O) tại tiếp điểm A (Ax ⊥ OA)"
+  ],
+  "explanation": "Hình vẽ kết hợp chuẩn Toán 9: tam giác nhọn ABC nội tiếp đường tròn (O), hai đường cao BD và CE cắt nhau tại trực tâm H, tiếp tuyến Ax tại A vuông góc bán kính OA."
+}
+
 QUAN TRỌNG:
 - Không trả lời bất kỳ văn bản giải thích nào ngoài JSON.
 - Không tự bịa thêm dữ kiện hình học khi đề không có.
@@ -720,12 +763,31 @@ function validateAndNormalizeSpec(spec: GeometrySpecification, originalPrompt: s
   if (!Array.isArray(spec.equalAngles)) spec.equalAngles = [];
 
   // An toàn dự phòng: nếu đề bài hoặc detectedEntities có các phép dựng mà Gemini vô tình bỏ sót
-  const combinedText = `${originalPrompt} ${(spec.detectedEntities || []).join(' ')} ${(spec.explanation || '')}`;
+  // Loại bỏ các câu kết luận chứng minh để không biến kết luận thành giả thiết
+  const sanitizedPrompt = originalPrompt
+    .replace(/(?:chứng\s*minh\s*(?:rằng)?|cmr\s*:?|chứng\s*tỏ\s*(?:rằng)?)[^.?!;]*(?:[.?!;]|$)/gi, ' ')
+    .replace(/\b(?:tính|tìm)\s+(?:độ\s*dài|diện\s*tích|góc|số\s*đo)[^.?!;]*(?:[.?!;]|$)/gi, ' ');
+
+  const combinedText = `${sanitizedPrompt} ${(spec.detectedEntities || []).join(' ')} ${(spec.explanation || '')}`;
   const rawText = combinedText.toLowerCase();
 
   if (spec.shapeCategory === 'triangle' && spec.triangle) {
     const [vA, vB, vC] = spec.triangle.vertices || ['A', 'B', 'C'];
     const oppBC = `${vB}${vC}`;
+
+    // Tam giác tù
+    if (rawText.includes('tù')) {
+      spec.triangle.type = 'obtuse';
+    }
+
+    // Đường tròn ngoại tiếp (Bài toán kết hợp Toán 9)
+    if (
+      rawText.includes('nội tiếp đường tròn') ||
+      rawText.includes('đường tròn ngoại tiếp') ||
+      (rawText.includes('(o)') && !rawText.includes('nằm ngoài'))
+    ) {
+      spec.triangle.circumscribedCircle = true;
+    }
 
     // 1. Nhận diện đỉnh góc vuông nếu chưa có
     if (spec.triangle.type === 'right' || spec.triangle.type === 'right-isosceles') {
@@ -745,7 +807,36 @@ function validateAndNormalizeSpec(spec: GeometrySpecification, originalPrompt: s
       }
     }
 
-    // 2. Kiểm tra đường cao AH nếu Gemini chưa điền vào altitudes
+    // 2. Trực tâm H và hai đường cao
+    if (
+      rawText.includes('trực tâm h') ||
+      (rawText.includes('đường cao') && (rawText.includes('cắt nhau tại h') || rawText.includes('giao nhau tại h')))
+    ) {
+      if (spec.altitudes.length < 2 && rawText.includes('bd') && rawText.includes('ce')) {
+        if (!spec.altitudes.some(a => a.foot === 'D')) {
+          spec.altitudes.push({ from: vB, toLine: `${vA}${vC}`, foot: 'D', showRightAngle: true, style: 'dashed' });
+        }
+        if (!spec.altitudes.some(a => a.foot === 'E')) {
+          spec.altitudes.push({ from: vC, toLine: `${vA}${vB}`, foot: 'E', showRightAngle: true, style: 'dashed' });
+        }
+      }
+      if (!spec.auxPoints.some(p => p.name === 'H')) {
+        const alt1 = spec.altitudes[0];
+        const alt2 = spec.altitudes[1];
+        if (alt1 && alt2) {
+          spec.auxPoints.push({
+            name: 'H',
+            type: 'intersection',
+            line1: `${alt1.from}${alt1.foot}`,
+            line2: `${alt2.from}${alt2.foot}`,
+          });
+        } else {
+          spec.auxPoints.push({ name: 'H', type: 'orthocenter' });
+        }
+      }
+    }
+
+    // 3. Kiểm tra đường cao AH nếu Gemini chưa điền vào altitudes
     if (spec.altitudes.length === 0) {
       if (rawText.includes('đường cao ah') || (rawText.includes('ah') && (rawText.includes('vuông góc') || rawText.includes('chân đường cao')))) {
         spec.altitudes.push({
@@ -758,16 +849,51 @@ function validateAndNormalizeSpec(spec: GeometrySpecification, originalPrompt: s
       }
     }
 
-    // 3. Kiểm tra trung tuyến AM nếu Gemini chưa điền vào medians
-    if (spec.medians.length === 0) {
-      if (rawText.includes('trung tuyến am') || (rawText.includes('m là trung điểm') && (rawText.includes('am') || rawText.includes('nối am')))) {
-        spec.medians.push({
-          from: vA,
-          toSegment: oppBC,
-          midpoint: 'M',
-          showTicks: true,
-          style: 'dashed',
+    // 4. Kiểm tra trung tuyến AM: CHỈ thêm khi đề thực sự có "trung tuyến" hoặc "nối AM" / "kẻ AM"
+    const hasMedianCommand = rawText.includes('trung tuyến am') ||
+      (rawText.includes('m là trung điểm') && (rawText.includes('nối am') || rawText.includes('kẻ am')));
+    if (hasMedianCommand && spec.medians.length === 0) {
+      spec.medians.push({
+        from: vA,
+        toSegment: oppBC,
+        midpoint: 'M',
+        showTicks: true,
+        style: 'dashed',
+      });
+    }
+
+    // 5. Nếu đề chỉ có "M là trung điểm BC" mà không yêu cầu vẽ trung tuyến AM:
+    // Không thêm đường trung tuyến, chỉ tạo điểm M là trung điểm
+    const hasMidpointOnly = (rawText.includes('m là trung điểm') || rawText.includes('trung điểm m')) && !hasMedianCommand;
+    if (hasMidpointOnly && !spec.auxPoints.some(p => p.name === 'M') && !spec.medians.some(m => m.midpoint === 'M')) {
+      spec.auxPoints.push({
+        name: 'M',
+        type: 'midpoint',
+        segment: oppBC,
+      });
+      if (!spec.equalSegments.some(es => es.segments.includes(`${vB}M`))) {
+        spec.equalSegments.push({
+          segments: [`${vB}M`, `M${vC}`],
+          tickType: 1,
         });
+      }
+    }
+
+    // 6. Tiếp tuyến Ax của (O)
+    if (rawText.includes('tiếp tuyến ax') || (rawText.includes('tiếp tuyến') && rawText.includes('ax'))) {
+      if (!spec.auxPoints.some(p => p.name === 'x')) {
+        spec.auxPoints.push({
+          name: 'x',
+          type: 'tangent',
+          fromPoint: 'A',
+          centerPoint: 'O',
+        });
+      }
+      if (!spec.auxLines.some(l => (l.from === 'A' && l.to === 'x') || (l.from === 'x' && l.to === 'A'))) {
+        spec.auxLines.push({ from: 'A', to: 'x', style: 'solid' });
+      }
+      if (!spec.rightAngles.some(r => r.vertex === 'A' && ((r.ray1 === 'O' && r.ray2 === 'x') || (r.ray1 === 'x' && r.ray2 === 'O')))) {
+        spec.rightAngles.push({ vertex: 'A', ray1: 'O', ray2: 'x' });
       }
     }
   }
