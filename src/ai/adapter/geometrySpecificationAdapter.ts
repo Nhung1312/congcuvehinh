@@ -131,6 +131,99 @@ export class GeometrySpecificationAdapter {
   }
 
   /**
+   * Chuyển các phép dựng phụ của Gemini sang cấu trúc đã được SVG hỗ trợ.
+   * Không suy đoán tọa độ; các điểm được tính lại theo vị trí đỉnh lúc render.
+   */
+  private static buildAuxiliaryData(spec: GeometrySpecification) {
+    const namedSpecialPoints = new Set([
+      ...(spec.altitudes || []).map(item => item.foot),
+      ...(spec.medians || []).map(item => item.midpoint),
+      ...(spec.bisectors || []).map(item => item.foot),
+    ]);
+    const segmentKey = (from: string, to: string) => [from, to].sort().join(':');
+    const specialSegments = new Set([
+      ...(spec.altitudes || []).map(item => segmentKey(item.from, item.foot)),
+      ...(spec.medians || []).map(item => segmentKey(item.from, item.midpoint)),
+      ...(spec.bisectors || []).map(item => segmentKey(item.from, item.foot)),
+    ]);
+
+    // Đường cao/trung tuyến đã có renderer và ký hiệu riêng; không vẽ đè lần hai.
+    const auxPoints: NonNullable<TriangleData['auxPoints']> = (spec.auxPoints || [])
+      .filter(point => Boolean(point.name) && !namedSpecialPoints.has(point.name))
+      .map((point, index) => ({
+        ...point,
+        id: `ai-point-${index}`,
+        showPoint: true,
+        showLabel: true,
+      }));
+
+    // Một điểm hình chiếu D của H phải có cả đoạn HD ngay cả khi AI quên auxLines.
+    const projectionSegments = auxPoints
+      .filter(point => point.type === 'projection' && Boolean(point.fromPoint))
+      .map(point => ({ from: point.fromPoint!, to: point.name, style: 'solid' as const }));
+    const usedSegments = new Set(specialSegments);
+    const auxLines: NonNullable<TriangleData['auxLines']> = [];
+    for (const line of [...(spec.auxLines || []), ...projectionSegments]) {
+      if (!line.from || !line.to || line.from === line.to) continue;
+      const key = segmentKey(line.from, line.to);
+      if (usedSegments.has(key)) continue;
+      usedSegments.add(key);
+      auxLines.push({
+        id: `ai-line-${auxLines.length}`,
+        from: line.from,
+        to: line.to,
+        style: line.style || 'solid',
+        label: 'label' in line ? line.label : undefined,
+        enabled: true,
+      });
+    }
+
+    const rightAngleMarkers: NonNullable<TriangleData['rightAngleMarkers']> = [];
+    const markerKeys = new Set<string>();
+    const candidates = [
+      ...(spec.rightAngles || []),
+      ...auxPoints
+        .filter(point => point.type === 'projection' && point.fromPoint && point.targetLine)
+        .map(point => ({
+          vertex: point.name,
+          ray1: point.fromPoint!,
+          ray2: Array.isArray(point.targetLine) ? point.targetLine[0] : point.targetLine![0],
+        })),
+    ];
+    for (const marker of candidates) {
+      if (!marker.vertex || !marker.ray1 || !marker.ray2) continue;
+      const key = [marker.vertex, ...[marker.ray1, marker.ray2].sort()].join(':');
+      if (markerKeys.has(key)) continue;
+      markerKeys.add(key);
+      rightAngleMarkers.push({ id: `ai-right-${rightAngleMarkers.length}`, ...marker, enabled: true });
+    }
+
+    const equalSidesMarkers: NonNullable<TriangleData['equalSidesMarkers']> =
+      (spec.equalSegments || []).map((item, index) => ({
+        id: `ai-equal-${index}`,
+        segments: item.segments,
+        tickType: item.tickType || 1,
+        enabled: true,
+      }));
+    const equalAnglesMarkers: NonNullable<TriangleData['equalAnglesMarkers']> =
+      (spec.equalAngles || []).map((item, index) => ({
+        id: `ai-angle-${index}`,
+        angles: item.angles,
+        enabled: true,
+      }));
+    const parallelMarkers: NonNullable<TriangleData['parallelMarkers']> =
+      (spec.parallels || []).map((item, index) => ({
+        id: `ai-parallel-${index}`,
+        segment1: item.line1,
+        segment2: item.line2,
+        arrowCount: item.arrowCount || 1,
+        enabled: true,
+      }));
+
+    return { auxPoints, auxLines, rightAngleMarkers, equalSidesMarkers, equalAnglesMarkers, parallelMarkers };
+  }
+
+  /**
    * Tạo dữ liệu TriangleData từ spec
    */
   private static buildTriangleData(spec: GeometrySpecification): TriangleData {
@@ -140,41 +233,62 @@ export class GeometrySpecificationAdapter {
     };
 
     const triType = triSpec.type || 'general';
+    const specialRole = triSpec.specialVertex
+      ? triSpec.vertices.indexOf(triSpec.specialVertex)
+      : 0;
     let points: [Point2D, Point2D, Point2D] = [
-      { x: 260, y: 110 },
+      { x: 215, y: 110 },
       { x: 130, y: 340 },
       { x: 430, y: 340 },
     ];
 
-    if (triType === 'right') {
-      points = [
-        { x: 170, y: 120 },
-        { x: 170, y: 340 },
-        { x: 440, y: 340 },
-      ];
-    } else if (triType === 'right-isosceles') {
-      points = [
-        { x: 180, y: 130 },
-        { x: 180, y: 340 },
-        { x: 390, y: 340 },
-      ];
+    if (triType === 'right' || triType === 'right-isosceles') {
+      const leg = triType === 'right-isosceles' ? 210 : 270;
+      // Đảm bảo góc vuông nằm đúng tại specialVertex, không mặc định B.
+      if (specialRole === 0) {
+        points = [
+          { x: 170, y: 340 },
+          { x: 170, y: 340 - leg },
+          { x: 170 + leg, y: 340 },
+        ];
+      } else if (specialRole === 2) {
+        points = [
+          { x: 170, y: 340 },
+          { x: 170 + leg, y: 340 },
+          { x: 170 + leg, y: 340 - leg },
+        ];
+      } else {
+        points = [
+          { x: 170, y: 340 - leg },
+          { x: 170, y: 340 },
+          { x: 170 + leg, y: 340 },
+        ];
+      }
     } else if (triType === 'equilateral') {
+      const side = 280;
+      const height = side * Math.sqrt(3) / 2;
       points = [
-        { x: 300, y: 115 },
-        { x: 155, y: 345 },
-        { x: 445, y: 345 },
+        { x: 300, y: 110 },
+        { x: 160, y: 110 + height },
+        { x: 440, y: 110 + height },
       ];
     } else if (triType === 'isosceles') {
-      points = [
-        { x: 285, y: 110 },
-        { x: 145, y: 340 },
-        { x: 425, y: 340 },
-      ];
+      const top = { x: 285, y: 110 };
+      const left = { x: 145, y: 340 };
+      const right = { x: 425, y: 340 };
+      points = specialRole === 1 ? [left, top, right]
+        : specialRole === 2 ? [left, right, top]
+        : [top, left, right];
     }
+
+    const roleOf = (name: string): 'A' | 'B' | 'C' => {
+      const index = triSpec.vertices.indexOf(name);
+      return index === 1 ? 'B' : index === 2 ? 'C' : 'A';
+    };
 
     // Altitudes
     const altitudes = (spec.altitudes || []).map((alt) => ({
-      fromVertex: (alt.from as 'A' | 'B' | 'C') || 'A',
+      fromVertex: roleOf(alt.from),
       enabled: true,
       label: alt.foot || 'H',
       style: (alt.style || 'dashed') as any,
@@ -183,7 +297,7 @@ export class GeometrySpecificationAdapter {
 
     // Medians
     const medians = (spec.medians || []).map((med) => ({
-      fromVertex: (med.from as 'A' | 'B' | 'C') || 'A',
+      fromVertex: roleOf(med.from),
       enabled: true,
       label: med.midpoint || 'M',
       style: (med.style || 'dashed') as any,
@@ -192,7 +306,7 @@ export class GeometrySpecificationAdapter {
 
     // Bisectors
     const bisectors = (spec.bisectors || []).map((bis) => ({
-      fromVertex: (bis.from as 'A' | 'B' | 'C') || 'A',
+      fromVertex: roleOf(bis.from),
       enabled: true,
       label: bis.foot || 'D',
       style: (bis.style || 'solid') as any,
@@ -200,14 +314,21 @@ export class GeometrySpecificationAdapter {
     }));
 
     // Perpendicular Bisectors
-    const perpBisectors = (spec.perpBisectors || []).map(() => ({
-      side: 'BC' as const,
-      enabled: true,
-      label: 'd',
-      style: 'dashed' as const,
-      showRightAngle: true,
-      showEqualMarks: true,
-    }));
+    const perpBisectors: NonNullable<TriangleData['perpBisectors']> = (spec.perpBisectors || [])
+      .map(item => {
+        const names = Array.isArray(item.segment) ? item.segment.join('') : item.segment;
+        const sorted = names.split('').sort().join('');
+        const side: 'AB' | 'AC' | 'BC' | null = sorted === 'AB' ? 'AB' : sorted === 'AC' ? 'AC' : sorted === 'BC' ? 'BC' : null;
+        return side ? {
+          side,
+          enabled: true,
+          label: item.label || 'd',
+          style: 'dashed' as const,
+          showRightAngle: item.showRightAngle !== false,
+          showTickMarks: item.showTicks !== false,
+        } : null;
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
 
     const vA = triSpec.vertices?.[0] || 'A';
     const vB = triSpec.vertices?.[1] || 'B';
@@ -232,6 +353,7 @@ export class GeometrySpecificationAdapter {
     );
 
     return {
+      ...this.buildAuxiliaryData(spec),
       type: triType,
       vertexNames: triSpec.vertices,
       points,
@@ -280,6 +402,7 @@ export class GeometrySpecificationAdapter {
     const showCircumcircle = Boolean(quadSpec.showCircumcircle) || quadType === 'cyclic';
 
     return {
+      ...this.buildAuxiliaryData(spec),
       type: quadType,
       vertexNames: quadSpec.vertices,
       points,
@@ -313,6 +436,7 @@ export class GeometrySpecificationAdapter {
     const radius = 110;
 
     return {
+      ...this.buildAuxiliaryData(spec),
       presetType,
       points,
       radius,
@@ -365,6 +489,7 @@ export class GeometrySpecificationAdapter {
     const points = getLineRayPresetPoints(lineType);
 
     return {
+      ...this.buildAuxiliaryData(spec),
       type: lineType,
       pointNames: lineSpec.pointNames,
       points,
@@ -405,6 +530,7 @@ export class GeometrySpecificationAdapter {
     const points = getAnglePresetPoints(angleType);
 
     return {
+      ...this.buildAuxiliaryData(spec),
       type: angleType,
       points,
       vertexName: angleSpec.vertex || 'O',
@@ -458,6 +584,7 @@ export class GeometrySpecificationAdapter {
     );
 
     return {
+      ...this.buildAuxiliaryData(spec),
       type: polyType,
       sidesCount,
       center,
@@ -497,6 +624,7 @@ export class GeometrySpecificationAdapter {
     const presets = getSymmetryPresetPoints(symType, shape);
 
     return {
+      ...this.buildAuxiliaryData(spec),
       type: symType,
       targetShape: shape,
       axisLabel: symSpec.axisLabel || 'd',
