@@ -19,6 +19,7 @@ import {
   CustomEqualAnglesMarker,
 } from '../types';
 import { resolveAuxiliaryPoints } from '../utils/resolveAuxiliaryPoints';
+import { getGeometrySceneBoundingBox } from '../utils/geometrySceneBounds';
 import { SvgPatternDefs } from './patterns/SvgPatterns';
 import { SGK_STYLE, getMathFontFamily } from '../constants/style';
 import {
@@ -117,6 +118,16 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
   const strokeWidth = settings.strokeWidth || SGK_STYLE.strokeWidth.main;
   const fontSize = settings.fontSize || SGK_STYLE.fontSize.label;
 
+  // Tính toán Bounding Box và ViewBox SVG toàn cảnh (tự động mở rộng khi có điểm ngoài như T)
+  const sceneBounds = getGeometrySceneBoundingBox(data, width, height, 40);
+  const vbMinX = sceneBounds.minX < 0 ? sceneBounds.minX : 0;
+  const vbMinY = sceneBounds.minY < 0 ? sceneBounds.minY : 0;
+  const vbMaxX = sceneBounds.maxX > width ? sceneBounds.maxX : width;
+  const vbMaxY = sceneBounds.maxY > height ? sceneBounds.maxY : height;
+  const vbWidth = vbMaxX - vbMinX;
+  const vbHeight = vbMaxY - vbMinY;
+  const svgViewBox = `${vbMinX} ${vbMinY} ${vbWidth} ${vbHeight}`;
+
   // State cho việc kéo điểm trực tiếp trên SVG
   const [draggingVertex, setDraggingVertex] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -201,15 +212,15 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     if (draggingVertex === null || !svgRef.current) return;
 
     const svgRect = svgRef.current.getBoundingClientRect();
-    const scaleX = width / svgRect.width;
-    const scaleY = height / svgRect.height;
+    const scaleX = vbWidth / svgRect.width;
+    const scaleY = vbHeight / svgRect.height;
 
-    let newX = Math.round((e.clientX - svgRect.left) * scaleX);
-    let newY = Math.round((e.clientY - svgRect.top) * scaleY);
+    let newX = Math.round(vbMinX + (e.clientX - svgRect.left) * scaleX);
+    let newY = Math.round(vbMinY + (e.clientY - svgRect.top) * scaleY);
 
-    // Giới hạn trong khung vẽ
-    newX = Math.max(30, Math.min(width - 30, newX));
-    newY = Math.max(35, Math.min(height - 30, newY));
+    // Giới hạn trong khung vẽ mở rộng
+    newX = Math.max(vbMinX + 30, Math.min(vbMaxX - 30, newX));
+    newY = Math.max(vbMinY + 35, Math.min(vbMaxY - 30, newY));
 
     if (subType === 'triangle') {
       if (draggingVertex === 10) {
@@ -353,6 +364,14 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     // Giải chuỗi H → D/E dù điểm phụ được trả về không đúng thứ tự.
     const pointsMap = resolveAuxiliaryPoints(namedPoints, auxPoints, circle?.radius);
 
+    // Kiểm tra xem có giao điểm thực tế nào trên tiếp tuyến không (ẩn hoàn toàn x nếu đã có T)
+    const hasTangentInt = auxPoints.some(
+      (o) =>
+        o.type === 'intersection' &&
+        ((typeof o.line1 === 'string' && o.line1.includes('x')) ||
+          (typeof o.line2 === 'string' && o.line2.includes('x')))
+    );
+
     return (
       <g id="auxiliary-elements-layer">
         {/* 1. Ký hiệu góc bằng nhau (Equal Angle Arcs) */}
@@ -383,7 +402,9 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
         ))}
 
         {/* 2. Đoạn nối / Đường phụ tùy ý (Auxiliary Lines) */}
-        {auxLines.filter((l) => l.enabled !== false).map((line, idx) => {
+        {auxLines
+          .filter((l) => l.enabled !== false && !(hasTangentInt && (l.from === 'x' || l.to === 'x')))
+          .map((line, idx) => {
           const pStart = resolvePointCoordinate(line.from, pointsMap);
           const pEnd = resolvePointCoordinate(line.to, pointsMap);
           if (!pStart || !pEnd) return null;
@@ -527,7 +548,12 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
         ))}
 
         {/* 6. Điểm phụ và Nhãn điểm phụ (Auxiliary Points & Labels) */}
-        {auxPoints.filter((p) => p.showPoint !== false || p.showLabel !== false).map((p, idx) => {
+        {auxPoints
+          .filter((p) => {
+            if (hasTangentInt && (p.name === 'x' || p.type === 'tangent')) return false;
+            return p.showPoint !== false || p.showLabel !== false;
+          })
+          .map((p, idx) => {
           const pt = pointsMap[p.name];
           if (!pt) return null;
           const color = p.color || strokeColor;
@@ -5020,7 +5046,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
       ref={svgRef}
       id="svg-math-canvas"
       xmlns="http://www.w3.org/2000/svg"
-      viewBox={`0 0 ${width} ${height}`}
+      viewBox={svgViewBox}
       width={width}
       height={height}
       onPointerMove={handlePointerMove}
@@ -5034,12 +5060,12 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     >
       <SvgPatternDefs />
 
-      <rect width={width} height={height} fill={settings.backgroundColor || '#ffffff'} />
+      <rect x={vbMinX} y={vbMinY} width={vbWidth} height={vbHeight} fill={settings.backgroundColor || '#ffffff'} />
 
       {showTitle && (
         <text
-          x={width / 2}
-          y={SGK_STYLE.margin.titleY}
+          x={vbMinX + vbWidth / 2}
+          y={vbMinY + SGK_STYLE.margin.titleY}
           textAnchor="middle"
           fontSize={settings.fontSize ? settings.fontSize + 2 : SGK_STYLE.fontSize.title}
           fontWeight="bold"

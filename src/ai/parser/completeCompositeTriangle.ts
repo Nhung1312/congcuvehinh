@@ -63,22 +63,53 @@ export function completeCompositeTriangle(spec: GeometrySpecification, text: str
       (l.from === from && l.to === to) || (l.from === to && l.to === from))) return;
     spec.auxLines!.push({ from, to, style: 'solid' });
   };
-  const cut = raw.match(/tiếp\s+tuyến[^.!?;]{0,180}?\bcắt\s+(?:đường\s+thẳng\s+)?([A-Z]{2})\s+tại\s+([A-Z])\b/i);
+  const cut = raw.match(/(?:tiếp\s+tuyến|đường\s+thẳng)[^.!?;]{0,180}?\bcắt\s+(?:đường\s+thẳng\s+|tia\s+|cạnh\s+)?([A-Z]{2})\s+tại\s+(?:điểm\s+)?([A-Z])\b/i);
   const line = cut?.[1]?.toUpperCase(), hit = cut?.[2]?.toUpperCase();
   if (line && hit && line.length === 2 && !vertices.includes(hit)) {
-    const point: GeometricAuxPointSpec = { name: hit, type: 'intersection', line1: at + helper, line2: line };
+    const point: GeometricAuxPointSpec = {
+      name: hit,
+      type: 'intersection',
+      line1: at + helper,
+      line2: line,
+      showPoint: true,
+      showLabel: true,
+    };
     const i = spec.auxPoints.findIndex(p => p.name === hit);
     if (i < 0) spec.auxPoints.push(point);
-    else spec.auxPoints[i] = point;
+    else spec.auxPoints[i] = { ...spec.auxPoints[i], ...point };
+
     addLine(at, hit);
-    addLine(line[0], hit); // include the extension to T, not only segment BC
+    addLine(line[0], hit); // vẽ phần kéo dài cần thiết từ B/C đến T
+
+    // Khi đã có giao điểm thật T, ẩn hoàn toàn điểm phụ hướng x trên SVG
+    dir.showPoint = false;
+    dir.showLabel = false;
+    const hIdx = spec.auxPoints.findIndex(p => p.name === helper);
+    if (hIdx >= 0) {
+      spec.auxPoints[hIdx].showPoint = false;
+      spec.auxPoints[hIdx].showLabel = false;
+    }
+
+    // Xóa bỏ mọi đoạn nối tới điểm phụ x
     spec.auxLines = spec.auxLines.filter(l => !(
-      (l.from === at && l.to === helper) || (l.from === helper && l.to === at)
+      (l.from === at && l.to === helper) || (l.from === helper && l.to === at) ||
+      l.from === helper || l.to === helper
     ));
-  } else addLine(at, helper);
+
+    // Cập nhật ký hiệu góc vuông tại tiếp điểm A hướng về giao điểm T
+    const ra = spec.rightAngles.find(r => r.vertex === at && (r.ray1 === helper || r.ray2 === helper));
+    if (ra) {
+      if (ra.ray1 === helper) ra.ray1 = hit;
+      if (ra.ray2 === helper) ra.ray2 = hit;
+    }
+  } else {
+    addLine(at, helper);
+  }
+
+  const targetRay = hit || helper;
   if (!spec.rightAngles.some(r => r.vertex === at &&
-      ((r.ray1 === 'O' && r.ray2 === helper) || (r.ray2 === 'O' && r.ray1 === helper)))) {
-    spec.rightAngles.push({ vertex: at, ray1: 'O', ray2: helper });
+      ((r.ray1 === 'O' && r.ray2 === targetRay) || (r.ray2 === 'O' && r.ray1 === targetRay)))) {
+    spec.rightAngles.push({ vertex: at, ray1: 'O', ray2: targetRay });
   }
   return spec;
 }
