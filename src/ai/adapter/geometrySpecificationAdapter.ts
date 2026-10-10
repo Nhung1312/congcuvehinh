@@ -233,41 +233,62 @@ export class GeometrySpecificationAdapter {
     };
 
     const triType = triSpec.type || 'general';
+    const specialRole = triSpec.specialVertex
+      ? triSpec.vertices.indexOf(triSpec.specialVertex)
+      : 0;
     let points: [Point2D, Point2D, Point2D] = [
-      { x: 260, y: 110 },
+      { x: 215, y: 110 },
       { x: 130, y: 340 },
       { x: 430, y: 340 },
     ];
 
-    if (triType === 'right') {
-      points = [
-        { x: 170, y: 120 },
-        { x: 170, y: 340 },
-        { x: 440, y: 340 },
-      ];
-    } else if (triType === 'right-isosceles') {
-      points = [
-        { x: 180, y: 130 },
-        { x: 180, y: 340 },
-        { x: 390, y: 340 },
-      ];
+    if (triType === 'right' || triType === 'right-isosceles') {
+      const leg = triType === 'right-isosceles' ? 210 : 270;
+      // Đảm bảo góc vuông nằm đúng tại specialVertex, không mặc định B.
+      if (specialRole === 0) {
+        points = [
+          { x: 170, y: 340 },
+          { x: 170, y: 340 - leg },
+          { x: 170 + leg, y: 340 },
+        ];
+      } else if (specialRole === 2) {
+        points = [
+          { x: 170, y: 340 },
+          { x: 170 + leg, y: 340 },
+          { x: 170 + leg, y: 340 - leg },
+        ];
+      } else {
+        points = [
+          { x: 170, y: 340 - leg },
+          { x: 170, y: 340 },
+          { x: 170 + leg, y: 340 },
+        ];
+      }
     } else if (triType === 'equilateral') {
+      const side = 280;
+      const height = side * Math.sqrt(3) / 2;
       points = [
-        { x: 300, y: 115 },
-        { x: 155, y: 345 },
-        { x: 445, y: 345 },
+        { x: 300, y: 110 },
+        { x: 160, y: 110 + height },
+        { x: 440, y: 110 + height },
       ];
     } else if (triType === 'isosceles') {
-      points = [
-        { x: 285, y: 110 },
-        { x: 145, y: 340 },
-        { x: 425, y: 340 },
-      ];
+      const top = { x: 285, y: 110 };
+      const left = { x: 145, y: 340 };
+      const right = { x: 425, y: 340 };
+      points = specialRole === 1 ? [left, top, right]
+        : specialRole === 2 ? [left, right, top]
+        : [top, left, right];
     }
+
+    const roleOf = (name: string): 'A' | 'B' | 'C' => {
+      const index = triSpec.vertices.indexOf(name);
+      return index === 1 ? 'B' : index === 2 ? 'C' : 'A';
+    };
 
     // Altitudes
     const altitudes = (spec.altitudes || []).map((alt) => ({
-      fromVertex: (alt.from as 'A' | 'B' | 'C') || 'A',
+      fromVertex: roleOf(alt.from),
       enabled: true,
       label: alt.foot || 'H',
       style: (alt.style || 'dashed') as any,
@@ -276,7 +297,7 @@ export class GeometrySpecificationAdapter {
 
     // Medians
     const medians = (spec.medians || []).map((med) => ({
-      fromVertex: (med.from as 'A' | 'B' | 'C') || 'A',
+      fromVertex: roleOf(med.from),
       enabled: true,
       label: med.midpoint || 'M',
       style: (med.style || 'dashed') as any,
@@ -285,7 +306,7 @@ export class GeometrySpecificationAdapter {
 
     // Bisectors
     const bisectors = (spec.bisectors || []).map((bis) => ({
-      fromVertex: (bis.from as 'A' | 'B' | 'C') || 'A',
+      fromVertex: roleOf(bis.from),
       enabled: true,
       label: bis.foot || 'D',
       style: (bis.style || 'solid') as any,
