@@ -13,6 +13,9 @@ import {
   midpoint,
   projectPointToLine,
   angleBisectorPoint,
+  computeReflectedPoints,
+  getSymmetryPresetPoints,
+  extendLine,
 } from './geometryMath';
 import { resolveAuxiliaryPoints } from './resolveAuxiliaryPoints';
 
@@ -236,9 +239,36 @@ export function getGeometrySceneBoundingBox(
   } else if (subType === 'polygon') {
     const p = data.polygon || {};
     if (p.points && Array.isArray(p.points)) points.push(...p.points);
+  } else if (subType === 'symmetry') {
+    const sym = data.symmetry || {};
+    const type = sym.type || 'axial';
+    const shape = sym.targetShape || 'triangle';
+    const defaults = getSymmetryPresetPoints(type, shape);
+    const original: Point2D[] = sym.originalPoints?.length ? sym.originalPoints : defaults.originalPoints;
+    const axis: [Point2D, Point2D] = sym.axisPoints?.length === 2 ? sym.axisPoints
+      : [{ x: canvasWidth / 2, y: 50 }, { x: canvasWidth / 2, y: canvasHeight - 50 }];
+    const center: Point2D = sym.centerPoint || { x: canvasWidth / 2, y: canvasHeight / 2 };
+    const reflected = computeReflectedPoints(type, original, axis, center);
+    points.push(...original, ...reflected);
+    if (type === 'axial') {
+      const extended = extendLine(axis[0], axis[1], 80, 80);
+      points.push(extended.start, extended.end);
+    } else {
+      points.push(center);
+    }
+    if (shape === 'circle' && original[0] && reflected[0]) {
+      const radius = sym.circleRadius || (original[1] ? Math.hypot(
+        original[1].x - original[0].x, original[1].y - original[0].y
+      ) : 60);
+      if (Number.isFinite(radius) && radius > 0) {
+        for (const c of [original[0], reflected[0]]) {
+          points.push({ x: c.x - radius, y: c.y - radius }, { x: c.x + radius, y: c.y + radius });
+        }
+      }
+    }
   }
 
-  const bbox = calculatePointsBoundingBox(points, padding);
+  const bbox = calculatePointsBoundingBox(points.filter(p => Number.isFinite(p.x) && Number.isFinite(p.y)), padding);
   const expanded = getExpandedSvgViewBox(bbox, canvasWidth, canvasHeight);
 
   return {
@@ -249,7 +279,13 @@ export function getGeometrySceneBoundingBox(
 }
 
 
-/** Expand the scene to the physical SVG aspect ratio without stretching angles or circles. */
+/**
+ * Fit the actual geometry rather than always including the original blank canvas.
+ * Pure viewBox computation: never moves geometry or alters angles/distances.
+ * A minimum viewBox size prevents huge zoom on a tiny/degenerate diagram.
+ * The rendered SVG bounds (including rays/labels/markers) may override analytical
+ * scene bounds once the browser has measured the geometry group.
+ */
 export function aspectFitSceneViewBox(
   bounds: Pick<SceneBoundingBoxResult, 'minX' | 'maxX' | 'minY' | 'maxY'>,
   canvasWidth: number,
@@ -257,19 +293,23 @@ export function aspectFitSceneViewBox(
 ): { minX: number; minY: number; width: number; height: number } {
   const width = Math.max(1, canvasWidth);
   const height = Math.max(1, canvasHeight);
-  const minX = Math.min(0, bounds.minX), maxX = Math.max(width, bounds.maxX);
-  const minY = Math.min(0, bounds.minY), maxY = Math.max(height, bounds.maxY);
-  let outW = maxX - minX, outH = maxY - minY;
-  let x = minX, y = minY;
-  const aspect = width / height;
-  if (outW / outH < aspect) {
-    const margin = (outH * aspect - outW) / 2;
-    x -= margin;
-    outW += 2 * margin;
-  } else {
-    const margin = (outW / aspect - outH) / 2;
-    y -= margin;
-    outH += 2 * margin;
+  const { minX, maxX, minY, maxY } = bounds;
+  if (![minX, maxX, minY, maxY].every(Number.isFinite) || maxX <= minX || maxY <= minY) {
+    return { minX: 0, minY: 0, width, height };
   }
-  return { minX: x, minY: y, width: outW, height: outH };
+  const sceneWidth = maxX - minX;
+  const sceneHeight = maxY - minY;
+  // Relative breathing room, with a minimum for text labels and arrowheads.
+  const padding = Math.max(22, Math.min(64, Math.max(sceneWidth, sceneHeight) * 0.055));
+  const requiredW = Math.max(width * 0.64, sceneWidth + padding * 2);
+  const requiredH = Math.max(height * 0.64, sceneHeight + padding * 2);
+  const aspect = width / height;
+  const outW = Math.max(requiredW, requiredH * aspect);
+  const outH = outW / aspect;
+  return {
+    minX: (minX + maxX - outW) / 2,
+    minY: (minY + maxY - outH) / 2,
+    width: outW,
+    height: outH,
+  };
 }
