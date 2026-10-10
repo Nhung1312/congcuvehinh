@@ -744,9 +744,14 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     const lStyleC = t.labelStyles?.C || {};
 
     // Vị trí nhãn đỉnh thông minh
-    const labelA = getSmartVertexLabelPosition(pA, pB, pC, 20);
-    const labelB = getSmartVertexLabelPosition(pB, pC, pA, 20);
-    const labelC = getSmartVertexLabelPosition(pC, pA, pB, 20);
+    const triangleLabelLayout = layoutGeometryPointLabels(
+      [{ name: nameA, point: pA }, { name: nameB, point: pB }, { name: nameC, point: pC }],
+      [{ start: pA, end: pB }, { start: pB, end: pC }, { start: pC, end: pA }],
+      [pA, pB, pC], fontSize
+    );
+    const labelA = triangleLabelLayout[nameA];
+    const labelB = triangleLabelLayout[nameB];
+    const labelC = triangleLabelLayout[nameC];
 
     // ==========================================
     // 1. ĐƯỜNG CAO (Altitudes)
@@ -1733,10 +1738,17 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     const lStyleD = q.labelStyles?.D || {};
 
     // Vị trí nhãn đỉnh thông minh (hướng ra ngoài tứ giác)
-    const labelA = getSmartVertexLabelPosition(pA, pD, pB, 20);
-    const labelB = getSmartVertexLabelPosition(pB, pA, pC, 20);
-    const labelC = getSmartVertexLabelPosition(pC, pB, pD, 20);
-    const labelD = getSmartVertexLabelPosition(pD, pC, pA, 20);
+    const quadLabelLayout = layoutGeometryPointLabels(
+      [{ name: nameA, point: pA }, { name: nameB, point: pB },
+       { name: nameC, point: pC }, { name: nameD, point: pD }],
+      [{ start: pA, end: pB }, { start: pB, end: pC },
+       { start: pC, end: pD }, { start: pD, end: pA }],
+      [pA, pB, pC, pD], fontSize
+    );
+    const labelA = quadLabelLayout[nameA];
+    const labelB = quadLabelLayout[nameB];
+    const labelC = quadLabelLayout[nameC];
+    const labelD = quadLabelLayout[nameD];
 
     // ==========================================
     // 1. TÔ MIỀN TỨ GIÁC (Fill)
@@ -4481,6 +4493,13 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     const pDash = getDashArray(polygon?.strokeStyle);
 
     const pointsString = points.map((p) => `${p.x},${p.y}`).join(' ');
+    const polygonLabelLayout = layoutGeometryPointLabels(
+      [{ name: centerName, point: center }, ...points.map((point, i) => ({
+        name: vertexNames[i] || `A_{${i + 1}}`, point,
+      }))],
+      points.map((point, i) => ({ start: point, end: points[(i + 1) % points.length] })),
+      [...points, center], fontSize
+    );
 
     // 1. Đường tròn ngoại tiếp (Circumcircle)
     let circumcircleSvg: React.ReactNode = null;
@@ -4763,8 +4782,10 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
             <circle cx={center.x} cy={center.y} r={3.5} fill={pStroke} />
             {showLabels && (
               <text
-                x={center.x + 8}
-                y={center.y - 8}
+                x={polygonLabelLayout[centerName]?.x ?? center.x + 8}
+                y={polygonLabelLayout[centerName]?.y ?? center.y - 8}
+                textAnchor={polygonLabelLayout[centerName]?.textAnchor}
+                dominantBaseline={polygonLabelLayout[centerName]?.dominantBaseline}
                 fontSize={fontSize}
                 fontStyle="italic"
                 fontWeight="bold"
@@ -4782,7 +4803,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
           <g id="polygon-vertices">
             {points.map((p, i) => {
               const vName = vertexNames[i] || `A_{${i + 1}}`;
-              const labelPos = getSmartVertexLabelPosition(p, center, points[(i + 1) % points.length], 18);
+              const labelPos = polygonLabelLayout[vName] || getSmartVertexLabelPosition(p, center, points[(i + 1) % points.length], 18);
               return (
                 <g key={`poly-v-${i}`} className="cursor-grab active:cursor-grabbing">
                   {/* Vùng cảm ứng kéo đỉnh */}
@@ -5076,6 +5097,22 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
       namedSymPoints[reflNames[idx] || `A'${idx + 1}`] = p;
     });
 
+    const symmetrySegments = [
+      ...origPoints.map((point, i) => ({
+        start: point, end: origPoints[(i + 1) % origPoints.length],
+      })),
+      ...reflPoints.map((point, i) => ({
+        start: point, end: reflPoints[(i + 1) % reflPoints.length],
+      })),
+      ...origPoints.flatMap((point, i) => reflPoints[i] ? [{ start: point, end: reflPoints[i] }] : []),
+    ];
+    const symmetryLabelLayout = layoutGeometryPointLabels(
+      [...origPoints.map((point, i) => ({ name: origNames[i] || `A${i + 1}`, point })),
+       ...reflPoints.map((point, i) => ({ name: reflNames[i] || `A'${i + 1}`, point })),
+       { name: centerName, point: centerPoint }],
+      symmetrySegments, [...origPoints, ...reflPoints, centerPoint], fontSize
+    );
+
     return (
       <g id="symmetry-group">
         {/* Đường nối và ký hiệu vuông góc/bằng nhau */}
@@ -5111,8 +5148,10 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
                 <circle cx={p.x} cy={p.y} r={draggingVertex === idx ? 4.5 : 3} fill={origColor} />
                 {showOrigLabels && (
                   <text
-                    x={p.x - 10}
-                    y={p.y - 10}
+                    x={symmetryLabelLayout[name]?.x ?? p.x - 10}
+                    y={symmetryLabelLayout[name]?.y ?? p.y - 10}
+                    textAnchor={symmetryLabelLayout[name]?.textAnchor}
+                    dominantBaseline={symmetryLabelLayout[name]?.dominantBaseline}
                     fontSize={fontSize}
                     fontStyle="italic"
                     fontWeight="bold"
@@ -5136,8 +5175,10 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
                 <circle cx={p.x} cy={p.y} r={3} fill={reflColor} />
                 {showReflLabels && (
                   <text
-                    x={p.x + 10}
-                    y={p.y - 10}
+                    x={symmetryLabelLayout[name]?.x ?? p.x + 10}
+                    y={symmetryLabelLayout[name]?.y ?? p.y - 10}
+                    textAnchor={symmetryLabelLayout[name]?.textAnchor}
+                    dominantBaseline={symmetryLabelLayout[name]?.dominantBaseline}
                     fontSize={fontSize}
                     fontStyle="italic"
                     fontWeight="bold"
