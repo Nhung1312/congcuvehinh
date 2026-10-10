@@ -2,7 +2,7 @@
  * geometrySpecificationAdapter.ts
  * Chuyển đổi GeometrySpecification (lớp dữ liệu trung gian từ AI) sang ChartDocument của Geometry Engine hiện tại
  */
-import { GeometrySpecification } from '../types';
+import { GeometrySpecification, GeometricAuxPointSpec } from '../types';
 import {
   ChartDocument,
   Point2D,
@@ -151,20 +151,47 @@ export class GeometrySpecificationAdapter {
 
     // Đường cao/trung tuyến/đỉnh tam giác đã có renderer và ký hiệu riêng; không vẽ đè lần hai.
     const seenPointNames = new Set<string>();
+    const hasTangentIntersection = (pointName: string) =>
+      (spec.auxPoints || []).some(
+        p =>
+          p.type === 'intersection' &&
+          ((typeof p.line1 === 'string' && p.line1.includes(pointName)) ||
+            (typeof p.line2 === 'string' && p.line2.includes(pointName)))
+      );
+
+    const isHelperHidden = (point: GeometricAuxPointSpec) => {
+      if (point.showPoint === false && point.showLabel === false) return true;
+      if (point.name === 'x' || point.type === 'tangent') {
+        if (
+          hasTangentIntersection(point.name) ||
+          (spec.auxPoints || []).some(
+            p =>
+              p.type === 'intersection' &&
+              ((typeof p.line1 === 'string' && p.line1.includes('x')) ||
+                (typeof p.line2 === 'string' && p.line2.includes('x')))
+          )
+        ) {
+          return true;
+        }
+      }
+      return false;
+    };
+
     const auxPoints: NonNullable<TriangleData['auxPoints']> = (spec.auxPoints || [])
       .filter(point => {
         if (!point.name || namedSpecialPoints.has(point.name) || seenPointNames.has(point.name)) return false;
         seenPointNames.add(point.name);
         return true;
       })
-      .map((point, index) => ({
-        ...point,
-        id: `ai-point-${index}`,
-        showPoint: !(point.type === 'tangent' && (spec.auxPoints || []).some(p => p.type === 'intersection' &&
-          typeof p.line1 === 'string' && p.line1.includes(point.name))),
-        showLabel: !(point.type === 'tangent' && (spec.auxPoints || []).some(p => p.type === 'intersection' &&
-          typeof p.line1 === 'string' && p.line1.includes(point.name))),
-      }));
+      .map((point, index) => {
+        const hidden = isHelperHidden(point);
+        return {
+          ...point,
+          id: `ai-point-${index}`,
+          showPoint: hidden || point.showPoint === false ? false : true,
+          showLabel: hidden || point.showLabel === false ? false : true,
+        };
+      });
 
     // Một điểm hình chiếu D của H phải có cả đoạn HD ngay cả khi AI quên auxLines.
     const projectionSegments = auxPoints
@@ -172,8 +199,17 @@ export class GeometrySpecificationAdapter {
       .map(point => ({ from: point.fromPoint!, to: point.name, style: 'solid' as const }));
     const usedSegments = new Set(specialSegments);
     const auxLines: NonNullable<TriangleData['auxLines']> = [];
+    const hasTangentInt = (spec.auxPoints || []).some(
+      p =>
+        p.type === 'intersection' &&
+        ((typeof p.line1 === 'string' && p.line1.includes('x')) ||
+          (typeof p.line2 === 'string' && p.line2.includes('x')))
+    );
+
     for (const line of [...(spec.auxLines || []), ...projectionSegments]) {
       if (!line.from || !line.to || line.from === line.to) continue;
+      // Ẩn đoạn nối tới điểm phụ x khi đã có giao điểm thực tế trên tiếp tuyến
+      if (hasTangentInt && (line.from === 'x' || line.to === 'x')) continue;
       const key = segmentKey(line.from, line.to);
       if (usedSegments.has(key)) continue;
       usedSegments.add(key);
@@ -187,10 +223,57 @@ export class GeometrySpecificationAdapter {
       });
     }
 
+    // Đảm bảo có đoạn nối AT và đoạn kéo dài từ BC đến T nếu có giao điểm tiếp tuyến
+    const tangentIntPoint = (spec.auxPoints || []).find(
+      p =>
+        p.type === 'intersection' &&
+        typeof p.line1 === 'string' &&
+        (p.line1.includes('x') || p.line1.includes('A'))
+    );
+    if (tangentIntPoint && typeof tangentIntPoint.line1 === 'string' && typeof tangentIntPoint.line2 === 'string') {
+      const tangentAt = tangentIntPoint.line1.replace('x', '') || 'A';
+      const cutLine = tangentIntPoint.line2;
+      const tName = tangentIntPoint.name;
+      const hasAT = auxLines.some(l => (l.from === tangentAt && l.to === tName) || (l.from === tName && l.to === tangentAt));
+      if (!hasAT) {
+        auxLines.push({
+          id: `ai-line-${auxLines.length}`,
+          from: tangentAt,
+          to: tName,
+          style: 'solid',
+          enabled: true,
+        });
+      }
+      if (cutLine.length === 2) {
+        const hasExt = auxLines.some(
+          l =>
+            (l.from === cutLine[0] && l.to === tName) ||
+            (l.from === cutLine[1] && l.to === tName) ||
+            (l.from === tName && l.to === cutLine[0]) ||
+            (l.from === tName && l.to === cutLine[1])
+        );
+        if (!hasExt) {
+          auxLines.push({
+            id: `ai-line-${auxLines.length}`,
+            from: cutLine[0],
+            to: tName,
+            style: 'solid',
+            enabled: true,
+          });
+        }
+      }
+    }
+
     const rightAngleMarkers: NonNullable<TriangleData['rightAngleMarkers']> = [];
     const markerKeys = new Set<string>();
     const candidates = [
-      ...(spec.rightAngles || []),
+      ...(spec.rightAngles || []).map(r => {
+        if (hasTangentInt && tangentIntPoint) {
+          if (r.ray1 === 'x') return { ...r, ray1: tangentIntPoint.name };
+          if (r.ray2 === 'x') return { ...r, ray2: tangentIntPoint.name };
+        }
+        return r;
+      }),
       ...auxPoints
         .filter(point => point.type === 'projection' && point.fromPoint && point.targetLine)
         .map(point => ({

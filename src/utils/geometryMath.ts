@@ -2179,6 +2179,85 @@ export const getGeometryBoundingBox = (points: Point2D[]): BoundingBox => {
 };
 
 /**
+ * Tính toán bounding box có padding bao bọc danh sách điểm
+ */
+export const calculatePointsBoundingBox = (points: Point2D[], padding: number = 0): BoundingBox => {
+  if (points.length === 0) {
+    return { minX: 0, maxX: 0, minY: 0, maxY: 0, width: 0, height: 0, centerX: 0, centerY: 0 };
+  }
+  let minX = points[0].x;
+  let maxX = points[0].x;
+  let minY = points[0].y;
+  let maxY = points[0].y;
+
+  for (let i = 1; i < points.length; i++) {
+    const p = points[i];
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+
+  minX = Math.round((minX - padding) * 10) / 10;
+  maxX = Math.round((maxX + padding) * 10) / 10;
+  minY = Math.round((minY - padding) * 10) / 10;
+  maxY = Math.round((maxY + padding) * 10) / 10;
+
+  const width = Math.round((maxX - minX) * 10) / 10;
+  const height = Math.round((maxY - minY) * 10) / 10;
+
+  return {
+    minX,
+    maxX,
+    minY,
+    maxY,
+    width,
+    height,
+    centerX: (minX + maxX) / 2,
+    centerY: (minY + maxY) / 2,
+  };
+};
+
+/**
+ * Tính viewBox SVG mở rộng an toàn, bao bọc toàn bộ canvas và các phần tử tràn biên
+ */
+export const getExpandedSvgViewBox = (
+  sceneBox: BoundingBox,
+  canvasWidth: number = 560,
+  canvasHeight: number = 440
+): { minX: number; minY: number; width: number; height: number; viewBox: string } => {
+  const overflowLeft = sceneBox.minX < 0;
+  const overflowTop = sceneBox.minY < 0;
+  const overflowRight = sceneBox.maxX > canvasWidth;
+  const overflowBottom = sceneBox.maxY > canvasHeight;
+
+  if (!overflowLeft && !overflowTop && !overflowRight && !overflowBottom) {
+    return {
+      minX: 0,
+      minY: 0,
+      width: canvasWidth,
+      height: canvasHeight,
+      viewBox: `0 0 ${canvasWidth} ${canvasHeight}`,
+    };
+  }
+
+  const minX = Math.min(0, sceneBox.minX);
+  const minY = Math.min(0, sceneBox.minY);
+  const maxX = Math.max(canvasWidth, sceneBox.maxX);
+  const maxY = Math.max(canvasHeight, sceneBox.maxY);
+  const width = maxX - minX;
+  const height = maxY - minY;
+
+  return {
+    minX,
+    minY,
+    width,
+    height,
+    viewBox: `${minX} ${minY} ${width} ${height}`,
+  };
+};
+
+/**
  * Dịch chuyển toàn bộ tập điểm của hình
  */
 export const translateGeometryPoints = (points: Point2D[], dx: number, dy: number): Point2D[] => {

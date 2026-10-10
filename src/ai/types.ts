@@ -57,6 +57,8 @@ export interface GeometricAuxPointSpec {
   radius?: number;
   freeX?: number;
   freeY?: number;
+  showPoint?: boolean;
+  showLabel?: boolean;
 }
 
 export interface GeometricAuxLineSpec {
