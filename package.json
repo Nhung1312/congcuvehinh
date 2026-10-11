@@ -14,6 +14,7 @@
     "test:geometry-tikz": "tsx --test scripts/test_geometry_tikz.ts",
     "test:geometry-image": "tsx --test scripts/test_geometry_image.ts",
     "test:geometry-constructions": "node --import tsx --test scripts/test_geometry_constructions.ts",
+    "test:geometry-presets": "node --import tsx --test scripts/test_geometry_presets.ts",
     "test:api-runtime": "node --import tsx --test scripts/test_vercel_api_runtime.ts"
   },
   "dependencies": {

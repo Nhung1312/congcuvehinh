@@ -186,6 +186,8 @@ export const CanvasArea: React.FC<CanvasAreaProps> = ({
       case 'GEOMETRY_TRIANGLE':
       case 'GEOMETRY_QUADRILATERAL':
       case 'GEOMETRY_CIRCLE':
+      case 'GEOMETRY_POLYGON':
+      case 'GEOMETRY_SYMMETRY':
       case 'AI_GEOMETRY':
         return (
           <GeometrySvg

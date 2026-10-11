@@ -10,7 +10,6 @@ import {
   FileDown,
   Copy,
   Printer,
-  Sparkles,
   HelpCircle,
   Check,
   Download,
@@ -34,7 +33,6 @@ interface HeaderProps {
   onOpenTemplates: () => void;
   onOpenDataTable: () => void;
   onOpenHelp: () => void;
-  onOpenAIModal?: () => void;
   onOpenAuthModal?: () => void;
   onOpenSubscriptionModal?: () => void;
   currentUser?: UserProfile | null;
@@ -64,7 +62,6 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenTemplates,
   onOpenDataTable,
   onOpenHelp,
-  onOpenAIModal,
   onOpenAuthModal,
   onOpenSubscriptionModal,
   currentUser,
@@ -114,18 +111,6 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Center Actions / Quick Modals */}
       <div className="hidden lg:flex items-center gap-2">
-        {/* Nút AI Dựng Hình Nổi Bật */}
-        {onOpenAIModal && (
-          <button
-            onClick={onOpenAIModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 text-amber-300 border border-amber-500/40 transition shadow-xs"
-            title="🤖 AI Tự động dựng hình học từ đề bài tiếng Việt"
-          >
-            <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
-            <span>AI Dựng Hình</span>
-          </button>
-        )}
-
         {/* Khối Undo / Redo */}
         <div className="flex items-center gap-1 bg-slate-800 rounded-md p-0.5 border border-slate-700 mr-2">
           <button

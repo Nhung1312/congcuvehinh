@@ -368,10 +368,12 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     const centerPointName = triangle?.circumscribedCircle?.centerName || 'O';
     const tangentPoint = auxPoints.find((p) => p.type === 'tangent' && p.fromPoint && p.name);
     const helperName = tangentPoint?.name || 'x';
-    const isTangentLine = (value: unknown): value is string =>
-      typeof value === 'string' && (
-        tangentPoint ? value === `${tangentPoint.fromPoint}${helperName}` : /^[A-Z]x$/.test(value)
-      );
+    const isTangentLine = (value: unknown) => {
+      const endpoints = Array.isArray(value) ? value : typeof value === 'string' ? value.split('') : [];
+      return tangentPoint
+        ? endpoints.length === 2 && endpoints.includes(tangentPoint.fromPoint) && endpoints.includes(helperName)
+        : typeof value === 'string' && /^[A-Z]x$/.test(value);
+    };
     const tangentIntPoint = auxPoints.find((p) =>
       p.type === 'intersection' && (isTangentLine(p.line1) || isTangentLine(p.line2))
     );
@@ -701,6 +703,35 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     // 1. ĐƯỜNG CAO (Altitudes)
     // ==========================================
     const altitudes = t.altitudes || (t.showAltitudes ? [{ fromVertex: 'A', enabled: true, style: 'dashed', showRightAngle: true }] : []);
+    const medians = t.medians || (t.showMedians ? [{ fromVertex: 'A', enabled: true, style: 'dashed', showTickMarks: true }] : []);
+    const bisectors = t.bisectors || (t.showBisectors ? [{ fromVertex: 'A', enabled: true, style: 'dashed', showAngleMarks: true }] : []);
+
+    // Các chân đường đặc biệt có thể trùng nhau (ví dụ tam giác cân).
+    // Gộp tên tại cùng tọa độ thay vì vẽ H, M, D chồng lên nhau.
+    const footLabelGroups: { point: Point2D; names: string[]; shown: boolean }[] = [];
+    for (const [kind, items, defaults] of [
+      ['altitude', altitudes, ['H', 'K', 'L']],
+      ['median', medians, ['M', 'N', 'P']],
+      ['bisector', bisectors, ['D', 'E', 'F']],
+    ] as const) {
+      for (const item of items.filter(item => item.enabled)) {
+        const role = item.fromVertex === 'B' ? 1 : item.fromVertex === 'C' ? 2 : 0;
+        const [from, first, second] = role === 1 ? [pB, pA, pC] : role === 2 ? [pC, pA, pB] : [pA, pB, pC];
+        const point = kind === 'altitude' ? projectPointToLine(from, first, second).point
+          : kind === 'median' ? midpoint(first, second) : angleBisectorPoint(from, first, second);
+        const name = item.label || defaults[role];
+        const group = footLabelGroups.find(group => dist(group.point, point) < 1e-6);
+        if (group) { if (!group.names.includes(name)) group.names.push(name); }
+        else footLabelGroups.push({ point, names: [name], shown: false });
+      }
+    }
+    const footLabelText = (point: Point2D, fallback: string) => {
+      const group = footLabelGroups.find(group => dist(group.point, point) < 1e-6);
+      if (!group) return fallback;
+      if (group.shown) return '';
+      group.shown = true;
+      return group.names.join(' = ');
+    };
 
     const renderedAltitudes = altitudes
       .filter((alt) => alt.enabled)
@@ -724,7 +755,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
 
         const proj = projectPointToLine(fromP, baseP1, baseP2);
         const footP = proj.point;
-        const footLabel = alt.label || defaultLabel;
+        const footLabel = footLabelText(footP, alt.label || defaultLabel);
         const footLabelPos = getSmartVertexLabelPosition(footP, baseP1, fromP, 16);
         const altColor = alt.color || strokeColor;
         const altWidth = alt.strokeWidth || 1.2;
@@ -766,7 +797,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
 
             {/* Chân đường cao node & label */}
             <circle cx={footP.x} cy={footP.y} r={2.5} fill={altColor} />
-            {showLabels && (
+            {showLabels && footLabel && (
               <text
                 x={footLabelPos.x}
                 y={footLabelPos.y}
@@ -787,8 +818,6 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     // ==========================================
     // 2. TRUNG TUYẾN (Medians)
     // ==========================================
-    const medians = t.medians || (t.showMedians ? [{ fromVertex: 'A', enabled: true, style: 'dashed', showTickMarks: true }] : []);
-
     const renderedMedians = medians
       .filter((med) => med.enabled)
       .map((med, idx) => {
@@ -813,7 +842,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
         }
 
         const midP = midpoint(baseP1, baseP2);
-        const midLabel = med.label || defaultLabel;
+        const midLabel = footLabelText(midP, med.label || defaultLabel);
         const midLabelPos = getSmartVertexLabelPosition(midP, baseP1, fromP, 16);
         const medColor = med.color || strokeColor;
         const medWidth = med.strokeWidth || 1.2;
@@ -848,7 +877,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
 
             {/* Điểm trung điểm */}
             <circle cx={midP.x} cy={midP.y} r={2.5} fill={medColor} />
-            {showLabels && (
+            {showLabels && midLabel && (
               <text
                 x={midLabelPos.x}
                 y={midLabelPos.y}
@@ -869,8 +898,6 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     // ==========================================
     // 3. ĐƯỜNG PHÂN GIÁC (Bisectors)
     // ==========================================
-    const bisectors = t.bisectors || (t.showBisectors ? [{ fromVertex: 'A', enabled: true, style: 'dashed', showAngleMarks: true }] : []);
-
     const renderedBisectors = bisectors
       .filter((bis) => bis.enabled)
       .map((bis, idx) => {
@@ -892,7 +919,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
         }
 
         const footD = angleBisectorPoint(fromP, adj1, adj2);
-        const labelD = bis.label || defaultLabel;
+        const labelD = footLabelText(footD, bis.label || defaultLabel);
         const dLabelPos = getSmartVertexLabelPosition(footD, adj1, fromP, 16);
         const bisColor = bis.color || strokeColor;
         const bisWidth = bis.strokeWidth || 1.2;
@@ -927,7 +954,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
 
             {/* Điểm D và nhãn */}
             <circle cx={footD.x} cy={footD.y} r={2.5} fill={bisColor} />
-            {showLabels && (
+            {showLabels && labelD && (
               <text
                 x={dLabelPos.x}
                 y={dLabelPos.y}

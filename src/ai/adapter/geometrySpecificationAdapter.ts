@@ -158,30 +158,17 @@ export class GeometrySpecificationAdapter {
 
     // Đường cao/trung tuyến/đỉnh tam giác đã có renderer và ký hiệu riêng; không vẽ đè lần hai.
     const seenPointNames = new Set<string>();
-    const hasTangentIntersection = (pointName: string) =>
-      (spec.auxPoints || []).some(
-        p =>
-          p.type === 'intersection' &&
-          ((typeof p.line1 === 'string' && p.line1.includes(pointName)) ||
-            (typeof p.line2 === 'string' && p.line2.includes(pointName)))
-      );
+    const lineEndpoints = (line?: string | [string, string]) =>
+      Array.isArray(line) ? line : line?.split('') || [];
 
     const isHelperHidden = (point: GeometricAuxPointSpec) => {
       if (point.showPoint === false && point.showLabel === false) return true;
-      if (point.name === 'x' || point.type === 'tangent') {
-        if (
-          hasTangentIntersection(point.name) ||
-          (spec.auxPoints || []).some(
-            p =>
-              p.type === 'intersection' &&
-              ((typeof p.line1 === 'string' && p.line1.includes('x')) ||
-                (typeof p.line2 === 'string' && p.line2.includes('x')))
-          )
-        ) {
-          return true;
-        }
-      }
-      return false;
+      return point.type === 'tangent' && Boolean(point.fromPoint) &&
+        (spec.auxPoints || []).some(p => p.type === 'intersection' &&
+          [p.line1, p.line2].some(line => {
+            const endpoints = lineEndpoints(line);
+            return endpoints.includes(point.name) && endpoints.includes(point.fromPoint!);
+          }));
     };
 
     const auxPoints: NonNullable<TriangleData['auxPoints']> = (spec.auxPoints || [])
@@ -207,17 +194,28 @@ export class GeometrySpecificationAdapter {
       .map(point => ({ from: point.fromPoint!, to: point.name, style: 'solid' as const }));
     const usedSegments = new Set<string>(specialSegments);
     const auxLines: NonNullable<TriangleData['auxLines']> = [];
-    const hasTangentInt = (spec.auxPoints || []).some(
-      p =>
-        p.type === 'intersection' &&
-        ((typeof p.line1 === 'string' && p.line1.includes('x')) ||
-          (typeof p.line2 === 'string' && p.line2.includes('x')))
-    );
+    const tangentPoint = (spec.auxPoints || []).find(p => p.type === 'tangent');
+    // Chỉ nhận tiếp tuyến khi đường giao chứa điểm tiếp tuyến đã khai báo.
+    // Một đường chéo AC chứa chữ A không phải là tiếp tuyến tại A.
+    const tangentIntersection = tangentPoint?.fromPoint
+      ? (spec.auxPoints || []).flatMap(point => {
+          if (point.type !== 'intersection') return [];
+          for (const [line, cutLine] of [[point.line1, point.line2], [point.line2, point.line1]]) {
+            const endpoints = lineEndpoints(line);
+            if (endpoints.includes(tangentPoint.name) && endpoints.includes(tangentPoint.fromPoint!)) {
+              return [{ point, cutLine }];
+            }
+          }
+          return [];
+        })[0]
+      : undefined;
+    const tangentIntPoint = tangentIntersection?.point;
+    const hasTangentInt = Boolean(tangentIntPoint);
 
     for (const line of [...(spec.auxLines || []), ...projectionSegments]) {
       if (!line.from || !line.to || line.from === line.to) continue;
       // Ẩn đoạn nối tới điểm phụ x khi đã có giao điểm thực tế trên tiếp tuyến
-      if (hasTangentInt && (line.from === 'x' || line.to === 'x')) continue;
+      if (hasTangentInt && (line.from === tangentPoint?.name || line.to === tangentPoint?.name)) continue;
       const key = segmentKey(line.from, line.to);
       if (usedSegments.has(key)) continue;
       usedSegments.add(key);
@@ -232,15 +230,9 @@ export class GeometrySpecificationAdapter {
     }
 
     // Đảm bảo có đoạn nối AT và đoạn kéo dài từ BC đến T nếu có giao điểm tiếp tuyến
-    const tangentIntPoint = (spec.auxPoints || []).find(
-      p =>
-        p.type === 'intersection' &&
-        typeof p.line1 === 'string' &&
-        (p.line1.includes('x') || p.line1.includes('A'))
-    );
-    if (tangentIntPoint && typeof tangentIntPoint.line1 === 'string' && typeof tangentIntPoint.line2 === 'string') {
-      const tangentAt = tangentIntPoint.line1.replace('x', '') || 'A';
-      const cutLine = tangentIntPoint.line2;
+    if (tangentIntPoint && tangentPoint?.fromPoint) {
+      const tangentAt = tangentPoint.fromPoint;
+      const cutLine = lineEndpoints(tangentIntersection?.cutLine);
       const tName = tangentIntPoint.name;
       const hasAT = auxLines.some(l => (l.from === tangentAt && l.to === tName) || (l.from === tName && l.to === tangentAt));
       if (!hasAT) {
@@ -273,23 +265,9 @@ export class GeometrySpecificationAdapter {
     }
 
     // Tự động dựng bán kính OA từ tâm O đến tiếp điểm A nếu có tiếp tuyến tại A của đường tròn (O)
-    const tangentPoint = (spec.auxPoints || []).find(p => p.type === 'tangent');
-    const tangentAt =
-      tangentPoint?.fromPoint ||
-      (tangentIntPoint && typeof tangentIntPoint.line1 === 'string'
-        ? tangentIntPoint.line1.replace('x', '')
-        : undefined) ||
-      'A';
-    const circleCenter =
-      tangentPoint?.centerPoint ||
-      'O';
-    const hasTangent = !!(
-      tangentPoint ||
-      tangentIntPoint ||
-      (spec.rightAngles || []).some(
-        r => r.vertex === tangentAt && (r.ray1 === circleCenter || r.ray2 === circleCenter)
-      )
-    );
+    const tangentAt = tangentPoint?.fromPoint;
+    const circleCenter = tangentPoint?.centerPoint || spec.circle?.center || 'O';
+    const hasTangent = Boolean(tangentPoint && tangentAt);
 
     if (hasTangent && tangentAt && circleCenter) {
       const existingOA = auxLines.find(
@@ -316,8 +294,8 @@ export class GeometrySpecificationAdapter {
     const candidates = [
       ...(spec.rightAngles || []).map(r => {
         if (hasTangentInt && tangentIntPoint) {
-          if (r.ray1 === 'x') return { ...r, ray1: tangentIntPoint.name };
-          if (r.ray2 === 'x') return { ...r, ray2: tangentIntPoint.name };
+          if (r.ray1 === tangentPoint?.name) return { ...r, ray1: tangentIntPoint.name };
+          if (r.ray2 === tangentPoint?.name) return { ...r, ray2: tangentIntPoint.name };
         }
         return r;
       }),
