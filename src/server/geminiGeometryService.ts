@@ -27,7 +27,7 @@ const SYSTEM_INSTRUCTION = `Bạn là chuyên gia Sư phạm Hình học Toán T
 Nhiệm vụ: Phân tích đề bài hình học phẳng tiếng Việt của người dùng và trả về DUY NHẤT một JSON hợp lệ tuân thủ chính xác schema hình học THCS để vẽ hình trên Geometry Engine.
 
 QUY TẮC GIẢ THIẾT GỐC:
-- problemText: chép đầy đủ đề gốc từ ảnh hoặc văn bản, giữ nguyên tên điểm, thứ tự tia, <, >, = và các phần a/b/c. Không dùng lời giải để thay đề.
+- problemText: chép đầy đủ đề gốc từ ảnh hoặc văn bản, giữ nguyên tên điểm, thứ tự tia, <, >, = và các phần a/b/c. Dùng chữ/ký hiệu thuần (ABC, AC < AB, ME ⊥ AB), không bọc tên điểm/cạnh bằng LaTeX hoặc Markdown. Không dùng lời giải để thay đề.
 - Chỉ dùng giả thiết và lệnh dựng để định nghĩa điểm. Kết luận "chứng minh ..." không phải giả thiết; không thêm đường cao vì có chữ H, tâm nội tiếp vì có chữ I, hoặc trung tuyến vì có chữ M.
 - Điểm H trên tia PQ có gốc P, hướng Q. Nếu QH = QP thì H khác P và nằm ngoài Q: type "on-ray", segment "PQ", fromPoint "Q", distanceSegment "QP", distanceRatio 1, rayPosition "beyond". Nếu PH = 2AB thì fromPoint "P", distanceSegment "AB", distanceRatio 2. Mọi tên điểm đều thay được, không dùng tọa độ free cho phép dựng này.
 - type "ratio" cho phép tỉ số ngoài [0,1] khi kéo dài đoạn (ví dụ điểm đối xứng qua trung điểm: ratio 2).
