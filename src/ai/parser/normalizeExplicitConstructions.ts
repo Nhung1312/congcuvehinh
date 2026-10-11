@@ -70,7 +70,7 @@ export function normalizeExplicitConstructions(spec: GeometrySpecification, prob
     if (from === to) return;
     const key = segmentKey(from + to);
     // Không vẽ chồng một cạnh có sẵn hoặc đường đặc biệt đã được dựng đúng.
-    const vertices = spec.triangle?.vertices;
+    const vertices = spec.shapeCategory === 'triangle' ? spec.triangle?.vertices : undefined;
     if (vertices?.includes(from) && vertices.includes(to)) return;
     const quad = spec.quadrilateral?.vertices;
     if (spec.shapeCategory === 'quadrilateral' && quad?.some((p, i) => segmentKey(p + quad[(i + 1) % 4]) === key)) return;
@@ -243,7 +243,9 @@ export function normalizeExplicitConstructions(spec: GeometrySpecification, prob
 
   // Chỉ nối cạnh của hình được nhắc trong mục tiêu chứng minh; không gán hình
   // chữ nhật/bình hành, trung điểm hay dấu vuông góc từ kết luận cần chứng minh.
-  const known = new Set([...(spec.triangle?.vertices || spec.quadrilateral?.vertices || []),
+  const baseVertices = spec.shapeCategory === 'triangle' ? spec.triangle?.vertices :
+    spec.shapeCategory === 'quadrilateral' ? spec.quadrilateral?.vertices : undefined;
+  const known = new Set([...(baseVertices || []),
     ...spec.auxPoints.map(p => p.name), ...spec.altitudes.map(p => p.foot), ...spec.medians.map(p => p.midpoint)]);
   for (const match of normalizedProblem.matchAll(/tứ\s+giác\s+([A-Z]{4})\b/gi)) {
     const names = match[1].toUpperCase().split('');
@@ -254,7 +256,7 @@ export function normalizeExplicitConstructions(spec: GeometrySpecification, prob
       if ([...segment].every(p => known.has(p))) addLine(segment[0], segment[1]);
     }
   }
-  if (spec.triangle && ['right', 'right-isosceles'].includes(spec.triangle.type)) {
+  if (spec.shapeCategory === 'triangle' && spec.triangle && ['right', 'right-isosceles'].includes(spec.triangle.type)) {
     const vertex = spec.triangle.specialVertex || spec.triangle.vertices[0];
     const others = spec.triangle.vertices.filter(p => p !== vertex);
     if (!spec.rightAngles.some(p => p.vertex === vertex) && others.length === 2) {
