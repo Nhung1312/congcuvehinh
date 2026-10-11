@@ -4,8 +4,41 @@
  */
 import type { GeometricAuxPointSpec, GeometrySpecification } from '../types';
 
+/** OCR/AI có thể bọc cùng một dữ kiện bằng LaTeX hoặc Markdown. Chỉ bỏ
+ * định dạng khi đọc quy tắc; không sửa bản chép đề gốc trong spec. */
+function normalizeGeometryNotation(text: string): string {
+  let normalized = text.normalize('NFKC')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/&lt;|&#0*60;|&#x0*3c;/gi, '<')
+    .replace(/&gt;|&#0*62;|&#x0*3e;/gi, '>')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\\(?:triangle|Delta)\b/g, 'tam giác ')
+    .replace(/\\(?:perp|bot)\b/g, '⊥')
+    .replace(/\\parallel\b/g, '//')
+    .replace(/\\lt\b/g, '<')
+    .replace(/\\gt\b/g, '>')
+    .replace(/\\(?:left|right|displaystyle|textstyle)\b/g, '')
+    .replace(/\\(?:qquad|quad|enspace|thinspace)\b|\\[,;:! ]/g, ' ')
+    .replace(/\\(?:\(|\)|\[|\])|\$/g, '')
+    .replace(/[*`]/g, '')
+    .replace(/_{1,2}([A-Z]{1,4})_{1,2}/g, '$1');
+  // Bỏ các lớp định dạng lồng nhau trước khi đọc phân số độ dài.
+  for (let depth = 0; depth < 8; depth++) {
+    const previous = normalized;
+    normalized = normalized
+      .replace(/\\(?:mathrm|mathit|mathbf|mathsf|mathtt|textrm|text|operatorname|overline)\s*\{([^{}]*)\}/g, '$1')
+      .replace(/\{\s*\\(?:rm|it|bf)\s+([^{}]*)\}/g, '$1')
+      .replace(/\\(?:dfrac|tfrac|frac)\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g,
+        (_, numerator: string, denominator: string) => `${numerator.trim()}/${denominator.trim()}`);
+    if (normalized === previous) break;
+  }
+  return normalized
+    .replace(/\{\s*([A-Z](?:[ \t]*[A-Z]){0,3})\s*\}/g, '$1')
+    .replace(/\b[A-Z](?:[ \t\u00A0]+[A-Z]){1,3}\b/g, label => label.replace(/\s/g, ''));
+}
+
 export function stripGeometryProofGoals(text: string): string {
-  return text.normalize('NFC')
+  return normalizeGeometryNotation(text)
     .replace(/(?:chứng\s*minh\s*(?:rằng)?|cmr\s*:?|chứng\s*tỏ\s*(?:rằng)?)[\s\S]*?(?=[.?!]|\n\s*(?:[a-z0-9]+\)|(?:Gọi|Lấy|Kẻ|Nối|Từ)\s)|[;\s]+[a-z]\)\s*(?:Gọi|Lấy|Kẻ|Nối|Từ)\s|;\s*(?:Gọi|Lấy|Kẻ|Nối|Từ)\s|$)/gi, ' ')
     .replace(/(?:tính|tìm)\s+(?:độ\s*dài|diện\s*tích|góc|số\s*đo)[^.?!;]*/gi, ' ');
 }
@@ -23,7 +56,8 @@ function distanceTerm(text: string): { segment: string; factor: number } | null 
 }
 
 export function normalizeExplicitConstructions(spec: GeometrySpecification, problemText: string): GeometrySpecification {
-  const raw = stripGeometryProofGoals(problemText);
+  const normalizedProblem = normalizeGeometryNotation(problemText);
+  const raw = stripGeometryProofGoals(normalizedProblem);
   spec.auxPoints ||= [];
   spec.auxLines ||= [];
   spec.altitudes ||= [];
@@ -211,11 +245,11 @@ export function normalizeExplicitConstructions(spec: GeometrySpecification, prob
   // chữ nhật/bình hành, trung điểm hay dấu vuông góc từ kết luận cần chứng minh.
   const known = new Set([...(spec.triangle?.vertices || spec.quadrilateral?.vertices || []),
     ...spec.auxPoints.map(p => p.name), ...spec.altitudes.map(p => p.foot), ...spec.medians.map(p => p.midpoint)]);
-  for (const match of problemText.matchAll(/tứ\s+giác\s+([A-Z]{4})\b/gi)) {
+  for (const match of normalizedProblem.matchAll(/tứ\s+giác\s+([A-Z]{4})\b/gi)) {
     const names = match[1].toUpperCase().split('');
     if (names.every(p => known.has(p))) names.forEach((p, i) => addLine(p, names[(i + 1) % 4]));
   }
-  for (const match of problemText.matchAll(/\b([A-Z]{2})\s*(?:⊥|vuông\s+góc|\/\/|song\s+song)\s*([A-Z]{2})\b/gi)) {
+  for (const match of normalizedProblem.matchAll(/\b([A-Z]{2})\s*(?:⊥|vuông\s+góc|\/\/|song\s+song)\s*([A-Z]{2})\b/gi)) {
     for (const segment of match.slice(1).map(s => s.toUpperCase())) {
       if ([...segment].every(p => known.has(p))) addLine(segment[0], segment[1]);
     }

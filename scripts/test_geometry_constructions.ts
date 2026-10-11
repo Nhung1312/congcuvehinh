@@ -115,16 +115,73 @@ test('Đề ảnh: chép đề để kiểm tra giả thiết, không dùng dete
   assert.equal(noAltitude.auxPoints?.some(p => p.name === 'H' || p.name === 'I'), false);
 });
 
+test('Đề ảnh bọc tên điểm bằng LaTeX vẫn bổ sung thứ tự cạnh khi JSON AI bỏ sót', () => {
+  const s = VietnameseGeometryParser.parse(problem());
+  delete s.triangle!.sideComparisons;
+  const transcription = problem().replace(/\b([A-Z]{1,4})\b/g, (_, label: string) => `\\(${label}\\)`);
+  s.problemText = transcription;
+  validateAndNormalizeSpec(s, '', true);
+  const p = resolved(s);
+  assert.ok(dist(p.A,p.C) < dist(p.A,p.B), 'AC < AB phải thắng độ dài mặc định');
+  assertConstruction(p);
+  assert.equal(s.problemText, transcription, 'Giữ nguyên bản chép đề để đối chiếu');
+});
+
+test('Định dạng OCR không thay đổi hình: LaTeX, Markdown, chữ nghiêng Unicode, khoảng trắng (128 biến thể)', () => {
+  const formats = [
+    (text: string) => text.replace(/\b([A-Z]{1,4})\b/g, (_, label: string) => `$${label}$`),
+    (text: string) => text.replace(/\b([A-Z]{1,4})\b/g, (_, label: string) => `\\[${label}\\]`),
+    (text: string) => text.replace(/\b([A-Z]{1,4})\b/g, (_, label: string) => `\\(\\mathbf{\\mathrm{${label}}}\\)`),
+    (text: string) => text.replace(/\b([A-Z]{1,4})\b/g, '**$1**'),
+    (text: string) => text.replace(/[A-Z]/g, letter => String.fromCodePoint(0x1D434 + letter.charCodeAt(0) - 65)),
+    (text: string) => text.replace(/\b([A-Z]{1,4})\b/g, (_, label: string) => label.split('').join(' ')),
+    (text: string) => text.replace('tam giác', '\\triangle').replaceAll('⊥', '\\perp ').replaceAll('<', '\\lt '),
+    (text: string) => text.replaceAll('<', '&lt;').replace(/\b([A-Z]{2,4})\b/g, (_, label: string) => label.split('').join('\u200B')),
+  ];
+  for (const n of [names, ['P','Q','R','S','T','U','V','W','X']])
+    for (const order of [[0,1,2],[1,2,0]]) for (const shorter of [false,true])
+      for (const format of formats) for (const source of ['rules','gemini']) {
+        const prompt = format(problem(n,order,true,shorter));
+        const s = source === 'rules' ? VietnameseGeometryParser.parse(prompt) : brokenAI(n);
+        if (source === 'gemini') {
+          s.problemText = prompt;
+          validateAndNormalizeSpec(s,'',true);
+          assert.equal(s.problemText,prompt);
+        }
+        const p = resolved(s), [A,B,C] = n.map(v => p[v]);
+        assertConstruction(p,n);
+        assert.ok(shorter ? dist(A,B)<dist(A,C) : dist(A,C)<dist(A,B), `${source}: ${prompt}`);
+        const t = document(s).data.geometry!.triangle!;
+        assert.ok(t.auxLines?.some(l => [l.from,l.to].sort().join('') === [n[4],n[5]].sort().join('')), 'Giữ cạnh EF của tứ giác cần chứng minh');
+        assert.equal(t.rightAngleMarkers?.some(m => m.vertex === n[6] || m.vertex === n[7] || m.vertex === n[8]), false);
+      }
+});
+
+test('Phân số LaTeX và dấu lớn hơn giữ đúng độ dài, hướng tia và thứ tự cạnh', () => {
+  for (const [equality,scale] of [[String.raw`AK = \frac{1}{2}\overline{BC}`,0.5],
+    [String.raw`AK = \dfrac{\mathrm{BC}}{2}`,0.5], [String.raw`\tfrac{AK}{2} = BC`,2]] as const) {
+    const prompt = String.raw`Cho \Delta{ABC} vuông tại A (AB \gt AC). Lấy điểm K trên tia AB sao cho \(${equality}\).`;
+    const s = VietnameseGeometryParser.parse(prompt);
+    const p = resolved(s);
+    assert.ok(dist(p.A,p.B)>dist(p.A,p.C));
+    near(dist(p.A,p.K),scale*dist(p.B,p.C));
+    near(cross(p.A,p.B,p.K),0);
+  }
+});
+
 test('Pipeline SDK Gemini và đề ảnh hoạt động với schema điểm trên tia (mock HTTP, không dùng quota)', async () => {
   const originalFetch = globalThis.fetch;
   let request: any;
   globalThis.fetch = async (_url, options) => {
     request = JSON.parse(String(options!.body));
-    return Response.json({ candidates:[{content:{role:'model',parts:[{text:JSON.stringify({...brokenAI(),problemText:problem()})}]},finishReason:'STOP'}] });
+    const transcription = problem().replace(/\b([A-Z]{1,4})\b/g, (_, label: string) => `\\(${label}\\)`);
+    return Response.json({ candidates:[{content:{role:'model',parts:[{text:JSON.stringify({...brokenAI(),problemText:transcription})}]},finishReason:'STOP'}] });
   };
   try {
     const spec = await parseGeometryWithGemini('', 'offline-test-key', {mimeType:'image/png',data:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB'});
-    assertConstruction(resolved(spec));
+    const p = resolved(spec);
+    assertConstruction(p);
+    assert.ok(dist(p.A,p.C)<dist(p.A,p.B));
     assert.equal(spec.generationInfo?.model,'gemini-3.8-flash');
     assert.ok(request.generationConfig.responseSchema.required.includes('problemText'));
     assert.ok(request.generationConfig.responseSchema.properties.auxPoints.items.properties.type.enum.includes('on-ray'));
