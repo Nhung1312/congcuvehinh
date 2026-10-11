@@ -45,9 +45,12 @@ export interface GeometricPerpBisectorSpec {
 
 export interface GeometricAuxPointSpec {
   name: string;
-  type: 'midpoint' | 'ratio' | 'projection' | 'free' | 'intersection' | 'on-circle' | 'tangent' | 'orthocenter' | 'centroid' | 'incenter' | 'circumcenter';
+  type: 'midpoint' | 'ratio' | 'projection' | 'free' | 'intersection' | 'on-circle' | 'on-ray' | 'tangent' | 'orthocenter' | 'centroid' | 'incenter' | 'circumcenter';
   segment?: string | [string, string];
-  ratio?: number; // 0..1
+  ratio?: number; // Tỉ số có hướng; <0 hoặc >1 cho phần kéo dài
+  distanceSegment?: string | [string, string]; // Đoạn dùng làm độ dài cho điểm trên tia
+  distanceRatio?: number; // |fromPoint, điểm mới| / |distanceSegment|
+  rayPosition?: 'between' | 'beyond';
   fromPoint?: string;
   targetLine?: string | [string, string];
   line1?: string | [string, string];
@@ -95,6 +98,8 @@ export interface GeometricEqualAnglesSpec {
 export interface GeometrySpecification {
   title: string;
   shapeCategory: ShapeCategory;
+  /** Đề gốc được chép từ ảnh; không phải lời giải hoặc suy luận của AI. */
+  problemText?: string;
   
   // Chi tiết theo từng loại hình
   triangle?: {
@@ -104,6 +109,7 @@ export interface GeometrySpecification {
     equalSides?: [string, string]; // e.g. ['AB', 'AC']
     sideLengths?: { [side: string]: string | number };
     angles?: { [vertex: string]: number };
+    sideComparisons?: { shorter: string; longer: string }[];
     circumscribedCircle?: boolean; // Đường tròn ngoại tiếp
     inscribedCircle?: boolean; // Đường tròn nội tiếp
   };

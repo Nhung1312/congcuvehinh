@@ -132,7 +132,7 @@ test('Đề bài tam giác ABC vuông tại A, đường cao AH, hình chiếu D
   assert.ok(tri.auxLines?.some((l: any) => l.from === 'D' && l.to === 'E'));
   assert.ok(tri.auxLines?.some((l: any) => l.from === 'H' && l.to === 'D'));
   assert.ok(tri.auxLines?.some((l: any) => l.from === 'H' && l.to === 'E'));
-  assert.ok(tri.rightAngleMarkers?.some((r: any) => r.vertex === 'A'));
+  assert.equal(tri.showRightAngleMarker, true, 'Góc vuông tại A dùng ký hiệu chính, không vẽ chồng lần hai');
   assert.ok(tri.rightAngleMarkers?.some((r: any) => r.vertex === 'D'));
   assert.ok(tri.rightAngleMarkers?.some((r: any) => r.vertex === 'E'));
 });

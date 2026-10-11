@@ -4,6 +4,7 @@
  */
 import { GeometrySpecification, ShapeCategory } from '../types';
 import { completeCompositeTriangle } from './completeCompositeTriangle';
+import { normalizeExplicitConstructions, stripGeometryProofGoals } from './normalizeExplicitConstructions';
 import { TriangleType, QuadType, CirclePresetType, LineRayType, AngleType } from '../../types';
 
 export class VietnameseGeometryParser {
@@ -57,7 +58,9 @@ export class VietnameseGeometryParser {
         spec = this.parseTriangleProblem(constrRaw, text);
         break;
     }
-    return completeCompositeTriangle(this.enrichSpecification(spec, constrRaw, text), constrRaw);
+    return normalizeExplicitConstructions(
+      completeCompositeTriangle(this.enrichSpecification(spec, constrRaw, text), constrRaw), raw
+    );
   }
 
   /**
@@ -187,8 +190,9 @@ export class VietnameseGeometryParser {
       detectedEntities.push('Loại tam giác: Tam giác đều');
     } else if (
       text.includes('cân') ||
-      /([A-Z]{2})\s*=\s*([A-Z]{2})/i.test(raw) ||
-      /([A-Z]{2})\s+bằng\s+([A-Z]{2})/i.test(raw)
+      [...raw.matchAll(/\b([A-Z]{2})\s*(?:=|bằng)\s*([A-Z]{2})\b/gi)].some(m =>
+        [...m[1].toUpperCase(), ...m[2].toUpperCase()].every(v => vertices.includes(v)) &&
+        m[1].split('').sort().join('').toUpperCase() !== m[2].split('').sort().join('').toUpperCase())
     ) {
       triType = 'isosceles';
       const vertexMatch = text.match(/cân\s+tại\s+([a-z])/i);
@@ -851,9 +855,7 @@ export class VietnameseGeometryParser {
   }
 
   private static stripProofGoals(text: string): string {
-    return text
-      .replace(/(?:chứng\s*minh\s*(?:rằng)?|cmr\s*:?|chứng\s*tỏ\s*(?:rằng)?)[^.?!;]*(?:[.?!;]|$)/gi, ' ')
-      .replace(/\b(?:tính|tìm)\s+(?:độ\s*dài|diện\s*tích|góc|số\s*đo)[^.?!;]*(?:[.?!;]|$)/gi, ' ');
+    return stripGeometryProofGoals(text);
   }
 
   /**

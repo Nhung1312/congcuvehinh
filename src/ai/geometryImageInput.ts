@@ -28,6 +28,7 @@ export function validateGeometryImageInput(value: unknown): GeometryImageInput |
 
 export const GEOMETRY_IMAGE_INSTRUCTION =
   'Đọc giả thiết hình học trong ảnh đề toán tiếng Việt, bao gồm tên điểm, đường và ký hiệu toán. ' +
+  'Chép đầy đủ đề vào problemText, giữ thứ tự tia, bất đẳng thức cạnh và các giả thiết dựng mới trong từng phần a/b/c. ' +
   'Tạo JSON dựng hình CHỈ từ giả thiết, không coi yêu cầu chứng minh là giả thiết. ' +
   'Kết hợp đề chữ bên dưới khi có, ưu tiên ghi chú chữ nếu mâu thuẫn.';
 

@@ -106,6 +106,15 @@ function triangleExport(out: TikzGeometry, t: TriangleData) {
   const names = t.vertexNames || ['A', 'B', 'C'];
   p.forEach((v, i) => out.point(names[i] || ['A', 'B', 'C'][i], v, t.showLabels !== false));
   out.polygon(p);
+  if (t.showRightAngleMarker !== false && (t.type === 'right' || t.type === 'right-isosceles')) {
+    const index = p.findIndex((v, i) => {
+      const first = p[(i + 1) % 3], second = p[(i + 2) % 3];
+      const lengths = dist(v, first) * dist(v, second);
+      return lengths > 1 && Math.abs((first.x - v.x) * (second.x - v.x) +
+        (first.y - v.y) * (second.y - v.y)) / lengths < 1e-6;
+    });
+    if (index >= 0) out.rightAngle(p[index], p[(index + 1) % 3], p[(index + 2) % 3], 12);
+  }
 
   const circum = getTriangleCircumcircle(p[0], p[1], p[2]);
   const incircle = getTriangleIncircle(p[0], p[1], p[2]);

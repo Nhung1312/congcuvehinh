@@ -6,6 +6,7 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import type { GeometrySpecification } from '../ai/types';
 import { completeCompositeTriangle } from '../ai/parser/completeCompositeTriangle.js';
+import { normalizeExplicitConstructions, stripGeometryProofGoals } from '../ai/parser/normalizeExplicitConstructions.js';
 import { makeGeometryUserParts, type GeometryImageInput } from '../ai/geometryImageInput.js';
 
 /** Gemini client được khởi tạo: ưu tiên API key cá nhân của người dùng, nếu không có sẽ dùng server GEMINI_API_KEY */
@@ -24,6 +25,14 @@ function getGeminiClient(userApiKey?: string): { client: GoogleGenAI; keySource:
 const SYSTEM_INSTRUCTION = `Bạn là chuyên gia Sư phạm Hình học Toán THCS Việt Nam (Toán lớp 6, 7, 8, 9) và là bộ phân tích ngôn ngữ tự nhiên thành Cấu trúc Dữ liệu Hình học phẳng (Geometry Specification JSON).
 
 Nhiệm vụ: Phân tích đề bài hình học phẳng tiếng Việt của người dùng và trả về DUY NHẤT một JSON hợp lệ tuân thủ chính xác schema hình học THCS để vẽ hình trên Geometry Engine.
+
+QUY TẮC GIẢ THIẾT GỐC:
+- problemText: chép đầy đủ đề gốc từ ảnh hoặc văn bản, giữ nguyên tên điểm, thứ tự tia, <, >, = và các phần a/b/c. Không dùng lời giải để thay đề.
+- Chỉ dùng giả thiết và lệnh dựng để định nghĩa điểm. Kết luận "chứng minh ..." không phải giả thiết; không thêm đường cao vì có chữ H, tâm nội tiếp vì có chữ I, hoặc trung tuyến vì có chữ M.
+- Điểm H trên tia PQ có gốc P, hướng Q. Nếu QH = QP thì H khác P và nằm ngoài Q: type "on-ray", segment "PQ", fromPoint "Q", distanceSegment "QP", distanceRatio 1, rayPosition "beyond". Nếu PH = 2AB thì fromPoint "P", distanceSegment "AB", distanceRatio 2. Mọi tên điểm đều thay được, không dùng tọa độ free cho phép dựng này.
+- type "ratio" cho phép tỉ số ngoài [0,1] khi kéo dài đoạn (ví dụ điểm đối xứng qua trung điểm: ratio 2).
+- Trung điểm của ME phải có segment "ME", không mặc định BC. Mọi giao điểm EH và AF phải xuất line1 "EH", line2 "AF".
+- Với AC < AB, xuất triangle.sideComparisons [{shorter:"AC",longer:"AB"}]. Không biến đoạn phụ bằng nhau thành tam giác cân.
 
 QUY TẮC PHÂN LOẠI & NHẬN DIỆN THỰC THỂ HÌNH HỌC:
 
@@ -257,6 +266,7 @@ const GEOMETRY_RESPONSE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
     title: { type: Type.STRING, description: 'Tiêu đề ngắn gọn của hình vẽ' },
+    problemText: { type: Type.STRING, description: 'Chép nguyên đề từ ảnh/văn bản, gồm cả các phần a/b/c; giữ tên điểm và mọi ký hiệu, không thêm lời giải' },
     shapeCategory: {
       type: Type.STRING,
       enum: ['triangle', 'quadrilateral', 'circle', 'line-ray', 'angle', 'polygon', 'symmetry'],
@@ -279,6 +289,15 @@ const GEOMETRY_RESPONSE_SCHEMA = {
           type: Type.ARRAY,
           items: { type: Type.STRING },
           description: 'Cặp cạnh bằng nhau ví dụ ["AB", "AC"]',
+        },
+        sideComparisons: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: { shorter: { type: Type.STRING }, longer: { type: Type.STRING } },
+            required: ['shorter', 'longer'],
+          },
+          description: 'Bất đẳng thức cạnh trong giả thiết, ví dụ AC < AB',
         },
         circumscribedCircle: { type: Type.BOOLEAN, description: 'Đường tròn ngoại tiếp tam giác' },
         inscribedCircle: { type: Type.BOOLEAN, description: 'Đường tròn nội tiếp tam giác' },
@@ -493,10 +512,13 @@ const GEOMETRY_RESPONSE_SCHEMA = {
           name: { type: Type.STRING, description: 'Tên điểm phụ, ví dụ H, D, E, M, N, G, K, I' },
           type: {
             type: Type.STRING,
-            enum: ['midpoint', 'ratio', 'projection', 'intersection', 'on-circle', 'free', 'tangent', 'orthocenter'],
+            enum: ['midpoint', 'ratio', 'projection', 'intersection', 'on-circle', 'on-ray', 'free', 'tangent', 'orthocenter'],
           },
           segment: { type: Type.STRING, description: 'Đoạn thẳng chứa trung điểm hoặc tỉ số, ví dụ AB, BC' },
-          ratio: { type: Type.NUMBER, description: 'Tỉ số chia từ 0 đến 1' },
+          ratio: { type: Type.NUMBER, description: 'Tỉ số có hướng, có thể <0 hoặc >1 cho phần kéo dài' },
+          distanceSegment: { type: Type.STRING, description: 'Đoạn tham chiếu độ dài của điểm trên tia' },
+          distanceRatio: { type: Type.NUMBER, description: 'Khoảng cách từ fromPoint tới điểm mới chia cho độ dài distanceSegment' },
+          rayPosition: { type: Type.STRING, enum: ['between', 'beyond'], description: 'Chọn nhánh giữa hai điểm gốc hoặc kéo dài qua điểm thứ hai' },
           fromPoint: { type: Type.STRING, description: 'Điểm hạ hình chiếu vuông góc (VD: H hạ xuống AB thì fromPoint là H)' },
           targetLine: { type: Type.STRING, description: 'Đường thẳng nhận hình chiếu (VD: AB, AC, BC)' },
           line1: { type: Type.STRING, description: 'Đường thẳng 1 khi tìm giao điểm' },
@@ -597,7 +619,7 @@ const GEOMETRY_RESPONSE_SCHEMA = {
       description: 'Mô tả ngắn gọn về hình vẽ chuẩn SGK',
     },
   },
-  required: ['title', 'shapeCategory', 'detectedEntities', 'explanation'],
+  required: ['title', 'shapeCategory', 'problemText', 'detectedEntities', 'explanation'],
 };
 
 /**
@@ -651,7 +673,7 @@ export async function parseGeometryWithGemini(prompt: string, userApiKey?: strin
         }
 
         const parsed: GeometrySpecification = JSON.parse(cleanText);
-        validateAndNormalizeSpec(parsed, prompt);
+        validateAndNormalizeSpec(parsed, prompt, Boolean(image));
         parsed.generationInfo = {
           source: 'gemini',
           model: modelName,
@@ -698,7 +720,7 @@ export async function parseGeometryWithGemini(prompt: string, userApiKey?: strin
 /**
  * Chuẩn hóa và kiểm tra tính hợp lệ của Specification
  */
-function validateAndNormalizeSpec(spec: GeometrySpecification, originalPrompt: string): void {
+export function validateAndNormalizeSpec(spec: GeometrySpecification, originalPrompt: string, fromImage = false): void {
   if (!spec.shapeCategory) {
     spec.shapeCategory = 'triangle';
   }
@@ -764,11 +786,10 @@ function validateAndNormalizeSpec(spec: GeometrySpecification, originalPrompt: s
 
   // An toàn dự phòng: nếu đề bài hoặc detectedEntities có các phép dựng mà Gemini vô tình bỏ sót
   // Loại bỏ các câu kết luận chứng minh để không biến kết luận thành giả thiết
-  const sanitizedPrompt = originalPrompt
-    .replace(/(?:chứng\s*minh\s*(?:rằng)?|cmr\s*:?|chứng\s*tỏ\s*(?:rằng)?)[^.?!;]*(?:[.?!;]|$)/gi, ' ')
-    .replace(/\b(?:tính|tìm)\s+(?:độ\s*dài|diện\s*tích|góc|số\s*đo)[^.?!;]*(?:[.?!;]|$)/gi, ' ');
-
-  const combinedText = `${sanitizedPrompt} ${(spec.detectedEntities || []).join(' ')} ${(spec.explanation || '')}`;
+  const problemText = fromImage ? `${spec.problemText || ''}\n${originalPrompt}` : (originalPrompt || spec.problemText || '');
+  const sanitizedPrompt = stripGeometryProofGoals(problemText);
+  // Lời giải/nhãn AI có thể chứa kết luận hoặc phép dựng tưởng tượng.
+  const combinedText = sanitizedPrompt;
   const rawText = combinedText.toLowerCase();
 
   if (spec.shapeCategory === 'triangle' && spec.triangle) {
@@ -838,7 +859,7 @@ function validateAndNormalizeSpec(spec: GeometrySpecification, originalPrompt: s
 
     // 3. Kiểm tra đường cao AH nếu Gemini chưa điền vào altitudes
     if (spec.altitudes.length === 0) {
-      if (rawText.includes('đường cao ah') || (rawText.includes('ah') && (rawText.includes('vuông góc') || rawText.includes('chân đường cao')))) {
+      if (/đường\s+cao\s+AH\b|\bAH\s+(?:vuông\s+góc|⊥)\s+(?:với\s+)?BC\b/i.test(combinedText)) {
         spec.altitudes.push({
           from: vA,
           toLine: oppBC,
@@ -991,4 +1012,5 @@ function validateAndNormalizeSpec(spec: GeometrySpecification, originalPrompt: s
     }
   }
   completeCompositeTriangle(spec, sanitizedPrompt);
+  normalizeExplicitConstructions(spec, problemText);
 }

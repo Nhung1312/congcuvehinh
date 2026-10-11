@@ -55,6 +55,34 @@ function computePoint(point: CustomAuxPoint, points: Record<string, Point2D>, de
     return from && target ? projectPointToLine(from, ...target).point : null;
   }
 
+  // Giao của tia có hướng với đường tròn tâm fromPoint, bán kính là một
+  // độ dài phụ thuộc. Không dùng tọa độ tự do hoặc gán vai trò theo tên điểm.
+  if (point.type === 'on-ray') {
+    const ray = endpoints(point.segment, points);
+    const reference = endpoints(point.distanceSegment, points);
+    const center = point.fromPoint && resolvePointCoordinate(point.fromPoint, points);
+    const scale = point.distanceRatio ?? 1;
+    if (!ray || !reference || !center || !Number.isFinite(scale) || scale <= 0) return null;
+    const dx = ray[1].x - ray[0].x, dy = ray[1].y - ray[0].y;
+    const a = dx * dx + dy * dy;
+    const radius = Math.hypot(reference[1].x - reference[0].x, reference[1].y - reference[0].y) * scale;
+    if (a < 1e-12 || radius < 1e-8) return null;
+    const ox = ray[0].x - center.x, oy = ray[0].y - center.y;
+    const b = 2 * (ox * dx + oy * dy);
+    const c = ox * ox + oy * oy - radius * radius;
+    const discriminant = b * b - 4 * a * c;
+    const tolerance = 1e-10 * Math.max(b * b, Math.abs(4 * a * c), 1);
+    if (discriminant < -tolerance) return null;
+    const root = Math.sqrt(Math.max(0, discriminant));
+    const candidates = [(-b - root) / (2 * a), (-b + root) / (2 * a)]
+      // Một điểm mới khác hai điểm đã đặt tên trên tia.
+      .filter(t => t > 1e-8 && Math.abs(t - 1) > 1e-8)
+      .filter(t => point.rayPosition === 'between' ? t < 1 : point.rayPosition === 'beyond' ? t > 1 : true);
+    if (!candidates.length) return null;
+    const t = candidates[0];
+    return { x: ray[0].x + t * dx, y: ray[0].y + t * dy };
+  }
+
   if (point.type === 'intersection') {
     const first = endpoints(point.line1, points);
     const second = endpoints(point.line2, points);
