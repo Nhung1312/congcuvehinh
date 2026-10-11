@@ -9,6 +9,13 @@ on:
     paths:
       - 'src/ai/**'
       - 'src/components/EditorPanels/AIGeometryEditor.tsx'
+      - 'src/components/TemplatesModal.tsx'
+      - 'src/components/Sidebar.tsx'
+      - 'src/components/Header.tsx'
+      - 'src/App.tsx'
+      - 'src/storage/textbookTemplates.ts'
+      - 'src/storage/storageService.ts'
+      - 'scripts/test_textbook_templates.ts'
       - 'api/geometry/parse.ts'
       - 'api/health.ts'
       - 'server.ts'
@@ -52,5 +59,8 @@ jobs:
         run: npm run test:geometry-constructions
       - name: Compiled API startup and request tests (plain Node ESM)
         run: npm run test:api-runtime
+      - name: Textbook template geometry and SVG checks
+        run: npm run test:textbook-templates
       - name: Production bundle check
         run: npm run build
+

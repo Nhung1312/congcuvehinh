@@ -18,12 +18,14 @@ import {
   Box,
   Hexagon,
   Repeat,
+  BookOpen,
 } from 'lucide-react';
 import { ToolCategory, ToolType } from '../types';
 
 interface SidebarProps {
   currentType: ToolType;
   onSelectTool: (type: ToolType) => void;
+  onOpenTemplates: () => void;
 }
 
 interface ToolItem {
@@ -35,7 +37,7 @@ interface ToolItem {
   isSpecial?: boolean;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentType, onSelectTool }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentType, onSelectTool, onOpenTemplates }) => {
   const categories: { id: ToolCategory; title: string; items: ToolItem[] }[] = [
     {
       id: 'ai',
@@ -209,6 +211,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentType, onSelectTool }) =
       </div>
 
       <div className="p-2 space-y-4">
+        <button type="button" onClick={onOpenTemplates}
+          className="w-full flex items-center gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-left hover:bg-blue-100">
+          <BookOpen className="w-5 h-5 shrink-0" />
+          <span><span className="block text-xs font-bold">Mẫu hình cơ bản THCS</span>
+            <span className="block text-[10px] mt-0.5">Chọn hình có sẵn</span></span>
+        </button>
         {categories.map((cat) => (
           <div key={cat.id} className="space-y-1">
             <h3 className="px-2.5 text-[11px] font-bold text-slate-500 tracking-wider uppercase">
@@ -259,3 +267,4 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentType, onSelectTool }) =
     </aside>
   );
 };
+

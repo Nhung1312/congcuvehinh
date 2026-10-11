@@ -81,6 +81,7 @@ import {
 } from '../utils/geometryMath';
 
 interface GeometrySvgProps {
+  svgId?: string;
   data: GeometryData;
   settings: BaseChartSettings;
   onUpdateTrianglePoints?: (points: [Point2D, Point2D, Point2D]) => void;
@@ -94,6 +95,7 @@ interface GeometrySvgProps {
 }
 
 export const GeometrySvg: React.FC<GeometrySvgProps> = ({
+  svgId = 'svg-math-canvas',
   data,
   settings,
   onUpdateTrianglePoints,
@@ -2878,13 +2880,13 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
                 {c.showTangentRightAngle !== false && twoTangents.isValid && (
                   <>
                     <path
-                      d={getRightAngleMarkerPath(pCenter, twoTangents.p1, pExtP, 9)}
+                      d={getRightAngleMarkerPath(twoTangents.p1, pCenter, pExtP, 9)}
                       stroke="#475569"
                       strokeWidth={1.2}
                       fill="none"
                     />
                     <path
-                      d={getRightAngleMarkerPath(pCenter, twoTangents.p2, pExtP, 9)}
+                      d={getRightAngleMarkerPath(twoTangents.p2, pCenter, pExtP, 9)}
                       stroke="#475569"
                       strokeWidth={1.2}
                       fill="none"
@@ -2973,7 +2975,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
                     />
                     {/* Góc vuông OA ⊥ Tangent */}
                     <path
-                      d={getRightAngleMarkerPath(pCenter, pRadius, tLineP2, 9)}
+                      d={getRightAngleMarkerPath(pRadius, pCenter, tLineP2, 9)}
                       stroke="#475569"
                       strokeWidth={1.2}
                       fill="none"
@@ -5110,7 +5112,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
   return (
     <svg
       ref={svgRef}
-      id="svg-math-canvas"
+      id={svgId}
       xmlns="http://www.w3.org/2000/svg"
       viewBox={svgViewBox}
       preserveAspectRatio="xMidYMid meet"
@@ -5139,3 +5141,4 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     </svg>
   );
 };
+
