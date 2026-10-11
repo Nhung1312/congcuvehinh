@@ -18,7 +18,7 @@ const api = await import(new URL('api/geometry/parse.js', base));
 const health = await import(new URL('api/health.js', base));
 let calls = [];
 let failWithQuota = false;
-const fixture = {
+let fixture = {
   title: 'Tam giác ABC', shapeCategory: 'triangle',
   triangle: { type: 'general', vertices: ['A', 'B', 'C'] },
   detectedEntities: ['A', 'B', 'C'], explanation: '',
@@ -88,6 +88,34 @@ assert.equal(personalBody.spec.generationInfo.keySource, 'API key cá nhân');
 assert.equal(calls.at(-1).headers.get('x-goog-api-key'), 'offline-personal-key');
 assert.ok(calls.at(-1).url.includes('gemini-3.8-flash'));
 assert.deepEqual(personalBody.spec.triangle.vertices, ['A', 'B', 'C']);
+assert.deepEqual(calls.at(-1).body.generationConfig.responseSchema.properties.triangle.required, ['type', 'vertices']);
+assert.deepEqual(calls.at(-1).body.generationConfig.responseSchema.properties.quadrilateral.required, ['type', 'vertices']);
+
+// Reproduce the reported 502 with model JSON for a rectangle and an incomplete
+// unused triangle. Exercise both production handler conventions, text and image.
+const triangleFixture = fixture;
+const quadPrompt = 'Cho hình chữ nhật PQRS với PQ > PS. Kẻ PN ⊥ QS tại N. Gọi M là trung điểm QR. Nối MN.';
+for (const triangle of [{type:'right'}, {type:'right-isosceles'}, {type:'isosceles'},
+  {type:'right',vertices:null}, {type:'right-isosceles',vertices:['N','X','Y']}]) {
+  fixture = {title:'Hình chữ nhật',shapeCategory:'quadrilateral',problemText:quadPrompt,
+    quadrilateral:{type:'rectangle',vertices:['P','Q','R','S']},triangle,
+    detectedEntities:[],explanation:''};
+  const quadWeb = await api.POST(request({prompt:quadPrompt,apiKey:'offline-personal-key'}));
+  const quadBody = await quadWeb.json();
+  assert.equal(quadWeb.status,200,JSON.stringify(quadBody));
+  assert.equal(quadBody.spec.generationInfo.source,'gemini');
+  assert.equal(quadBody.spec.shapeCategory,'quadrilateral');
+  assert.deepEqual(quadBody.spec.quadrilateral.vertices,['P','Q','R','S']);
+  assert.deepEqual(quadBody.spec.rightAngles,[{vertex:'N',ray1:'P',ray2:'Q'}]);
+  assert.ok(quadBody.spec.auxPoints.some(p=>p.name==='N' && p.type==='projection'));
+  const quadNode = nodeResponse();
+  await api.default({method:'POST',body:{prompt:'',apiKey:'offline-personal-key',
+    image:{mimeType:'image/png',data:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB'}}},quadNode);
+  assert.equal(quadNode.statusCode,200,JSON.stringify(quadNode.data));
+  assert.equal(quadNode.data.spec.shapeCategory,'quadrilateral');
+  assert.ok(quadNode.data.spec.auxPoints.some(p=>p.name==='M' && p.segment==='QR'));
+}
+fixture = triangleFixture;
 
 process.env.GEMINI_API_KEY = 'offline-server-key';
 const image = { mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB' };
@@ -112,7 +140,7 @@ assert.equal(quota.status, 502);
 const quotaBody = await quota.json();
 assert.equal(quotaBody.code, 'GEMINI_UNAVAILABLE');
 assert.match(quotaBody.error, /hạn mức|Quota/);
-console.log('PASS: cold start, health, Node/Web handlers, validation, text/image, BYOK/env, quota');
+console.log('PASS: cold start, health, Node/Web handlers, validation, text/image, unused triangle in quadrilateral, BYOK/env, quota');
 `;
 
 test('API khởi chạy và xử lý request sau khi biên dịch thành ESM production', () => {

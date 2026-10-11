@@ -135,17 +135,25 @@ export class GeometrySpecificationAdapter {
    * Không suy đoán tọa độ; các điểm được tính lại theo vị trí đỉnh lúc render.
    */
   private static buildAuxiliaryData(spec: GeometrySpecification) {
-    const triVertices = new Set(spec.triangle?.vertices || ['A', 'B', 'C']);
+    // Gemini có thể trả thêm một mô tả tam giác phụ chưa đủ trường. Chỉ dùng
+    // đường cao/trung tuyến/ký hiệu riêng khi tam giác là hình chính được vẽ.
+    const triangle = spec.shapeCategory === 'triangle' ? spec.triangle : undefined;
+    const altitudes = triangle ? (spec.altitudes || []) : [];
+    const medians = triangle ? (spec.medians || []) : [];
+    const bisectors = triangle ? (spec.bisectors || []) : [];
+    const baseVertices = new Set(spec.shapeCategory === 'quadrilateral'
+      ? (spec.quadrilateral?.vertices || ['A', 'B', 'C', 'D'])
+      : (triangle?.vertices || ['A', 'B', 'C']));
     const namedSpecialPoints = new Set([
-      ...triVertices,
-      ...(spec.altitudes || []).map(item => item.foot),
-      ...(spec.bisectors || []).map(item => item.foot),
+      ...baseVertices,
+      ...altitudes.map(item => item.foot),
+      ...bisectors.map(item => item.foot),
     ]);
     const segmentKey = (from: string, to: string) => [from, to].sort().join(':');
     const specialSegments = new Set([
-      ...(spec.altitudes || []).map(item => segmentKey(item.from, item.foot)),
-      ...(spec.medians || []).map(item => segmentKey(item.from, item.midpoint)),
-      ...(spec.bisectors || []).map(item => segmentKey(item.from, item.foot)),
+      ...altitudes.map(item => segmentKey(item.from, item.foot)),
+      ...medians.map(item => segmentKey(item.from, item.midpoint)),
+      ...bisectors.map(item => segmentKey(item.from, item.foot)),
     ]);
 
     // Đường cao/trung tuyến/đỉnh tam giác đã có renderer và ký hiệu riêng; không vẽ đè lần hai.
@@ -178,13 +186,13 @@ export class GeometrySpecificationAdapter {
 
     const auxPoints: NonNullable<TriangleData['auxPoints']> = (spec.auxPoints || [])
       .filter(point => {
-        if (!point.name || triVertices.has(point.name) || namedSpecialPoints.has(point.name) || seenPointNames.has(point.name)) return false;
+        if (!point.name || baseVertices.has(point.name) || namedSpecialPoints.has(point.name) || seenPointNames.has(point.name)) return false;
         seenPointNames.add(point.name);
         return true;
       })
       .map((point, index) => {
         const hidden = isHelperHidden(point);
-        const inMedians = (spec.medians || []).some(m => m.midpoint === point.name);
+        const inMedians = medians.some(m => m.midpoint === point.name);
         return {
           ...point,
           id: `ai-point-${index}`,
@@ -336,10 +344,10 @@ export class GeometrySpecificationAdapter {
     }
     for (const marker of candidates) {
       if (!marker.vertex || !marker.ray1 || !marker.ray2) continue;
-      const rightVertex = spec.triangle?.specialVertex || spec.triangle?.vertices[0];
-      if (spec.triangle && ['right', 'right-isosceles'].includes(spec.triangle.type) &&
+      const rightVertex = triangle?.specialVertex || triangle?.vertices?.[0];
+      if (triangle && ['right', 'right-isosceles'].includes(triangle.type) &&
           marker.vertex === rightVertex &&
-          [marker.ray1, marker.ray2].sort().join(':') === spec.triangle.vertices.filter(v => v !== rightVertex).sort().join(':')) continue;
+          [marker.ray1, marker.ray2].sort().join(':') === triangle.vertices.filter(v => v !== rightVertex).sort().join(':')) continue;
       const key = [marker.vertex, ...[marker.ray1, marker.ray2].sort()].join(':');
       if (markerKeys.has(key)) continue;
       markerKeys.add(key);
@@ -358,15 +366,15 @@ export class GeometrySpecificationAdapter {
       for (const group of linked) equalityGroups.splice(equalityGroups.indexOf(group), 1);
       equalityGroups.push({ segments: unique, tickType: linked[0]?.tickType || item.tickType });
     }
-    const equalTriangle = spec.triangle && ['isosceles', 'equilateral', 'right-isosceles'].includes(spec.triangle.type);
+    const equalTriangle = triangle && ['isosceles', 'equilateral', 'right-isosceles'].includes(triangle.type);
     const baseEqualKeys = new Set<string>();
-    if (equalTriangle && spec.triangle) {
-      const apex = spec.triangle.specialVertex || spec.triangle.vertices[0];
-      for (const vertex of spec.triangle.vertices) {
+    if (equalTriangle && triangle) {
+      const apex = triangle.specialVertex || triangle.vertices[0];
+      for (const vertex of triangle.vertices) {
         if (vertex !== apex) baseEqualKeys.add(keyForSegment(apex + vertex));
       }
-      if (spec.triangle.type === 'equilateral') {
-        const others = spec.triangle.vertices.filter(v => v !== apex);
+      if (triangle.type === 'equilateral') {
+        const others = triangle.vertices.filter(v => v !== apex);
         baseEqualKeys.add(keyForSegment(others.join('')));
       }
     }

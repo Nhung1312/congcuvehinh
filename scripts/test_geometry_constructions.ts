@@ -306,3 +306,79 @@ test('Chuẩn hóa lại giữ nguyên quan hệ và không thêm đối tượn
   assert.equal(after.auxLines!.length,before.auxLines!.length);
   assert.equal(after.equalSidesMarkers!.length,before.equalSidesMarkers!.length);
 });
+
+// JSON model có thể kèm các mô tả hình phụ/rỗng ngoài hình chính.
+const unusedTriangles = [undefined, null, {}, {type:'right'}, {type:'right-isosceles'},
+  {type:'isosceles'}, {type:'right',vertices:null}, {type:'right',vertices:[]},
+  {type:'right-isosceles',vertices:['N','P','Q']}];
+
+test('Tứ giác không đọc đỉnh tam giác phụ: đủ 7 loại, đổi tên điểm và JSON thiếu trường (126 biến thể)', () => {
+  for (const type of ['rectangle','square','parallelogram','rhombus','trapezoid','isosceles-trapezoid','right-trapezoid'] as const)
+    for (const vertices of [['A','B','C','D'],['P','Q','R','S']] as const) for (const triangle of unusedTriangles) {
+      const [A,B,C,D] = vertices;
+      const prompt = `Cho tứ giác ${vertices.join('')}. Kẻ ${A}N ⊥ ${B}${D} tại N. Gọi M là trung điểm ${B}${C}. Nối NM.`;
+      const spec = {title:'Tứ giác',shapeCategory:'quadrilateral',quadrilateral:{type,vertices:[...vertices]},
+        triangle,detectedEntities:[],explanation:''} as GeometrySpecification;
+      validateAndNormalizeSpec(spec,prompt);
+      assert.equal(spec.shapeCategory,'quadrilateral');
+      assert.deepEqual(spec.rightAngles,[{vertex:'N',ray1:A,ray2:B}]);
+      const doc = document(spec), q = doc.data.geometry!.quadrilateral!;
+      assert.equal(doc.type,'GEOMETRY_QUADRILATERAL');
+      assert.equal(q.type,type);
+      assert.deepEqual(q.vertexNames,vertices);
+      const points = resolveAuxiliaryPoints(Object.fromEntries(vertices.map((v,i)=>[v,q.points![i]])),q.auxPoints || []);
+      assert.ok(points.N && points.M);
+      near(cross(points[B],points[D],points.N),0);
+      near((points[A].x-points.N.x)*(points[D].x-points[B].x)+(points[A].y-points.N.y)*(points[D].y-points[B].y),0);
+      samePoint(points.M,midpoint(points[B],points[C]));
+      assert.ok(q.auxLines?.some(l=>[l.from,l.to].sort().join('') === [A,'N'].sort().join('')));
+      assert.ok(q.auxLines?.some(l=>[l.from,l.to].sort().join('') === 'MN'));
+    }
+});
+
+test('Hình chiếu và trung điểm của tứ giác vẫn được vẽ khi JSON có cả đường cao/trung tuyến phụ', () => {
+  const prompt = 'Cho hình chữ nhật ABCD với AB > AD. Kẻ AN ⊥ BD tại N. Gọi M là trung điểm BC. Nối AM và NM. Chứng minh tứ giác ANMD là hình bình hành.';
+  const spec = {title:'Hình chữ nhật',shapeCategory:'quadrilateral',quadrilateral:{type:'rectangle',vertices:['A','B','C','D']},
+    triangle:{type:'right-isosceles',vertices:['N','P','Q']},
+    altitudes:[{from:'A',toLine:'BD',foot:'N'}],medians:[{from:'A',toSegment:'BC',midpoint:'M'}],
+    detectedEntities:[],explanation:''} as GeometrySpecification;
+  validateAndNormalizeSpec(spec,prompt);
+  const doc = document(spec), q = doc.data.geometry!.quadrilateral!;
+  assert.equal(q.type,'rectangle','Kết luận chứng minh không thay loại hình chính');
+  for (const name of ['N','M']) {
+    const point = q.auxPoints!.find(p=>p.name===name);
+    assert.ok(point?.showPoint && point.showLabel, `${name} không bị đường đặc biệt của tam giác che mất`);
+  }
+  for (const segment of ['AN','AM','NM','MD']) assert.ok(q.auxLines!.some(l=>[l.from,l.to].sort().join('')===segment.split('').sort().join('')),segment);
+  assert.equal(q.equalSidesMarkers![0].tickType,1,'Tam giác phụ không chiếm nhóm ký hiệu bằng nhau');
+  const svg = renderToStaticMarkup(React.createElement(GeometrySvg,{data:doc.data.geometry!,settings:doc.settings}));
+  assert.match(svg,/>N<\/text>/);
+  assert.match(svg,/>M<\/text>/);
+  assert.doesNotMatch(svg,/NaN|Infinity/);
+});
+
+test('Đường tròn, đoạn thẳng, góc, đa giác và đối xứng bỏ qua mô tả tam giác phụ chưa đầy đủ', () => {
+  const cases: {prompt:string; payload:Partial<GeometrySpecification>; type:string}[] = [
+    {prompt:'Cho đường tròn (O).',payload:{shapeCategory:'circle',circle:{presetType:'basic',center:'O'}},type:'GEOMETRY_CIRCLE'},
+    {prompt:'Cho đoạn thẳng PQ.',payload:{shapeCategory:'line-ray',lineRay:{type:'segment',pointNames:['P','Q']}},type:'GEOMETRY_LINE_RAY'},
+    {prompt:'Cho góc xOy.',payload:{shapeCategory:'angle',angle:{type:'single',vertex:'O',ray1:'x',ray2:'y',degrees:60}},type:'GEOMETRY_ANGLE'},
+    {prompt:'Cho lục giác đều PQRSTU.',payload:{shapeCategory:'polygon',polygon:{type:'hexagon',sidesCount:6,vertexNames:['P','Q','R','S','T','U']}},type:'GEOMETRY_POLYGON'},
+    {prompt:'Phép đối xứng tâm O.',payload:{shapeCategory:'symmetry',symmetry:{type:'central',targetShape:'segment',centerName:'O',originalNames:['P','Q'],reflectedNames:["P'","Q'"]}},type:'GEOMETRY_SYMMETRY'},
+  ];
+  for (const entry of cases) for (const triangle of unusedTriangles) {
+    const spec = {title:'Hình phẳng',detectedEntities:[],explanation:'',...entry.payload,triangle,
+      auxPoints:[{name:'N',type:'free',freeX:120,freeY:100}],rightAngles:[{vertex:'N',ray1:'P',ray2:'Q'}],
+      equalSegments:[{segments:['PN','NQ']}]} as GeometrySpecification;
+    validateAndNormalizeSpec(spec,entry.prompt);
+    assert.equal(spec.shapeCategory,entry.payload.shapeCategory);
+    assert.deepEqual(spec.rightAngles,[{vertex:'N',ray1:'P',ray2:'Q'}]);
+    const doc = document(spec);
+    assert.equal(doc.type,entry.type);
+    const data = Object.values(doc.data.geometry!).find(v=>typeof v==='object') as any;
+    assert.ok(data.auxPoints.some((p:any)=>p.name==='N' && p.showLabel));
+    assert.equal(data.equalSidesMarkers[0].tickType,1);
+    const svg = renderToStaticMarkup(React.createElement(GeometrySvg,{data:doc.data.geometry!,settings:doc.settings}));
+    assert.doesNotMatch(svg,/NaN|Infinity/);
+    assert.match(svg,/>N<\/text>/);
+  }
+});
