@@ -1,3 +1,4 @@
+import { BASIC_TEXTBOOK_TEMPLATES, type TextbookTemplate } from './textbookTemplates';
 import { ChartDocument, ToolType } from '../types';
 
 export interface StorageService {
@@ -79,7 +80,7 @@ const genId = () => 'tpl_' + Math.random().toString(36).substr(2, 9);
 /**
  * Bộ mẫu chuẩn SGK Toán THCS (Textbook standard templates)
  */
-export const TEXTBOOK_TEMPLATES: ChartDocument[] = [
+const LEGACY_TEXTBOOK_TEMPLATES: TextbookTemplate[] = [
   // 1. Định lý Ta-lét / Tam giác đồng dạng
   {
     id: genId(),
@@ -174,3 +175,5 @@ export const TEXTBOOK_TEMPLATES: ChartDocument[] = [
     }
   }
 ];
+
+export const TEXTBOOK_TEMPLATES: TextbookTemplate[] = [...LEGACY_TEXTBOOK_TEMPLATES, ...BASIC_TEXTBOOK_TEMPLATES];
