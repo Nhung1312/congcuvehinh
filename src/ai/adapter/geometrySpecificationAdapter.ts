@@ -336,19 +336,54 @@ export class GeometrySpecificationAdapter {
     }
     for (const marker of candidates) {
       if (!marker.vertex || !marker.ray1 || !marker.ray2) continue;
+      const rightVertex = spec.triangle?.specialVertex || spec.triangle?.vertices[0];
+      if (spec.triangle && ['right', 'right-isosceles'].includes(spec.triangle.type) &&
+          marker.vertex === rightVertex &&
+          [marker.ray1, marker.ray2].sort().join(':') === spec.triangle.vertices.filter(v => v !== rightVertex).sort().join(':')) continue;
       const key = [marker.vertex, ...[marker.ray1, marker.ray2].sort()].join(':');
       if (markerKeys.has(key)) continue;
       markerKeys.add(key);
       rightAngleMarkers.push({ id: `ai-right-${rightAngleMarkers.length}`, ...marker, enabled: true });
     }
 
-    const equalSidesMarkers: NonNullable<TriangleData['equalSidesMarkers']> =
-      (spec.equalSegments || []).map((item, index) => ({
+    // Các nhóm độc lập phải dùng ký hiệu khác nhau; nhóm có chung một đoạn
+    // được gộp để mọi đoạn được tuyên bố bằng nhau có cùng ký hiệu.
+    const equalityGroups: { segments: (string | [string, string])[]; tickType?: 1 | 2 | 3 | 'o' | 'x' }[] = [];
+    const keyForSegment = (s: string | [string, string]) => (Array.isArray(s) ? [...s] : s.split('')).sort().join(':');
+    for (const item of spec.equalSegments || []) {
+      const keys = new Set(item.segments.map(keyForSegment));
+      const linked = equalityGroups.filter(group => group.segments.some(s => keys.has(keyForSegment(s))));
+      const segments = [...item.segments, ...linked.flatMap(group => group.segments)];
+      const unique = segments.filter((s, i) => segments.findIndex(t => keyForSegment(t) === keyForSegment(s)) === i);
+      for (const group of linked) equalityGroups.splice(equalityGroups.indexOf(group), 1);
+      equalityGroups.push({ segments: unique, tickType: linked[0]?.tickType || item.tickType });
+    }
+    const equalTriangle = spec.triangle && ['isosceles', 'equilateral', 'right-isosceles'].includes(spec.triangle.type);
+    const baseEqualKeys = new Set<string>();
+    if (equalTriangle && spec.triangle) {
+      const apex = spec.triangle.specialVertex || spec.triangle.vertices[0];
+      for (const vertex of spec.triangle.vertices) {
+        if (vertex !== apex) baseEqualKeys.add(keyForSegment(apex + vertex));
+      }
+      if (spec.triangle.type === 'equilateral') {
+        const others = spec.triangle.vertices.filter(v => v !== apex);
+        baseEqualKeys.add(keyForSegment(others.join('')));
+      }
+    }
+    const usedTicks = new Set<1 | 2 | 3 | 'o' | 'x'>(equalTriangle ? [1] : []);
+    const tickOptions = [1, 2, 3, 'o', 'x'] as const;
+    const equalSidesMarkers: NonNullable<TriangleData['equalSidesMarkers']> = equalityGroups.map((item, index) => {
+      const sameAsTriangle = item.segments.some(s => baseEqualKeys.has(keyForSegment(s)));
+      const tickType = sameAsTriangle ? 1 : item.tickType && !usedTicks.has(item.tickType) ? item.tickType :
+        (tickOptions.find(tick => !usedTicks.has(tick)) || item.tickType || 1);
+      usedTicks.add(tickType);
+      return {
         id: `ai-equal-${index}`,
         segments: item.segments,
-        tickType: item.tickType || 1,
+        tickType,
         enabled: true,
-      }));
+      };
+    });
     const equalAnglesMarkers: NonNullable<TriangleData['equalAnglesMarkers']> =
       (spec.equalAngles || []).map((item, index) => ({
         id: `ai-angle-${index}`,
@@ -378,7 +413,7 @@ export class GeometrySpecificationAdapter {
 
     const triType = triSpec.type || 'general';
     const specialRole = triSpec.specialVertex
-      ? triSpec.vertices.indexOf(triSpec.specialVertex)
+      ? Math.max(0, triSpec.vertices.indexOf(triSpec.specialVertex))
       : 0;
     let points: [Point2D, Point2D, Point2D] = [
       { x: 215, y: 110 },
@@ -399,8 +434,8 @@ export class GeometrySpecificationAdapter {
       } else if (specialRole === 2) {
         points = [
           { x: 170, y: 340 },
-          { x: 170 + leg2, y: 340 },
           { x: 170 + leg2, y: 340 - leg1 },
+          { x: 170 + leg2, y: 340 },
         ];
       } else {
         points = [
@@ -467,6 +502,36 @@ export class GeometrySpecificationAdapter {
         !(spec.equalSegments || []).length) {
       // Still acute, AB < AC, with the tangent–BC intersection much closer.
       points = [{ x: 175, y: 150 }, { x: 130, y: 340 }, { x: 430, y: 340 }];
+    }
+
+    // Chọn độ dài ban đầu theo mọi bất đẳng thức cạnh được cho, kể cả đổi tên
+    // hoặc đảo thứ tự đỉnh. Giữ nguyên loại tam giác và đỉnh góc vuông/cân/tù.
+    const comparisons = triSpec.sideComparisons || [];
+    if (comparisons.length) {
+      const sideLength = (candidate: Point2D[], side: string) => {
+        const first = triSpec.vertices.indexOf(side[0]), second = triSpec.vertices.indexOf(side[1]);
+        return first < 0 || second < 0 ? NaN : Math.hypot(
+          candidate[first].x - candidate[second].x, candidate[first].y - candidate[second].y
+        );
+      };
+      const permutations = [[0,1,2], [0,2,1], [1,0,2], [1,2,0], [2,0,1], [2,1,0]];
+      const special = triType !== 'general' && triType !== 'equilateral';
+      const permutation = permutations.find(order => (!special || order[specialRole] === specialRole) &&
+        comparisons.every(rule => sideLength(order.map(i => points[i]), rule.shorter) + 1e-6 <
+          sideLength(order.map(i => points[i]), rule.longer)));
+      if (permutation) {
+        const candidate = permutation.map(i => points[i]) as [Point2D, Point2D, Point2D];
+        if (triType === 'right' || triType === 'right-isosceles') {
+          const apex = points[specialRole];
+          points = points.map((point, index) => {
+            if (index === specialRole) return point;
+            const length = Math.hypot(point.x - apex.x, point.y - apex.y);
+            const target = Math.hypot(candidate[index].x - apex.x, candidate[index].y - apex.y);
+            return { x: apex.x + (point.x - apex.x) * target / length,
+              y: apex.y + (point.y - apex.y) * target / length };
+          }) as [Point2D, Point2D, Point2D];
+        } else points = candidate;
+      }
     }
 
     const roleOf = (name: string): 'A' | 'B' | 'C' => {

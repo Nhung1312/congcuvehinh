@@ -397,9 +397,12 @@ export interface CustomAuxLine {
 export interface CustomAuxPoint {
   id: string;
   name: string; // Tên điểm, ví dụ 'M', 'N', 'I', 'K', 'P', 'H', 'O'
-  type: 'midpoint' | 'ratio' | 'projection' | 'free' | 'intersection' | 'on-circle' | 'tangent' | 'orthocenter' | 'centroid' | 'incenter' | 'circumcenter';
+  type: 'midpoint' | 'ratio' | 'projection' | 'free' | 'intersection' | 'on-circle' | 'on-ray' | 'tangent' | 'orthocenter' | 'centroid' | 'incenter' | 'circumcenter';
   segment?: string | [string, string] | string[]; // Đoạn thẳng chứa trung điểm hoặc tỉ lệ, ví dụ 'AB', ['B', 'C']
-  ratio?: number; // Tỉ lệ chia (0 đến 1, ví dụ 0.5 = trung điểm, 0.33 = 1/3)
+  ratio?: number; // Tỉ số có hướng; có thể ngoài [0,1] khi kéo dài đoạn
+  distanceSegment?: string | [string, string] | string[];
+  distanceRatio?: number;
+  rayPosition?: 'between' | 'beyond';
   fromPoint?: string; // Đỉnh hạ hình chiếu (cho type 'projection')
   targetLine?: string | [string, string] | string[]; // Cạnh nhận hình chiếu
   line1?: string | [string, string] | string[]; // Đường 1 (cho type 'intersection')
