@@ -12,7 +12,8 @@
     "test:geometry-ai": "tsx --test scripts/test_geometry_ai_aux.ts",
     "test:geometry-ai-composite": "tsx --test scripts/test_geometry_ai_composite.ts",
     "test:geometry-tikz": "tsx --test scripts/test_geometry_tikz.ts",
-    "test:geometry-image": "tsx --test scripts/test_geometry_image.ts"
+    "test:geometry-image": "tsx --test scripts/test_geometry_image.ts",
+    "test:api-runtime": "node --import tsx --test scripts/test_vercel_api_runtime.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

@@ -10,8 +10,10 @@ on:
       - 'src/ai/**'
       - 'src/components/EditorPanels/AIGeometryEditor.tsx'
       - 'api/geometry/parse.ts'
+      - 'api/health.ts'
       - 'server.ts'
       - 'scripts/test_geometry_image.ts'
+      - 'scripts/test_vercel_api_runtime.ts'
       - 'src/server/geminiGeometryService.ts'
       - 'src/renderers/GeometrySvg.tsx'
       - 'src/utils/resolveAuxiliaryPoints.ts'
@@ -44,5 +46,7 @@ jobs:
         run: npm run test:geometry-tikz
       - name: Image question & prompt persistence UI tests
         run: npm run test:geometry-image
+      - name: Compiled API startup and request tests (plain Node ESM)
+        run: npm run test:api-runtime
       - name: Production bundle check
         run: npm run build

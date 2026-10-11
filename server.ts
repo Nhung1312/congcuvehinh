@@ -2,8 +2,8 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
-import { parseGeometryWithGemini } from './src/server/geminiGeometryService';
-import { validateGeometryImageInput } from './src/ai/geometryImageInput';
+import { parseGeometryWithGemini } from './src/server/geminiGeometryService.js';
+import { validateGeometryImageInput } from './src/ai/geometryImageInput.js';
 
 dotenv.config({ path: '.env.local' });
 dotenv.config();

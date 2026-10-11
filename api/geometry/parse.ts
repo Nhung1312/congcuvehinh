@@ -3,8 +3,9 @@
  * Supports both Web Standard Request (Fetch API) and Node.js (req, res) runtimes.
  * Never stores or logs API keys. Never uses shared keys.
  */
-import { parseGeometryWithGemini } from '../../src/server/geminiGeometryService';
-import { validateGeometryImageInput } from '../../src/ai/geometryImageInput';
+// Vercel emits separate ESM .js files; Node requires explicit extensions.
+import { parseGeometryWithGemini } from '../../src/server/geminiGeometryService.js';
+import { validateGeometryImageInput } from '../../src/ai/geometryImageInput.js';
 
 interface ParseOutcome {
   status: number;

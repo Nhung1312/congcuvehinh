@@ -5,8 +5,8 @@
  */
 import { GoogleGenAI, Type } from '@google/genai';
 import type { GeometrySpecification } from '../ai/types';
-import { completeCompositeTriangle } from '../ai/parser/completeCompositeTriangle';
-import { makeGeometryUserParts, type GeometryImageInput } from '../ai/geometryImageInput';
+import { completeCompositeTriangle } from '../ai/parser/completeCompositeTriangle.js';
+import { makeGeometryUserParts, type GeometryImageInput } from '../ai/geometryImageInput.js';
 
 /** Gemini client được khởi tạo: ưu tiên API key cá nhân của người dùng, nếu không có sẽ dùng server GEMINI_API_KEY */
 function getGeminiClient(userApiKey?: string): { client: GoogleGenAI; keySource: 'user' | 'server' } | null {
