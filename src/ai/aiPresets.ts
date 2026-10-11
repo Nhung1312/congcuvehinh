@@ -1,6 +1,6 @@
 /**
  * aiPresets.ts
- * Bộ 12 đề toán hình học THCS mẫu tiêu chuẩn để kiểm thử toàn diện hệ thống AI
+ * Đề mẫu hình học THCS đi kèm bản dựng sẵn, không cần gọi AI.
  */
 
 export interface GeometryProblemPreset {
@@ -57,7 +57,7 @@ export const AI_GEOMETRY_PRESETS: GeometryProblemPreset[] = [
   {
     id: 'preset-7',
     grade: 'Toán 8',
-    title: '7. Hình thang & Hai đường chéo song song',
+    title: '7. Hình thang & Hai đường chéo',
     topic: 'Hình thang (AB // CD)',
     prompt: 'Cho hình thang ABCD có đáy AB song song với CD. Kẻ hai đường chéo AC và BD cắt nhau tại O.',
   },

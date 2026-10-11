@@ -14,6 +14,8 @@ on:
       - 'server.ts'
       - 'scripts/test_geometry_image.ts'
       - 'scripts/test_geometry_constructions.ts'
+      - 'scripts/test_geometry_presets.ts'
+      - 'src/components/CanvasArea.tsx'
       - 'src/types/index.ts'
       - 'scripts/test_vercel_api_runtime.ts'
       - 'src/server/geminiGeometryService.ts'
@@ -50,6 +52,8 @@ jobs:
         run: npm run test:geometry-image
       - name: Explicit construction and image interpretation regression tests
         run: npm run test:geometry-constructions
+      - name: Offline preset drawing and geometry regression tests
+        run: npm run test:geometry-presets
       - name: Compiled API startup and request tests (plain Node ESM)
         run: npm run test:api-runtime
       - name: Production bundle check

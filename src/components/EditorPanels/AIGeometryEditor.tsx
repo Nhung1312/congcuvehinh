@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { ChartDocument, BaseChartSettings, ToolType } from '../../types';
 import { AI_GEOMETRY_PRESETS, GeometryProblemPreset } from '../../ai/aiPresets';
+import { buildGeometryPresetDocument } from '../../ai/geometryPresetDocuments';
 import { MockGeometryProvider } from '../../ai/providers/MockGeometryProvider';
 import { GeminiGeometryProvider } from '../../ai/providers/GeminiGeometryProvider';
 import { ClaudeGeometryProvider } from '../../ai/providers/ClaudeGeometryProvider';
@@ -202,7 +203,14 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
   const handleSelectPreset = (preset: GeometryProblemPreset) => {
     setPrompt(preset.prompt);
     setQuestionImage(undefined);
-    void handleRunAI(preset.prompt, null);
+    setErrorMsg(null);
+    setFailedProvider(null);
+    setLastResult(null);
+    try {
+      onApplyDoc(buildGeometryPresetDocument(preset, currentDoc.settings));
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Không thể mở hình mẫu.');
+    }
   };
 
   return (
@@ -558,14 +566,14 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
         </div>
       )}
 
-      {/* Danh sách 12 Đề Mẫu THCS Tiêu Chuẩn */}
+      {/* Hình dựng sẵn: mở trực tiếp, không gọi provider AI */}
       <div className="space-y-2 pt-2 border-t border-slate-200">
         <div className="flex items-center justify-between">
           <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
             <BookOpen className="w-3.5 h-3.5 text-amber-600" />
-            12 Đề mẫu THCS chuẩn SGK:
+            {AI_GEOMETRY_PRESETS.length} hình mẫu THCS dựng sẵn:
           </h4>
-          <span className="text-[10px] text-slate-400 font-medium">Nhấn để dựng ngay</span>
+          <span className="text-[10px] text-slate-400 font-medium">Không cần API key</span>
         </div>
 
         <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
@@ -573,6 +581,7 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
             <button
               key={preset.id}
               type="button"
+              disabled={isProcessing}
               onClick={() => handleSelectPreset(preset)}
               className="w-full text-left p-2.5 bg-slate-50 hover:bg-blue-50/70 hover:border-blue-300 border border-slate-200 rounded-lg text-xs transition group space-y-0.5"
             >

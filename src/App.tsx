@@ -29,7 +29,6 @@ import { CoordinatePlaneEditor } from './components/EditorPanels/CoordinatePlane
 import { FunctionGraphEditor } from './components/EditorPanels/FunctionGraphEditor';
 import { GeometryEditor } from './components/EditorPanels/GeometryEditor';
 import { AIGeometryEditor } from './components/EditorPanels/AIGeometryEditor';
-import { AIGeometryModal } from './components/AIGeometryModal';
 import { SpatialGeometryEditor } from './components/EditorPanels/SpatialGeometryEditor';
 import { FractionBarEditor } from './components/EditorPanels/FractionBarEditor';
 import { NumberLineEditor } from './components/EditorPanels/NumberLineEditor';
@@ -129,7 +128,6 @@ export const App: React.FC = () => {
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
   const [showSavedModal, setShowSavedModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
-  const [showAIModal, setShowAIModal] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
 
   const showToast = (message: string) => {
@@ -941,7 +939,6 @@ export const App: React.FC = () => {
         onOpenTemplates={() => setShowTemplatesModal(true)}
         onOpenDataTable={() => setShowDataTableModal(true)}
         onOpenHelp={() => setShowHelpModal(true)}
-        onOpenAIModal={() => setShowAIModal(true)}
         onOpenAuthModal={() => setShowAuthModal(true)}
         onOpenSubscriptionModal={() => setShowSubscriptionModal(true)}
         currentUser={currentUser}
@@ -1062,13 +1059,6 @@ export const App: React.FC = () => {
         onClose={() => setShowHelpModal(false)}
       />
 
-      <AIGeometryModal
-        isOpen={showAIModal}
-        onClose={() => setShowAIModal(false)}
-        currentDoc={currentDoc}
-        onApplyDoc={(doc) => setCurrentDoc(doc)}
-        onSwitchToManualTool={(t) => handleSelectTool(t)}
-      />
     </div>
   );
 };
