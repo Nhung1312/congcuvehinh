@@ -79,7 +79,9 @@ export class VietnameseGeometryParser {
       text.includes('hình đối xứng') ||
       text.includes('đối xứng qua trục') ||
       text.includes('đối xứng qua đường thẳng') ||
-      (text.includes('đối xứng') && !text.includes('tam giác') && !text.includes('tứ giác'));
+      (text.includes('đối xứng') &&
+        !/(?:tam giác|tứ giác|hình (?:bình hành|thang|chữ nhật|vuông|thoi)|đường tròn|đa giác đều|ngũ giác|lục giác|bát giác)/.test(text) &&
+        !/\b[a-z]\s+(?:là\s+)?(?:điểm\s+)?đối\s+xứng\s+(?:của|với)\s+[a-z]\s+qua\s+(?:điểm\s+)?[a-z]\b/i.test(text));
 
     if (isStandaloneSymmetry) {
       return 'symmetry';

@@ -150,9 +150,19 @@ export const CanvasArea: React.FC<CanvasAreaProps> = ({
       const curPoly = currentDoc.data.geometry?.polygon;
       if (curPoly) {
         const maxR = Math.max(40, Math.floor(Math.min(width, height) / 2 - 45));
-        const center = { x: width / 2, y: height / 2 };
-        const pts = curPoly.points ? fitGeometryPoints(curPoly.points, width, height, 45) : undefined;
-        onUpdatePolygonData({ ...curPoly, center, radius: maxR, points: pts });
+        if (curPoly.points?.length) {
+          const points = fitGeometryPoints(curPoly.points, width, height, 45);
+          // Các đỉnh đa giác đều vẫn thuộc đường tròn ngoại tiếp sau khi Fit.
+          // Bán kính phải được tính lại theo cùng phép biến đổi tọa độ.
+          const center = {
+            x: points.reduce((sum, p) => sum + p.x, 0) / points.length,
+            y: points.reduce((sum, p) => sum + p.y, 0) / points.length,
+          };
+          const radius = points.reduce((sum, p) => sum + Math.hypot(p.x - center.x, p.y - center.y), 0) / points.length;
+          onUpdatePolygonData({ ...curPoly, center, radius, points });
+        } else {
+          onUpdatePolygonData({ ...curPoly, center: { x: width / 2, y: height / 2 }, radius: maxR });
+        }
       }
     } else if (currentDoc.type === 'GEOMETRY_SYMMETRY' && onUpdateSymmetryData) {
       const curSym = currentDoc.data.geometry?.symmetry;
@@ -207,8 +217,11 @@ export const CanvasArea: React.FC<CanvasAreaProps> = ({
     } else if (currentDoc.type === 'GEOMETRY_POLYGON' && onUpdatePolygonData) {
       const curPoly = currentDoc.data.geometry?.polygon;
       if (curPoly) {
-        const newRadius = Math.max(30, Math.min(250, Math.round(curPoly.radius * factor)));
-        const pts = curPoly.points ? scaleGeometryPoints(curPoly.points, factor) : undefined;
+        const previousRadius = curPoly.radius > 0 ? curPoly.radius : 120;
+        const newRadius = Math.max(30, Math.min(250, previousRadius * factor));
+        const effectiveFactor = newRadius / previousRadius;
+        // Phóng theo tâm đa giác với cùng hệ số được áp dụng cho bán kính.
+        const pts = curPoly.points ? scaleGeometryPoints(curPoly.points, effectiveFactor, curPoly.center) : undefined;
         onUpdatePolygonData({ ...curPoly, radius: newRadius, points: pts });
       }
     } else if (currentDoc.type === 'GEOMETRY_SYMMETRY' && onUpdateSymmetryData) {
