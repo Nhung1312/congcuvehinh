@@ -87,6 +87,48 @@ test('Đề người dùng: cả bộ quy tắc và JSON AI sai đều dựng đ
   }
 });
 
+test('Đề thật: "Trên tia MF lấy điểm H" và điều kiện nằm giữa trước FM = FH', () => {
+  const prompt = [
+    'Cho tam giác ABC vuông tại A, có AC < AB. Gọi M là trung điểm của BC.',
+    'Từ M kẻ ME vuông góc với AB tại E, MF vuông góc với AC tại F.',
+    'Trên tia MF lấy điểm H sao cho F nằm giữa M và H, đồng thời FM = FH.',
+    'Gọi I là giao điểm của hai đường thẳng EH và AF. Gọi J là trung điểm của đoạn thẳng ME.',
+    'Vẽ đầy đủ các điểm A, B, C, M, E, F, H, I, J và các đoạn thẳng được nêu trong đề.',
+  ].join('\n');
+
+  for (const source of ['rules', 'gemini-wrong', 'image-transcription']) {
+    const spec = source === 'rules' ? VietnameseGeometryParser.parse(prompt) : brokenAI();
+    if (source === 'image-transcription') {
+      spec.problemText = prompt;
+      validateAndNormalizeSpec(spec, '', true);
+    } else if (source === 'gemini-wrong') {
+      validateAndNormalizeSpec(spec, prompt);
+    }
+
+    const h = spec.auxPoints?.find(p => p.name === 'H');
+    assert.equal(h?.type, 'on-ray', 'H không được giữ nhầm thành chân đường cao AH');
+    assert.equal(h?.segment, 'MF');
+    assert.equal(h?.fromPoint, 'F');
+    assert.equal(h?.rayPosition, 'beyond', 'F phải nằm giữa M và H');
+    assertConstruction(resolved(spec));
+
+    const doc = document(spec);
+    const tri = doc.data.geometry?.triangle!;
+    assert.equal(doc.type, 'GEOMETRY_TRIANGLE');
+    assert.equal(tri.altitudes?.length, 0);
+    for (const segment of ['EH', 'AF']) {
+      assert.ok(tri.auxLines?.some(line =>
+        [line.from + line.to, line.to + line.from].includes(segment)),
+        'Thiếu đoạn ' + segment);
+    }
+    const svg = renderToStaticMarkup(React.createElement(GeometrySvg, {
+      data: doc.data.geometry!, settings: doc.settings,
+    }));
+    assert.ok(svg.includes('<svg'), 'Phải render hình SVG');
+    assert.ok(!/NaN|Infinity/.test(svg), 'Tọa độ SVG không hợp lệ');
+  }
+});
+
 test('Quy tắc độc lập tên điểm, đỉnh vuông ở cả ba vị trí, đảo dấu bằng và hai thứ tự cạnh (72 biến thể)', () => {
   const sets = [names, ['P','Q','R','S','T','U','V','W','X'], ['D','E','F','K','L','M','N','P','Q']];
   for (const n of sets) for (const order of [[0,1,2],[1,0,2],[1,2,0]]) for (const reverse of [false,true])
