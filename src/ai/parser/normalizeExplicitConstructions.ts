@@ -190,14 +190,24 @@ export function normalizeExplicitConstructions(spec: GeometrySpecification, prob
     spec.rightAngles.push({ vertex: name, ray1: source, ray2: targetLine[0] });
   }
 
-  // Tia PQ có gốc P, hướng qua Q; độ dài có thể tham chiếu bất kỳ đoạn đã dựng.
-  const rayPattern = /(?:lấy|gọi|chọn)\s+(?:điểm\s+)?([A-Z])\s+(?:nằm\s+)?(?:trên|thuộc)\s+tia\s+([A-Z])([A-Z])\s+(?:sao\s+)?cho\s+([^.!?;]+)/gi;
-  for (const match of raw.matchAll(rayPattern)) {
-    const name = match[1].toUpperCase(), segment = (match[2] + match[3]).toUpperCase();
+  // Câu dựng điểm trên tia có thể viết ở cả hai thứ tự:
+  // "Lấy H trên tia MF sao cho FM = FH" hoặc
+  // "Trên tia MF lấy điểm H sao cho F nằm giữa M và H, đồng thời FM = FH".
+  // Tìm phép bằng độ dài trong toàn bộ mệnh đề sau "sao cho", không chỉ
+  // phần trước dấu phẩy hoặc chữ "và", vì các điều kiện vị trí có thể đứng trước.
+  const rayPatterns = [
+    { regex: /(?:lấy|gọi|chọn)\s+(?:điểm\s+)?([A-Z])\s+(?:nằm\s+)?(?:trên|thuộc)\s+tia\s+([A-Z])([A-Z])\s+(?:sao\s+)?cho\s+([^.!?;]+)/gi, fields: [1, 2, 3, 4] },
+    { regex: /(?:trên|thuộc)\s+tia\s+([A-Z])([A-Z])\s+(?:lấy|chọn|gọi)\s+(?:điểm\s+)?([A-Z])\s+(?:sao\s+)?cho\s+([^.!?;]+)/gi, fields: [3, 1, 2, 4] },
+  ];
+  const rayEquality = /((?:\d+(?:[.,]\d+)?(?:\s*\/\s*\d+(?:[.,]\d+)?)?\s*\*?\s*)?[A-Z]\s*[A-Z](?:\s*\/\s*\d+(?:[.,]\d+)?)?)\s*=\s*((?:\d+(?:[.,]\d+)?(?:\s*\/\s*\d+(?:[.,]\d+)?)?\s*\*?\s*)?[A-Z]\s*[A-Z](?:\s*\/\s*\d+(?:[.,]\d+)?)?)/i;
+  for (const { regex, fields } of rayPatterns) for (const match of raw.matchAll(regex)) {
+    const name = match[fields[0]].toUpperCase();
+    const segment = (match[fields[1]] + match[fields[2]]).toUpperCase();
+    const conditions = match[fields[3]];
     if (segment.includes(name)) continue;
-    const equality = match[4].split(/[,\n]|(?:và|nối|kẻ|gọi)\s/i)[0].split('=');
-    if (equality.length !== 2) continue;
-    const terms = equality.map(distanceTerm);
+    const equality = conditions.match(rayEquality);
+    if (!equality) continue;
+    const terms = [distanceTerm(equality[1]), distanceTerm(equality[2])];
     if (!terms[0] || !terms[1]) continue;
     const unknownIndex = terms.findIndex(t => t!.segment.includes(name));
     if (unknownIndex < 0) continue;
@@ -207,8 +217,8 @@ export function normalizeExplicitConstructions(spec: GeometrySpecification, prob
     const ratio = known.factor / unknown.factor;
     const previous = spec.auxPoints.find(p => p.name === name && p.type === 'on-ray' &&
       p.segment === segment && p.fromPoint === fromPoint);
-    const between = new RegExp(`${name}\\s+(?:nằm\\s+)?giữa\\s+${segment[0]}\\s+và\\s+${segment[1]}`, 'i').test(match[4]);
-    const beyond = new RegExp(`${segment[1]}\\s+(?:nằm\\s+)?giữa\\s+${segment[0]}\\s+và\\s+${name}`, 'i').test(match[4]);
+    const between = new RegExp(name + '\\s+(?:nằm\\s+)?giữa\\s+' + segment[0] + '\\s+và\\s+' + segment[1], 'i').test(conditions);
+    const beyond = new RegExp(segment[1] + '\\s+(?:nằm\\s+)?giữa\\s+' + segment[0] + '\\s+và\\s+' + name, 'i').test(conditions);
     const uniqueBeyond = fromPoint === segment[1] && segmentKey(known.segment) === segmentKey(segment) && ratio >= 1;
     const rayPosition = between ? 'between' : (beyond || uniqueBeyond) ? 'beyond' : previous?.rayPosition;
     setPoint({ name, type: 'on-ray', segment, fromPoint,
