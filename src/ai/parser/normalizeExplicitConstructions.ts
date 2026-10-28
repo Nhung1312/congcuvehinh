@@ -129,7 +129,7 @@ export function normalizeExplicitConstructions(spec: GeometrySpecification, prob
   // Loại hình và đỉnh đặc biệt phải lấy từ giả thiết, không từ tứ giác cần chứng minh.
   const triangleMatch = raw.match(/(?:tam\s+giác|[∆Δ])\s*([A-Z])\s*([A-Z])\s*([A-Z])\b([^.!?;]*)/i);
   const otherBase = raw.search(/(?:tứ\s+giác|hình\s+(?:chữ\s+nhật|vuông|thang|bình\s+hành|thoi))/i);
-  if (triangleMatch && (otherBase < 0 || triangleMatch.index! < otherBase)) {
+  if (spec.shapeCategory !== 'symmetry' && spec.shapeCategory !== 'polygon' && triangleMatch && (otherBase < 0 || triangleMatch.index! < otherBase)) {
     const vertices = [triangleMatch[1], triangleMatch[2], triangleMatch[3]].map(v => v.toUpperCase()) as [string, string, string];
     spec.shapeCategory = 'triangle';
     spec.triangle ||= { type: 'general', vertices };

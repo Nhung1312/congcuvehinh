@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChartDocument, ToolType, BaseChartSettings, Point2D } from './types';
+import { ChartDocument, ToolType, BaseChartSettings, Point2D, PolygonData, SymmetryData } from './types';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { CanvasArea } from './components/CanvasArea';
@@ -874,6 +874,38 @@ export const App: React.FC = () => {
     });
   };
 
+  const handleUpdatePolygonData = (polygon: PolygonData) => {
+    setCurrentDoc((prev) => {
+      if (!prev.data.geometry) return prev;
+      return {
+        ...prev,
+        data: {
+          ...prev.data,
+          geometry: {
+            ...prev.data.geometry,
+            polygon,
+          },
+        },
+      };
+    });
+  };
+
+  const handleUpdateSymmetryData = (symmetry: SymmetryData) => {
+    setCurrentDoc((prev) => {
+      if (!prev.data.geometry) return prev;
+      return {
+        ...prev,
+        data: {
+          ...prev.data,
+          geometry: {
+            ...prev.data.geometry,
+            symmetry,
+          },
+        },
+      };
+    });
+  };
+
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-100 text-slate-900 font-sans">
       
@@ -992,6 +1024,8 @@ export const App: React.FC = () => {
             onUpdateLineRayPoints={handleUpdateLineRayPoints}
             onUpdateAnglePoints={handleUpdateAnglePoints}
             onUpdateCirclePoints={handleUpdateCirclePoints}
+            onUpdatePolygonData={handleUpdatePolygonData}
+            onUpdateSymmetryData={handleUpdateSymmetryData}
           />
         </main>
       </div>

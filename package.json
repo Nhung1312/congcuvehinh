@@ -15,7 +15,8 @@
     "test:geometry-image": "tsx --test scripts/test_geometry_image.ts",
     "test:geometry-constructions": "node --import tsx --test scripts/test_geometry_constructions.ts",
     "test:api-runtime": "node --import tsx --test scripts/test_vercel_api_runtime.ts",
-    "test:textbook-templates": "node --import tsx --test scripts/test_textbook_templates.ts"
+    "test:textbook-templates": "node --import tsx --test scripts/test_textbook_templates.ts",
+    "test:geometry-groups": "tsx --test scripts/test_geometry_groups_a_to_f.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

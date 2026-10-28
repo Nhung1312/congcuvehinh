@@ -13,6 +13,7 @@ import {
   midpoint,
   projectPointToLine,
   angleBisectorPoint,
+  computeReflectedPoints,
 } from './geometryMath';
 import { resolveAuxiliaryPoints } from './resolveAuxiliaryPoints';
 
@@ -235,7 +236,30 @@ export function getGeometrySceneBoundingBox(
     if (a.points && Array.isArray(a.points)) points.push(...a.points);
   } else if (subType === 'polygon') {
     const p = data.polygon || {};
-    if (p.points && Array.isArray(p.points)) points.push(...p.points);
+    if (p.points && Array.isArray(p.points) && p.points.length > 0) {
+      points.push(...p.points);
+    }
+    if (p.center && p.radius) {
+      points.push(
+        { x: p.center.x - p.radius, y: p.center.y },
+        { x: p.center.x + p.radius, y: p.center.y },
+        { x: p.center.x, y: p.center.y - p.radius },
+        { x: p.center.x, y: p.center.y + p.radius }
+      );
+    }
+  } else if (subType === 'symmetry') {
+    const s = data.symmetry || {};
+    if (s.originalPoints && Array.isArray(s.originalPoints)) {
+      points.push(...s.originalPoints);
+      try {
+        const refl = computeReflectedPoints(s.type || 'axial', s.originalPoints, s.axisPoints, s.centerPoint);
+        if (refl && Array.isArray(refl)) points.push(...refl);
+      } catch {
+        // ignore if symmetry points incomplete
+      }
+    }
+    if (s.axisPoints && Array.isArray(s.axisPoints)) points.push(...s.axisPoints);
+    if (s.centerPoint) points.push(s.centerPoint);
   }
 
   const bbox = calculatePointsBoundingBox(points, padding);

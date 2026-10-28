@@ -18,7 +18,7 @@ import {
   ArrowRight,
   Monitor,
 } from 'lucide-react';
-import { ChartDocument, Point2D, BaseChartSettings } from '../types';
+import { ChartDocument, Point2D, BaseChartSettings, PolygonData, SymmetryData } from '../types';
 import { PieChartSvg } from '../renderers/PieChartSvg';
 import { BarChartSvg } from '../renderers/BarChartSvg';
 import { DoubleBarChartSvg } from '../renderers/DoubleBarChartSvg';
@@ -46,6 +46,8 @@ interface CanvasAreaProps {
   onUpdateLineRayPoints?: (points: Point2D[]) => void;
   onUpdateAnglePoints?: (points: Point2D[]) => void;
   onUpdateCirclePoints?: (points: Point2D[], radius?: number) => void;
+  onUpdatePolygonData?: (polygon: PolygonData) => void;
+  onUpdateSymmetryData?: (symmetry: SymmetryData) => void;
 }
 
 export const CanvasArea: React.FC<CanvasAreaProps> = ({
@@ -57,12 +59,14 @@ export const CanvasArea: React.FC<CanvasAreaProps> = ({
   onUpdateLineRayPoints,
   onUpdateAnglePoints,
   onUpdateCirclePoints,
+  onUpdatePolygonData,
+  onUpdateSymmetryData,
 }) => {
   const [zoomLevel, setZoomLevel] = useState<number>(100);
   const [bgPattern, setBgPattern] = useState<'plain' | 'grid' | 'dots'>('plain');
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const isGeometry = currentDoc.type.startsWith('GEOMETRY_');
+  const isGeometry = currentDoc.type.startsWith('GEOMETRY_') || currentDoc.type === 'AI_GEOMETRY';
   const width = currentDoc.settings.width || 600;
   const height = currentDoc.settings.height || 450;
 
@@ -95,6 +99,34 @@ export const CanvasArea: React.FC<CanvasAreaProps> = ({
       const center = { x: width / 2, y: height / 2 };
       const rad = currentDoc.data.geometry?.circle?.radius || 110;
       onUpdateCirclePoints([center, { x: center.x + rad, y: center.y }], rad);
+    } else if (currentDoc.type === 'GEOMETRY_POLYGON' && onUpdatePolygonData) {
+      const curPoly = currentDoc.data.geometry?.polygon;
+      if (curPoly) {
+        const center = { x: width / 2, y: height / 2 };
+        const dx = center.x - curPoly.center.x;
+        const dy = center.y - curPoly.center.y;
+        const points = curPoly.points ? translateGeometryPoints(curPoly.points, dx, dy) : undefined;
+        onUpdatePolygonData({ ...curPoly, center, points });
+      }
+    } else if (currentDoc.type === 'GEOMETRY_SYMMETRY' && onUpdateSymmetryData) {
+      const curSym = currentDoc.data.geometry?.symmetry;
+      if (curSym) {
+        const allPts: Point2D[] = [...curSym.originalPoints];
+        if (curSym.axisPoints) allPts.push(...curSym.axisPoints);
+        if (curSym.centerPoint) allPts.push(curSym.centerPoint);
+        if (allPts.length > 0) {
+          const cx = allPts.reduce((acc, p) => acc + p.x, 0) / allPts.length;
+          const cy = allPts.reduce((acc, p) => acc + p.y, 0) / allPts.length;
+          const dx = width / 2 - cx;
+          const dy = height / 2 - cy;
+          onUpdateSymmetryData({
+            ...curSym,
+            originalPoints: translateGeometryPoints(curSym.originalPoints, dx, dy),
+            axisPoints: curSym.axisPoints ? (translateGeometryPoints(curSym.axisPoints, dx, dy) as [Point2D, Point2D]) : undefined,
+            centerPoint: curSym.centerPoint ? { x: curSym.centerPoint.x + dx, y: curSym.centerPoint.y + dy } : undefined,
+          });
+        }
+      }
     }
   };
 
@@ -114,6 +146,42 @@ export const CanvasArea: React.FC<CanvasAreaProps> = ({
     } else if (currentDoc.type === 'GEOMETRY_ANGLE' && onUpdateAnglePoints) {
       const pts = currentDoc.data.geometry?.angle?.points || [{ x: 180, y: 280 }, { x: 420, y: 280 }, { x: 300, y: 140 }];
       onUpdateAnglePoints(fitGeometryPoints(pts, width, height, 45));
+    } else if (currentDoc.type === 'GEOMETRY_POLYGON' && onUpdatePolygonData) {
+      const curPoly = currentDoc.data.geometry?.polygon;
+      if (curPoly) {
+        const maxR = Math.max(40, Math.floor(Math.min(width, height) / 2 - 45));
+        const center = { x: width / 2, y: height / 2 };
+        const pts = curPoly.points ? fitGeometryPoints(curPoly.points, width, height, 45) : undefined;
+        onUpdatePolygonData({ ...curPoly, center, radius: maxR, points: pts });
+      }
+    } else if (currentDoc.type === 'GEOMETRY_SYMMETRY' && onUpdateSymmetryData) {
+      const curSym = currentDoc.data.geometry?.symmetry;
+      if (curSym) {
+        const allPts: Point2D[] = [...curSym.originalPoints];
+        if (curSym.axisPoints) allPts.push(...curSym.axisPoints);
+        if (curSym.centerPoint) allPts.push(curSym.centerPoint);
+        if (allPts.length > 0) {
+          const fitted = fitGeometryPoints(allPts, width, height, 45);
+          const origLen = curSym.originalPoints.length;
+          const newOrig = fitted.slice(0, origLen);
+          let offset = origLen;
+          let newAxis = curSym.axisPoints;
+          if (curSym.axisPoints) {
+            newAxis = [fitted[offset], fitted[offset + 1]];
+            offset += 2;
+          }
+          let newCenter = curSym.centerPoint;
+          if (curSym.centerPoint) {
+            newCenter = fitted[offset];
+          }
+          onUpdateSymmetryData({
+            ...curSym,
+            originalPoints: newOrig,
+            axisPoints: newAxis,
+            centerPoint: newCenter,
+          });
+        }
+      }
     }
   };
 
@@ -136,6 +204,28 @@ export const CanvasArea: React.FC<CanvasAreaProps> = ({
       const newRad = Math.max(30, Math.min(220, Math.round(curRad * factor)));
       const pts = currentDoc.data.geometry?.circle?.points || [{ x: width / 2, y: height / 2 }];
       onUpdateCirclePoints(pts, newRad);
+    } else if (currentDoc.type === 'GEOMETRY_POLYGON' && onUpdatePolygonData) {
+      const curPoly = currentDoc.data.geometry?.polygon;
+      if (curPoly) {
+        const newRadius = Math.max(30, Math.min(250, Math.round(curPoly.radius * factor)));
+        const pts = curPoly.points ? scaleGeometryPoints(curPoly.points, factor) : undefined;
+        onUpdatePolygonData({ ...curPoly, radius: newRadius, points: pts });
+      }
+    } else if (currentDoc.type === 'GEOMETRY_SYMMETRY' && onUpdateSymmetryData) {
+      const curSym = currentDoc.data.geometry?.symmetry;
+      if (curSym) {
+        const center = curSym.centerPoint || { x: width / 2, y: height / 2 };
+        const scalePt = (p: Point2D) => ({
+          x: Math.round(center.x + (p.x - center.x) * factor),
+          y: Math.round(center.y + (p.y - center.y) * factor),
+        });
+        onUpdateSymmetryData({
+          ...curSym,
+          originalPoints: curSym.originalPoints.map(scalePt),
+          axisPoints: curSym.axisPoints ? (curSym.axisPoints.map(scalePt) as [Point2D, Point2D]) : undefined,
+          circleRadius: curSym.circleRadius ? Math.round(curSym.circleRadius * factor) : undefined,
+        });
+      }
     }
   };
 
@@ -157,6 +247,25 @@ export const CanvasArea: React.FC<CanvasAreaProps> = ({
       const pts = currentDoc.data.geometry?.circle?.points || [{ x: width / 2, y: height / 2 }];
       const rad = currentDoc.data.geometry?.circle?.radius || 110;
       onUpdateCirclePoints(translateGeometryPoints(pts, dx, dy), rad);
+    } else if (currentDoc.type === 'GEOMETRY_POLYGON' && onUpdatePolygonData) {
+      const curPoly = currentDoc.data.geometry?.polygon;
+      if (curPoly) {
+        onUpdatePolygonData({
+          ...curPoly,
+          center: { x: curPoly.center.x + dx, y: curPoly.center.y + dy },
+          points: curPoly.points ? translateGeometryPoints(curPoly.points, dx, dy) : undefined,
+        });
+      }
+    } else if (currentDoc.type === 'GEOMETRY_SYMMETRY' && onUpdateSymmetryData) {
+      const curSym = currentDoc.data.geometry?.symmetry;
+      if (curSym) {
+        onUpdateSymmetryData({
+          ...curSym,
+          originalPoints: translateGeometryPoints(curSym.originalPoints, dx, dy),
+          axisPoints: curSym.axisPoints ? (translateGeometryPoints(curSym.axisPoints, dx, dy) as [Point2D, Point2D]) : undefined,
+          centerPoint: curSym.centerPoint ? { x: curSym.centerPoint.x + dx, y: curSym.centerPoint.y + dy } : undefined,
+        });
+      }
     }
   };
 
@@ -186,6 +295,8 @@ export const CanvasArea: React.FC<CanvasAreaProps> = ({
       case 'GEOMETRY_TRIANGLE':
       case 'GEOMETRY_QUADRILATERAL':
       case 'GEOMETRY_CIRCLE':
+      case 'GEOMETRY_POLYGON':
+      case 'GEOMETRY_SYMMETRY':
       case 'AI_GEOMETRY':
         return (
           <GeometrySvg
@@ -196,6 +307,8 @@ export const CanvasArea: React.FC<CanvasAreaProps> = ({
             onUpdateLineRayPoints={onUpdateLineRayPoints}
             onUpdateAnglePoints={onUpdateAnglePoints}
             onUpdateCirclePoints={onUpdateCirclePoints}
+            onUpdatePolygonData={onUpdatePolygonData}
+            onUpdateSymmetryData={onUpdateSymmetryData}
           />
         );
       case 'GEOMETRY_SPATIAL':

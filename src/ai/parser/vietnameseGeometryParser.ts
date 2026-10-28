@@ -68,13 +68,20 @@ export class VietnameseGeometryParser {
    */
   private static detectCategory(text: string): ShapeCategory {
     // 0. Nhận diện Phép đối xứng (trục hoặc tâm)
-    if (
-      text.includes('đối xứng') ||
+    const isStandaloneSymmetry =
+      text.includes('phép đối xứng') ||
+      text.includes('đối xứng trục') ||
       text.includes('đx trục') ||
+      text.includes('trục đối xứng') ||
+      text.includes('đối xứng tâm') ||
       text.includes('đx tâm') ||
       text.includes('tâm đối xứng') ||
-      text.includes('trục đối xứng')
-    ) {
+      text.includes('hình đối xứng') ||
+      text.includes('đối xứng qua trục') ||
+      text.includes('đối xứng qua đường thẳng') ||
+      (text.includes('đối xứng') && !text.includes('tam giác') && !text.includes('tứ giác'));
+
+    if (isStandaloneSymmetry) {
       return 'symmetry';
     }
 
