@@ -346,3 +346,16 @@ test('Nhóm F - Bài 15: Đối xứng trục và đối xứng tâm hiển th�
   assert.ok(svgCentral.includes('<svg'));
   assert.ok(!svgCentral.includes('NaN'));
 });
+
+
+// Điểm đối xứng phụ của hình bình hành không phải phép đối xứng toàn hình.
+test('Nhóm F - Dựng X đối xứng của A qua B trong hình bình hành vẫn là tứ giác', () => {
+  const spec = VietnameseGeometryParser.parse(
+    'Cho hình bình hành ABCD. Gọi X là điểm đối xứng của A qua B.'
+  );
+  assert.equal(spec.shapeCategory, 'quadrilateral');
+  const x = spec.auxPoints?.find(p => p.name === 'X');
+  assert.equal(x?.type, 'ratio');
+  assert.equal(x?.segment, 'AB');
+  assert.equal(x?.ratio, 2);
+});
