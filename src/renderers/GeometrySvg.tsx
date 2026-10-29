@@ -58,6 +58,8 @@ import {
   vecSub,
   vecScale,
   vecAdd,
+  vecLen,
+  vecPerp,
   getAdvancedEqualAngleArcSvg,
   getAdvancedSegmentTicks,
   getArrowHeadSvg,
@@ -626,6 +628,100 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
           const pt = pointsMap[p.name];
           if (!pt) return null;
           const color = p.color || strokeColor;
+
+          // Vị trí nhãn thông minh cho điểm phụ:
+          // 1. Nếu điểm có ký hiệu góc vuông (ví dụ chân đường cao N):
+          // Hướng nhãn ngược chiều với góc vuông để không bị hộp góc vuông đè lên
+          let labelPos = {
+            x: pt.x + 8,
+            y: pt.y - 8,
+            textAnchor: 'start' as 'start' | 'middle' | 'end',
+            dominantBaseline: 'alphabetic' as 'central' | 'hanging' | 'alphabetic',
+          };
+
+          const raMarker = rightAngleMarkers.find(
+            (m) => m.enabled !== false && m.vertex === p.name
+          );
+          if (raMarker) {
+            const r1 = resolvePointCoordinate(raMarker.ray1, pointsMap);
+            const r2 = resolvePointCoordinate(raMarker.ray2, pointsMap);
+            if (r1 && r2) {
+              const d1 = vecNorm(vecSub(r1, pt));
+              const d2 = vecNorm(vecSub(r2, pt));
+              const inCorner = vecNorm(vecAdd(d1, d2));
+              if (vecLen(inCorner) > 1e-4) {
+                const outCorner = vecScale(inCorner, -1);
+                const distOffset = 16;
+                labelPos = {
+                  x: pt.x + outCorner.x * distOffset,
+                  y: pt.y + outCorner.y * distOffset,
+                  textAnchor: outCorner.x > 0.3 ? 'start' : outCorner.x < -0.3 ? 'end' : 'middle',
+                  dominantBaseline:
+                    outCorner.y > 0.3 ? 'hanging' : outCorner.y < -0.3 ? 'alphabetic' : 'central',
+                };
+              }
+            }
+          } else {
+            // 2. Điểm nối với các đường phụ hoặc cạnh:
+            const connectedNeighbors: Point2D[] = [];
+            displayedLines.forEach((l) => {
+              if (l.from === p.name) {
+                const nb = resolvePointCoordinate(l.to, pointsMap);
+                if (nb) connectedNeighbors.push(nb);
+              } else if (l.to === p.name) {
+                const nb = resolvePointCoordinate(l.from, pointsMap);
+                if (nb) connectedNeighbors.push(nb);
+              }
+            });
+
+            if (p.type === 'midpoint' && p.segment) {
+              const segP1 = resolvePointCoordinate(p.segment[0], pointsMap);
+              const segP2 = resolvePointCoordinate(p.segment[1], pointsMap);
+              if (segP1) connectedNeighbors.push(segP1);
+              if (segP2) connectedNeighbors.push(segP2);
+            }
+
+            if (connectedNeighbors.length >= 2) {
+              let sumDir = { x: 0, y: 0 };
+              connectedNeighbors.forEach((nb) => {
+                const dir = vecNorm(vecSub(nb, pt));
+                sumDir = vecAdd(sumDir, dir);
+              });
+              if (vecLen(sumDir) > 0.2) {
+                const outDir = vecNorm(vecScale(sumDir, -1));
+                const distOffset = 16;
+                labelPos = {
+                  x: pt.x + outDir.x * distOffset,
+                  y: pt.y + outDir.y * distOffset,
+                  textAnchor: outDir.x > 0.3 ? 'start' : outDir.x < -0.3 ? 'end' : 'middle',
+                  dominantBaseline:
+                    outDir.y > 0.3 ? 'hanging' : outDir.y < -0.3 ? 'alphabetic' : 'central',
+                };
+              } else {
+                const segVec = vecNorm(vecSub(connectedNeighbors[1], connectedNeighbors[0]));
+                const perp = vecNorm(vecPerp(segVec));
+                const distOffset = 16;
+                labelPos = {
+                  x: pt.x + perp.x * distOffset,
+                  y: pt.y + perp.y * distOffset,
+                  textAnchor: perp.x > 0.3 ? 'start' : perp.x < -0.3 ? 'end' : 'middle',
+                  dominantBaseline:
+                    perp.y > 0.3 ? 'hanging' : perp.y < -0.3 ? 'alphabetic' : 'central',
+                };
+              }
+            } else if (connectedNeighbors.length === 1) {
+              const dir = vecNorm(vecSub(pt, connectedNeighbors[0]));
+              const distOffset = 16;
+              labelPos = {
+                x: pt.x + dir.x * distOffset,
+                y: pt.y + dir.y * distOffset,
+                textAnchor: dir.x > 0.3 ? 'start' : dir.x < -0.3 ? 'end' : 'middle',
+                dominantBaseline:
+                  dir.y > 0.3 ? 'hanging' : dir.y < -0.3 ? 'alphabetic' : 'central',
+              };
+            }
+          }
+
           return (
             <g key={`auxPt-${p.id || idx}`}>
               {p.showPoint !== false && (
@@ -633,8 +729,10 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
               )}
               {p.showLabel !== false && p.name && (
                 <text
-                  x={pt.x + 8}
-                  y={pt.y - 8}
+                  x={labelPos.x}
+                  y={labelPos.y}
+                  textAnchor={labelPos.textAnchor}
+                  dominantBaseline={labelPos.dominantBaseline}
                   fontSize={fontSize}
                   fontStyle="italic"
                   fontWeight="bold"
@@ -1753,12 +1851,24 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     const diagonals = q.diagonals;
     const diagAC = diagonals?.AC;
     const diagBD = diagonals?.BD;
-    const showDiagAC = diagAC?.enabled || q.showDiagonals;
-    const showDiagBD = diagBD?.enabled || q.showDiagonals;
+    const allAuxLines = [...(q.auxLines || []), ...(data.auxLines || [])];
+    const allAuxPoints = [...(q.auxPoints || []), ...(data.auxPoints || [])];
+
+    const hasAuxAC = allAuxLines.some(
+      (l) => (l.from === nameA && l.to === nameC) || (l.from === nameC && l.to === nameA)
+    );
+    const hasAuxBD = allAuxLines.some(
+      (l) => (l.from === nameB && l.to === nameD) || (l.from === nameD && l.to === nameB)
+    );
+    const showDiagAC = Boolean((diagAC?.enabled ?? q.showDiagonals) && !hasAuxAC);
+    const showDiagBD = Boolean((diagBD?.enabled ?? q.showDiagonals) && !hasAuxBD);
 
     const intersectionP = lineIntersection(pA, pC, pB, pD);
-    const showIntersection = diagonals?.showIntersection && intersectionP;
     const intersectionLabel = diagonals?.intersectionLabel || 'O';
+    const hasAuxIntersection = allAuxPoints.some(
+      (ap) => ap.name === intersectionLabel || (intersectionLabel === 'O' && ap.name === 'O')
+    );
+    const showIntersection = Boolean(diagonals?.showIntersection && intersectionP && !hasAuxIntersection);
     const labelIntersectionPos = intersectionP
       ? getSmartVertexLabelPosition(intersectionP, pA, pB, 15)
       : null;
@@ -1903,16 +2013,31 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
         q.type === 'rhombus' ||
         q.type === 'square';
 
+      const getSafeParallelT = (p1: Point2D, p2: Point2D): number => {
+        const segMid = midpoint(p1, p2);
+        const hasPointNearMid = allAuxPoints.some((ap) => {
+          const coord = resolvePointCoordinate(ap.name, {
+            A: pA, B: pB, C: pC, D: pD,
+            [nameA]: pA, [nameB]: pB, [nameC]: pC, [nameD]: pD,
+            AB: midpoint(pA, pB), BC: midpoint(pB, pC),
+            CD: midpoint(pC, pD), DA: midpoint(pD, pA),
+            AC: midpoint(pA, pC), BD: midpoint(pB, pD),
+          });
+          return coord && dist(coord, segMid) < 18;
+        });
+        return hasPointNearMid ? 0.28 : 0.5;
+      };
+
       if (isTrapezoidFamily || isParallelogramFamily) {
         // Đáy trên AB và đáy dưới DC song song (1 mũi tên >)
-        parallelArrowPaths.push(getParallelArrowsPath(pA, pB, 1, 7));
-        parallelArrowPaths.push(getParallelArrowsPath(pD, pC, 1, 7));
+        parallelArrowPaths.push(getParallelArrowsPath(pA, pB, 1, 7, getSafeParallelT(pA, pB)));
+        parallelArrowPaths.push(getParallelArrowsPath(pD, pC, 1, 7, getSafeParallelT(pD, pC)));
       }
 
       if (isParallelogramFamily) {
         // Cạnh bên DA và CB song song (2 mũi tên >>)
-        parallelArrowPaths.push(getParallelArrowsPath(pD, pA, 2, 7));
-        parallelArrowPaths.push(getParallelArrowsPath(pC, pB, 2, 7));
+        parallelArrowPaths.push(getParallelArrowsPath(pD, pA, 2, 7, getSafeParallelT(pD, pA)));
+        parallelArrowPaths.push(getParallelArrowsPath(pC, pB, 2, 7, getSafeParallelT(pC, pB)));
       }
     }
 
@@ -2331,7 +2456,7 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
           return (
             <>
               {renderAuxiliaryElements(qPointsMap, q)}
-              {renderAuxiliaryElements(qPointsMap, data)}
+              {q !== data && data.auxPoints && data.auxPoints !== q.auxPoints && renderAuxiliaryElements(qPointsMap, data)}
             </>
           );
         })()}

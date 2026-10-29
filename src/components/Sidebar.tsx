@@ -19,6 +19,8 @@ import {
   Hexagon,
   Repeat,
   BookOpen,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { ToolCategory, ToolType } from '../types';
 
@@ -38,10 +40,43 @@ interface ToolItem {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentType, onSelectTool, onOpenTemplates }) => {
-  const categories: { id: ToolCategory; title: string; items: ToolItem[] }[] = [
+  // Ghi nhớ trạng thái thu gọn trên trình duyệt, mặc định thu gọn (icon-bar 68px) theo yêu cầu
+  // Khi ở chế độ AI_GEOMETRY, luôn thu gọn về 68px và không để trạng thái cũ làm mở rộng
+  const [isCollapsed, setIsCollapsed] = React.useState<boolean>(() => {
+    if (currentType === 'AI_GEOMETRY') return true;
+    try {
+      const saved = localStorage.getItem('toan_thcs_sidebar_collapsed');
+      if (saved !== null) {
+        return saved === 'true';
+      }
+      return true; // Mặc định thu gọn thanh icon 68px
+    } catch {
+      return true;
+    }
+  });
+
+  // Tự động thu gọn về 68px khi người dùng chọn vào AI Dựng Hình
+  React.useEffect(() => {
+    if (currentType === 'AI_GEOMETRY') {
+      setIsCollapsed(true);
+    }
+  }, [currentType]);
+
+  const toggleCollapse = () => {
+    setIsCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('toan_thcs_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const categories: { id: ToolCategory; title: string; shortTitle: string; items: ToolItem[] }[] = [
     {
       id: 'ai',
       title: '🤖 TRỢ LÝ AI TOÁN HỌC',
+      shortTitle: 'AI',
       items: [
         {
           type: 'AI_GEOMETRY',
@@ -56,6 +91,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentType, onSelectTool, onO
     {
       id: 'geometry',
       title: 'HÌNH PHẲNG THCS',
+      shortTitle: 'Phẳng',
       items: [
         {
           type: 'GEOMETRY_LINE_RAY',
@@ -109,6 +145,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentType, onSelectTool, onO
     {
       id: 'spatial',
       title: 'HÌNH HỌC KHÔNG GIAN',
+      shortTitle: 'K.Gian',
       items: [
         {
           type: 'GEOMETRY_SPATIAL',
@@ -122,6 +159,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentType, onSelectTool, onO
     {
       id: 'coordinates',
       title: 'TỌA ĐỘ – ĐỒ THỊ',
+      shortTitle: 'Đồ thị',
       items: [
         {
           type: 'COORDINATE_PLANE',
@@ -142,6 +180,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentType, onSelectTool, onO
     {
       id: 'statistics',
       title: 'THỐNG KÊ – BIỂU ĐỒ',
+      shortTitle: 'Thống kê',
       items: [
         {
           type: 'PIE_CHART',
@@ -183,6 +222,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentType, onSelectTool, onO
     {
       id: 'models',
       title: 'MÔ HÌNH TOÁN HỌC',
+      shortTitle: 'Mô hình',
       items: [
         {
           type: 'FRACTION_BAR',
@@ -203,28 +243,112 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentType, onSelectTool, onO
   ];
 
   return (
-    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-y-auto select-none h-full">
-      <div className="p-3 border-b border-slate-100 bg-slate-50/70">
-        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-          Danh mục công cụ
-        </span>
+    <aside
+      className={`bg-white border-r border-slate-200 flex flex-col shrink-0 select-none h-full transition-all duration-200 z-20 ${
+        isCollapsed ? 'w-[68px]' : 'w-64'
+      }`}
+    >
+      {/* Header Sidebar với nút đóng/mở */}
+      <div className="p-2.5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between min-h-[46px]">
+        {!isCollapsed && (
+          <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider truncate">
+            Danh mục công cụ
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={toggleCollapse}
+          className={`p-1.5 rounded-lg text-slate-500 hover:text-blue-700 hover:bg-white border border-slate-200/80 shadow-2xs transition ${
+            isCollapsed ? 'mx-auto' : ''
+          }`}
+          title={isCollapsed ? 'Mở rộng danh mục (256px)' : 'Thu gọn danh mục (chỉ hiện icon)'}
+          aria-label={isCollapsed ? 'Mở rộng danh mục' : 'Thu gọn danh mục'}
+        >
+          {isCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+        </button>
       </div>
 
-      <div className="p-2 space-y-4">
-        <button type="button" onClick={onOpenTemplates}
-          className="w-full flex items-center gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-left hover:bg-blue-100">
-          <BookOpen className="w-5 h-5 shrink-0" />
-          <span><span className="block text-xs font-bold">Mẫu hình cơ bản THCS</span>
-            <span className="block text-[10px] mt-0.5">Chọn hình có sẵn</span></span>
-        </button>
+      {/* Danh sách các công cụ */}
+      <div className="flex-1 overflow-y-auto p-2 space-y-3">
+        {/* Nút Mẫu hình cơ bản THCS */}
+        {isCollapsed ? (
+          <div className="relative group flex justify-center">
+            <button
+              type="button"
+              onClick={onOpenTemplates}
+              className="w-10 h-10 flex items-center justify-center rounded-lg bg-blue-50 border border-blue-200 text-blue-800 hover:bg-blue-100 transition shadow-2xs"
+              title="Mẫu hình cơ bản THCS (Chọn hình có sẵn)"
+            >
+              <BookOpen className="w-4 h-4 shrink-0" />
+            </button>
+            <div className="absolute left-full ml-2 px-2.5 py-1 bg-slate-900 text-white text-xs rounded-md shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50 whitespace-nowrap">
+              Mẫu hình cơ bản THCS
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={onOpenTemplates}
+            className="w-full flex items-center gap-2 p-2.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-left hover:bg-blue-100 transition"
+          >
+            <BookOpen className="w-4 h-4 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <span className="block text-xs font-bold truncate">Mẫu hình cơ bản THCS</span>
+              <span className="block text-[10px] text-blue-600 truncate mt-0.5">Chọn hình có sẵn</span>
+            </div>
+          </button>
+        )}
+
+        {/* Các nhóm công cụ */}
         {categories.map((cat) => (
           <div key={cat.id} className="space-y-1">
-            <h3 className="px-2.5 text-[11px] font-bold text-slate-500 tracking-wider uppercase">
-              {cat.title}
-            </h3>
-            <div className="space-y-0.5">
+            {!isCollapsed ? (
+              <h3 className="px-2 text-[10px] font-bold text-slate-400 tracking-wider uppercase truncate">
+                {cat.title}
+              </h3>
+            ) : (
+              <div className="pt-1 border-t border-slate-100 flex justify-center">
+                <span className="text-[8px] font-bold text-slate-400 tracking-tighter uppercase">
+                  {cat.shortTitle}
+                </span>
+              </div>
+            )}
+
+            <div className="space-y-1">
               {cat.items.map((item) => {
                 const isActive = currentType === item.type;
+
+                if (isCollapsed) {
+                  return (
+                    <div key={item.type} className="relative group flex justify-center">
+                      <button
+                        type="button"
+                        onClick={() => onSelectTool(item.type)}
+                        className={`w-10 h-10 flex items-center justify-center rounded-lg transition ${
+                          isActive
+                            ? 'bg-blue-600 text-white shadow-xs ring-2 ring-blue-300'
+                            : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                        }`}
+                        title={`${item.label}${item.badge ? ' (' + item.badge + ')' : ''}`}
+                      >
+                        <div className={isActive ? 'text-white' : ''}>
+                          {item.icon}
+                        </div>
+                      </button>
+
+                      {/* Tooltip nổi bên phải khi di chuột */}
+                      <div className="absolute left-full ml-2 px-2.5 py-1.5 bg-slate-900 text-white text-xs rounded-md shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50 whitespace-nowrap flex items-center gap-1.5">
+                        <span className="font-medium">{item.label}</span>
+                        {item.badge && (
+                          <span className="text-[9px] bg-blue-500/40 text-blue-200 px-1.5 py-0.2 rounded font-semibold">
+                            {item.badge}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+
                 return (
                   <button
                     key={item.type}
@@ -235,9 +359,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentType, onSelectTool, onO
                         : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5 truncate">
+                    <div className="flex items-center gap-2.5 truncate min-w-0">
                       <div
-                        className={`p-1 rounded-md ${
+                        className={`p-1 rounded-md shrink-0 ${
                           isActive ? 'bg-blue-100' : 'bg-slate-100'
                         }`}
                       >
@@ -267,4 +391,3 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentType, onSelectTool, onO
     </aside>
   );
 };
-

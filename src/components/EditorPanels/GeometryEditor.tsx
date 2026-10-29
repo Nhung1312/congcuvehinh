@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   BaseChartSettings,
   GeometryData,
@@ -9,6 +9,7 @@ import {
   CircleData,
   PolygonData,
   SymmetryData,
+  DocumentAiMetadata,
 } from '../../types';
 import { CommonStyleEditor } from './CommonStyleEditor';
 import { TriangleEditor } from './TriangleEditor';
@@ -18,6 +19,14 @@ import { AngleEditor } from './AngleEditor';
 import { CircleEditor } from './CircleEditor';
 import { RegularPolygonEditor } from './RegularPolygonEditor';
 import { SymmetryEditor } from './SymmetryEditor';
+import { AIProblemPromptCard } from './AIProblemPromptCard';
+import { AI_GEOMETRY_PRESETS, GeometryProblemPreset } from '../../ai/aiPresets';
+import {
+  Sliders,
+  BookOpen,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
 import {
   getQuadPresetPoints,
   getLineRayPresetPoints,
@@ -31,6 +40,10 @@ import {
 interface GeometryEditorProps {
   data: GeometryData;
   settings: BaseChartSettings;
+  metadata?: DocumentAiMetadata;
+  onUpdateAiPrompt?: (newPrompt: string) => void;
+  onRerunAI?: (prompt: string) => Promise<void> | void;
+  isAIRunning?: boolean;
   onChangeData: (data: GeometryData) => void;
   onChangeSettings: (settings: BaseChartSettings) => void;
 }
@@ -38,10 +51,18 @@ interface GeometryEditorProps {
 export const GeometryEditor: React.FC<GeometryEditorProps> = ({
   data,
   settings,
+  metadata,
+  onUpdateAiPrompt,
+  onRerunAI,
+  isAIRunning = false,
   onChangeData,
   onChangeSettings,
 }) => {
   const subType = data.subType || 'triangle';
+
+  // Điều khiển các accordion: "Chỉnh sửa hình" mặc định mở, "Đề mẫu tham khảo" mặc định đóng
+  const [isGeometryOpen, setIsGeometryOpen] = useState(true);
+  const [isPresetsOpen, setIsPresetsOpen] = useState(false);
 
   const currentTriangle: TriangleData = data.triangle || {
     type: 'general',
@@ -123,128 +144,68 @@ export const GeometryEditor: React.FC<GeometryEditorProps> = ({
     vertexName: data.angle?.vertexName || 'O',
     ray1Name: data.angle?.ray1Name || 'x',
     ray2Name: data.angle?.ray2Name || 'y',
-    degrees: data.angle?.degrees || 60,
-    autoCalculateDegrees: data.angle?.autoCalculateDegrees ?? true,
-    showDegreeValue: data.angle?.showDegreeValue !== false,
-    arcRadius: data.angle?.arcRadius || 34,
-    showArc: data.angle?.showArc !== false,
-    showBisector: data.angle?.showBisector || defaultAngleType === 'bisector',
-    bisectorName: data.angle?.bisectorName || 'z',
-    showEqualAngleMarks: data.angle?.showEqualAngleMarks !== false,
-    fill: data.angle?.fill || { enabled: false, color: '#fef08a', opacity: 0.35 },
+    ray3Name: data.angle?.ray3Name || 'z',
+    bisectorName: data.angle?.bisectorName || 't',
     points: data.angle?.points || getAnglePresetPoints(defaultAngleType),
-    parallelCutConfig: data.angle?.parallelCutConfig || {
-      line1Name: 'a',
-      line2Name: 'b',
-      transversalName: 'c',
-      vertex1Name: 'A',
-      vertex2Name: 'B',
-      highlightType: 'alternate-interior',
-      showParallelMarkers: true,
-      showAngleNumbers: true,
-    },
-    ray1Style: data.angle?.ray1Style || { color: '#000000', strokeWidth: 1.8, style: 'solid' },
-    ray2Style: data.angle?.ray2Style || { color: '#000000', strokeWidth: 1.8, style: 'solid' },
+    showPoints: data.angle?.showPoints !== false,
+    showLabels: data.angle?.showLabels !== false,
+    showBisector: data.angle?.showBisector || false,
+    showAngleArc: data.angle?.showAngleArc !== false,
+    showAngleValue: data.angle?.showAngleValue || false,
+    angleValue: data.angle?.angleValue || 60,
+    showEqualAngleMarks: data.angle?.showEqualAngleMarks !== false,
+    arcRadius: data.angle?.arcRadius || 36,
+    lineStyle: data.angle?.lineStyle || { color: '#000000', strokeWidth: 1.8, style: 'solid' },
+    bisectorStyle: data.angle?.bisectorStyle || { color: '#dc2626', strokeWidth: 1.8, style: 'dashed' },
     ...(data.angle || {}),
   };
 
-  const defaultCirclePreset = data.circle?.presetType || 'basic';
+  const defaultCircleType = data.circle?.type || 'basic';
   const currentCircle: CircleData = {
-    presetType: defaultCirclePreset,
+    type: defaultCircleType,
     centerName: data.circle?.centerName || 'O',
+    points: data.circle?.points || getCirclePresetPoints(defaultCircleType),
     radius: data.circle?.radius || 110,
-    showCenterPoint: data.circle?.showCenterPoint !== false,
-    showCenterLabel: data.circle?.showCenterLabel !== false,
-    showRadius: data.circle?.showRadius !== false,
-    radiusPointName: data.circle?.radiusPointName || 'A',
+    showCenter: data.circle?.showCenter !== false,
+    showRadius: data.circle?.showRadius || false,
     radiusLabel: data.circle?.radiusLabel || 'R',
-    showRadiusLabel: data.circle?.showRadiusLabel !== false,
+    radiusPointName: data.circle?.radiusPointName || 'A',
     showDiameter: data.circle?.showDiameter || false,
-    diameterPoints: data.circle?.diameterPoints || ['A', 'B'],
-    showDiameterLabel: data.circle?.showDiameterLabel || false,
-    diameterLabel: data.circle?.diameterLabel || 'd',
-    showChord: data.circle?.showChord || false,
-    chordPoints: data.circle?.chordPoints || ['C', 'D'],
-    showChordDistance: data.circle?.showChordDistance !== false,
-    chordDistanceLabel: data.circle?.chordDistanceLabel || 'H',
-    showChordMidpoint: data.circle?.showChordMidpoint !== false,
-    showChordRightAngle: data.circle?.showChordRightAngle !== false,
-    showArc: data.circle?.showArc || false,
-    arcType: data.circle?.arcType || 'minor',
-    arcPoints: data.circle?.arcPoints || ['A', 'B'],
-    arcName: data.circle?.arcName || 'AB',
-    showArcName: data.circle?.showArcName !== false,
-    showTangent: data.circle?.showTangent || false,
-    tangentType: data.circle?.tangentType || 'at-point',
-    tangentPointName: data.circle?.tangentPointName || 'A',
-    tangentLineName: data.circle?.tangentLineName || 'Ax',
-    externalPointName: data.circle?.externalPointName || 'P',
-    tangentPointsNames: data.circle?.tangentPointsNames || ['A', 'B'],
-    showTangentRightAngle: data.circle?.showTangentRightAngle !== false,
-    showTangentEqualMarks: data.circle?.showTangentEqualMarks !== false,
-    showCenterConnector: data.circle?.showCenterConnector !== false,
-    showChordAB: data.circle?.showChordAB || false,
-    showSecant: data.circle?.showSecant || false,
-    secantPointsNames: data.circle?.secantPointsNames || ['C', 'D'],
-    showInscribedAngle: data.circle?.showInscribedAngle || false,
-    inscribedVertexName: data.circle?.inscribedVertexName || 'P',
-    showCentralAngle: data.circle?.showCentralAngle || false,
-    showSecondCircle: data.circle?.showSecondCircle || false,
-    center2Name: data.circle?.center2Name || "O'",
-    radius2: data.circle?.radius2 || 80,
-    showIntersections: data.circle?.showIntersections !== false,
-    intersectionNames: data.circle?.intersectionNames || ['A', 'B'],
-    fill: data.circle?.fill || { enabled: false, color: '#3b82f6', opacity: 0.25 },
-    fillType: data.circle?.fillType || 'full',
-    points: data.circle?.points || getCirclePresetPoints(defaultCirclePreset),
-    circleStyle: data.circle?.circleStyle || { strokeColor: '#000000', strokeWidth: 1.8, strokeStyle: 'solid' },
-    radiusStyle: data.circle?.radiusStyle || { strokeColor: '#000000', strokeWidth: 1.5, strokeStyle: 'solid' },
-    diameterStyle: data.circle?.diameterStyle || { strokeColor: '#000000', strokeWidth: 1.6, strokeStyle: 'solid' },
-    chordStyle: data.circle?.chordStyle || { strokeColor: '#000000', strokeWidth: 1.6, strokeStyle: 'solid' },
-    arcStyle: data.circle?.arcStyle || { strokeColor: '#ec4899', strokeWidth: 2.8, strokeStyle: 'solid' },
-    tangentStyle: data.circle?.tangentStyle || { strokeColor: '#000000', strokeWidth: 1.6, strokeStyle: 'solid' },
+    diameterPoint1: data.circle?.diameterPoint1 || 'A',
+    diameterPoint2: data.circle?.diameterPoint2 || 'B',
+    chords: data.circle?.chords || [],
+    tangents: data.circle?.tangents || [],
+    inscribedTriangles: data.circle?.inscribedTriangles || [],
+    circleStyle: data.circle?.circleStyle || { color: '#000000', strokeWidth: 1.8, style: 'solid' },
     ...(data.circle || {}),
   };
 
-  const defaultPolygonType = data.polygon?.type || 'pentagon';
-  const polygonSides = data.polygon?.sidesCount || 5;
+  const defaultPolygonSides = data.polygon?.sides || 6;
   const currentPolygon: PolygonData = {
-    type: defaultPolygonType,
-    sidesCount: polygonSides,
-    center: data.polygon?.center || { x: (settings.width || 640) / 2, y: (settings.height || 480) / 2 },
-    radius: data.polygon?.radius || 120,
-    rotationAngle: data.polygon?.rotationAngle ?? -90,
-    points:
-      data.polygon?.points ||
-      getRegularPolygonPresetPoints(
-        defaultPolygonType,
-        data.polygon?.center || { x: (settings.width || 640) / 2, y: (settings.height || 480) / 2 },
-        data.polygon?.radius || 120,
-        data.polygon?.rotationAngle ?? -90,
-        polygonSides
-      ),
-    vertexNames: data.polygon?.vertexNames || getDefaultPolygonVertexNames(polygonSides),
+    sides: defaultPolygonSides,
     centerName: data.polygon?.centerName || 'O',
+    vertexNames: data.polygon?.vertexNames || getDefaultPolygonVertexNames(defaultPolygonSides),
+    points: data.polygon?.points || getRegularPolygonPresetPoints(defaultPolygonSides),
     showVertices: data.polygon?.showVertices !== false,
     showLabels: data.polygon?.showLabels !== false,
-    showCenter: data.polygon?.showCenter !== false,
+    showCenter: data.polygon?.showCenter || false,
+    showCenterLabel: data.polygon?.showCenterLabel !== false,
+    showRadii: data.polygon?.showRadii || false,
+    showApothem: data.polygon?.showApothem || false,
+    showSideLengths: data.polygon?.showSideLengths || false,
+    sideLengthValue: data.polygon?.sideLengthValue || '4 cm',
     showCircumcircle: data.polygon?.showCircumcircle || false,
     showIncircle: data.polygon?.showIncircle || false,
-    showApothem: data.polygon?.showApothem || false,
-    apothemName: data.polygon?.apothemName || 'H',
-    showRadii: data.polygon?.showRadii || false,
-    showDiagonals: data.polygon?.showDiagonals || false,
-    showEqualSidesMarkers: data.polygon?.showEqualSidesMarkers || false,
-    showEqualAnglesMarkers: data.polygon?.showEqualAnglesMarkers || false,
-    fill: data.polygon?.fill || { enabled: false, color: '#3b82f6', opacity: 0.2 },
-    strokeColor: data.polygon?.strokeColor || '#000000',
-    strokeWidth: data.polygon?.strokeWidth || 1.8,
-    strokeStyle: data.polygon?.strokeStyle || 'solid',
+    fill: data.polygon?.fill || { enabled: false, color: '#10b981', opacity: 0.2 },
+    edgeStyles: data.polygon?.edgeStyles || {},
+    vertexStyles: data.polygon?.vertexStyles || {},
+    labelStyles: data.polygon?.labelStyles || {},
+    polygonStyle: data.polygon?.polygonStyle || { color: '#000000', strokeWidth: 1.8, style: 'solid' },
     ...(data.polygon || {}),
   };
 
   const defaultSymmetryType = data.symmetry?.type || 'axial';
-  const defaultSymmetryShape = data.symmetry?.targetShape || 'triangle';
+  const defaultSymmetryShape = data.symmetry?.targetShape || 'point';
   const currentSymmetry: SymmetryData = {
     type: defaultSymmetryType,
     targetShape: defaultSymmetryShape,
@@ -261,120 +222,201 @@ export const GeometryEditor: React.FC<GeometryEditorProps> = ({
   };
 
   return (
-    <div className="space-y-4">
-      {/* 1. Tiêu đề & Kiểu font SGK */}
-      <CommonStyleEditor
-        settings={settings}
-        onChangeSettings={onChangeSettings}
-      />
+    <div className="space-y-3.5">
+      {/* 1. ƯU TIÊN HÀNG ĐẦU: Mục ĐỀ BÀI ĐANG DỰNG (khi hình có nguồn AI) */}
+      {(metadata?.aiPrompt || metadata?.aiQuestionImage) && (
+        <AIProblemPromptCard
+          metadata={metadata}
+          onUpdatePrompt={onUpdateAiPrompt || (() => {})}
+          onRerunAI={onRerunAI}
+          isAIRunning={isAIRunning}
+        />
+      )}
 
-      {/* 2. Thông số Hình phẳng */}
-      <div className="space-y-3 bg-slate-50 p-3.5 rounded-lg border border-slate-200">
-        <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-          {subType === 'triangle'
-            ? 'Thiết lập Tam giác SGK'
-            : subType === 'quadrilateral'
-            ? 'Thiết lập Tứ giác SGK'
-            : subType === 'line-ray'
-            ? 'Thiết lập Đường thẳng & Đoạn thẳng'
-            : subType === 'circle'
-            ? 'Thiết lập Đường tròn SGK'
-            : subType === 'polygon'
-            ? 'Thiết lập Đa giác đều SGK'
-            : subType === 'symmetry'
-            ? 'Thiết lập Phép đối xứng SGK'
-            : 'Thiết lập Góc & Phân giác'}
-        </h4>
+      {/* 2. Mục CHỈNH SỬA HÌNH: có thể mở/thu gọn (mặc định mở) */}
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-2xs">
+        <button
+          type="button"
+          onClick={() => setIsGeometryOpen(!isGeometryOpen)}
+          className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100/80 transition text-left border-b border-slate-200"
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-1 rounded-md bg-blue-100 text-blue-700">
+              <Sliders className="w-3.5 h-3.5" />
+            </div>
+            <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+              Chỉnh sửa hình
+            </span>
+            <span className="text-[10px] text-slate-500 font-medium">
+              (
+              {subType === 'triangle'
+                ? 'Tam giác'
+                : subType === 'quadrilateral'
+                ? 'Tứ giác'
+                : subType === 'line-ray'
+                ? 'Đoạn thẳng/Tia'
+                : subType === 'circle'
+                ? 'Đường tròn'
+                : subType === 'polygon'
+                ? 'Đa giác đều'
+                : subType === 'symmetry'
+                ? 'Đối xứng'
+                : 'Góc'}
+              )
+            </span>
+          </div>
+          <div className="text-slate-400">
+            {isGeometryOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </div>
+        </button>
 
-        {/* 1. Tam giác */}
-        {subType === 'triangle' && (
-          <TriangleEditor
-            triangle={currentTriangle}
-            onChangeTriangle={(newTriangle) =>
-              onChangeData({
-                ...data,
-                triangle: newTriangle,
-              })
-            }
-          />
+        {isGeometryOpen && (
+          <div className="p-3 space-y-4">
+            {/* SubType Editor */}
+            <div className="space-y-3">
+              {subType === 'triangle' && (
+                <TriangleEditor
+                  triangle={currentTriangle}
+                  onChangeTriangle={(newTriangle) =>
+                    onChangeData({
+                      ...data,
+                      triangle: newTriangle,
+                    })
+                  }
+                />
+              )}
+
+              {subType === 'quadrilateral' && (
+                <QuadEditor
+                  quad={currentQuad}
+                  onChangeQuad={(newQuad) =>
+                    onChangeData({
+                      ...data,
+                      quadrilateral: newQuad,
+                    })
+                  }
+                />
+              )}
+
+              {subType === 'line-ray' && (
+                <LineRayEditor
+                  lineRay={currentLineRay}
+                  onChangeLineRay={(newLineRay) =>
+                    onChangeData({
+                      ...data,
+                      lineRay: newLineRay,
+                    })
+                  }
+                />
+              )}
+
+              {subType === 'angle' && (
+                <AngleEditor
+                  angle={currentAngle}
+                  onChangeAngle={(newAngle) =>
+                    onChangeData({
+                      ...data,
+                      angle: newAngle,
+                    })
+                  }
+                />
+              )}
+
+              {subType === 'circle' && (
+                <CircleEditor
+                  circle={currentCircle}
+                  onChangeCircle={(newCircle) =>
+                    onChangeData({
+                      ...data,
+                      circle: newCircle,
+                    })
+                  }
+                />
+              )}
+
+              {subType === 'polygon' && (
+                <RegularPolygonEditor
+                  polygon={currentPolygon}
+                  onChangePolygon={(newPolygon) =>
+                    onChangeData({
+                      ...data,
+                      polygon: newPolygon,
+                    })
+                  }
+                />
+              )}
+
+              {subType === 'symmetry' && (
+                <SymmetryEditor
+                  symmetry={currentSymmetry}
+                  onChangeSymmetry={(newSymmetry) =>
+                    onChangeData({
+                      ...data,
+                      symmetry: newSymmetry,
+                    })
+                  }
+                />
+              )}
+            </div>
+
+            {/* Tiêu đề & Kiểu font SGK */}
+            <div className="pt-3 border-t border-slate-100">
+              <CommonStyleEditor
+                settings={settings}
+                onChangeSettings={onChangeSettings}
+              />
+            </div>
+          </div>
         )}
+      </div>
 
-        {/* 2. Tứ giác */}
-        {subType === 'quadrilateral' && (
-          <QuadEditor
-            quad={currentQuad}
-            onChangeQuad={(newQuad) =>
-              onChangeData({
-                ...data,
-                quadrilateral: newQuad,
-              })
-            }
-          />
-        )}
+      {/* 3. Mục ĐỀ MẪU THAM KHẢO (12 đề SGK): có thể mở/thu gọn (mặc định ĐÓNG) */}
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-2xs">
+        <button
+          type="button"
+          onClick={() => setIsPresetsOpen(!isPresetsOpen)}
+          className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100/80 transition text-left"
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-1 rounded-md bg-amber-100 text-amber-700">
+              <BookOpen className="w-3.5 h-3.5" />
+            </div>
+            <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+              Đề mẫu tham khảo (12 đề SGK)
+            </span>
+          </div>
+          <div className="text-slate-400">
+            {isPresetsOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </div>
+        </button>
 
-        {/* 3. Đường thẳng / Tia / Đoạn thẳng / Song song / Vuông góc */}
-        {subType === 'line-ray' && (
-          <LineRayEditor
-            lineRay={currentLineRay}
-            onChangeLineRay={(newLineRay) =>
-              onChangeData({
-                ...data,
-                lineRay: newLineRay,
-              })
-            }
-          />
-        )}
-
-        {/* 4. Góc & Tia phân giác */}
-        {subType === 'angle' && (
-          <AngleEditor
-            angle={currentAngle}
-            onChangeAngle={(newAngle) =>
-              onChangeData({
-                ...data,
-                angle: newAngle,
-              })
-            }
-          />
-        )}
-
-        {/* 5. Đường tròn */}
-        {subType === 'circle' && (
-          <CircleEditor
-            circle={currentCircle}
-            onChangeCircle={(newCircle) =>
-              onChangeData({
-                ...data,
-                circle: newCircle,
-              })
-            }
-          />
-        )}
-
-        {/* 6. Đa giác đều (Nhóm 2 - Công cụ 3) */}
-        {subType === 'polygon' && (
-          <RegularPolygonEditor
-            polygon={currentPolygon}
-            onChangePolygon={(newPolygon) =>
-              onChangeData({
-                ...data,
-                polygon: newPolygon,
-              })
-            }
-          />
-        )}
-
-        {/* 7. Đối xứng trục & Đối xứng tâm (Nhóm 2 - Công cụ 2) */}
-        {subType === 'symmetry' && (
-          <SymmetryEditor
-            symmetry={currentSymmetry}
-            onChangeSymmetry={(newSymmetry) =>
-              onChangeData({
-                ...data,
-                symmetry: newSymmetry,
-              })
-            }
-          />
+        {isPresetsOpen && (
+          <div className="p-3 border-t border-slate-200 space-y-2 max-h-72 overflow-y-auto">
+            {AI_GEOMETRY_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => {
+                  if (onRerunAI) {
+                    onRerunAI(preset.prompt);
+                  }
+                }}
+                className="w-full text-left p-2.5 bg-slate-50 hover:bg-blue-50/70 hover:border-blue-300 border border-slate-200 rounded-lg text-xs transition group space-y-0.5"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800 group-hover:text-blue-800 text-[11px]">
+                    {preset.title}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-200 text-slate-600 font-semibold group-hover:bg-blue-200 group-hover:text-blue-800">
+                    {preset.grade}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 line-clamp-2 group-hover:text-slate-700 font-normal">
+                  {preset.prompt}
+                </p>
+              </button>
+            ))}
+          </div>
         )}
       </div>
     </div>

@@ -21,6 +21,9 @@ import {
   Check,
   ImagePlus,
   Trash2,
+  ChevronDown,
+  ChevronUp,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { ChartDocument, BaseChartSettings, ToolType } from '../../types';
 import { AI_GEOMETRY_PRESETS, GeometryProblemPreset } from '../../ai/aiPresets';
@@ -51,14 +54,19 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
   const promptStorageKey = 'congcuvehinh-ai-question-text-v1';
   const imageStorageKey = 'congcuvehinh-ai-question-image-tab-v1';
   const [prompt, setPrompt] = useState<string>(() => {
+    if (currentDoc.metadata?.aiPrompt) return currentDoc.metadata.aiPrompt;
     try { return window.localStorage.getItem(promptStorageKey) || ''; } catch { return ''; }
   });
   const [questionImage, setQuestionImage] = useState<GeometryImageInput | undefined>(() => {
+    if (currentDoc.metadata?.aiQuestionImage) return currentDoc.metadata.aiQuestionImage;
     try {
       const stored = window.sessionStorage.getItem(imageStorageKey);
       return stored ? validateGeometryImageInput(JSON.parse(stored)) : undefined;
     } catch { return undefined; }
   });
+  const [isPresetsOpen, setIsPresetsOpen] = useState(false);
+  const [showAiSettings, setShowAiSettings] = useState(false);
+  const [showAnalysisDetails, setShowAnalysisDetails] = useState(false);
   const [imageBusy, setImageBusy] = useState(false);
   const imageFileRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -183,6 +191,16 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
         currentDoc.settings
       );
 
+      // Lưu trữ đề bài gốc vào metadata của tài liệu để luôn hiển thị ưu tiên khi chỉnh sửa
+      newDoc.metadata = {
+        aiPrompt: input,
+        aiGeneratedPrompt: input,
+        aiQuestionImage: image ? { mimeType: image.mimeType, data: image.data } : undefined,
+        aiDetectedEntities: spec.detectedEntities,
+        aiExplanation: spec.explanation,
+        aiGenerationSource: selectedProvider,
+      };
+
       // Bước 3: Đưa vào hệ thống render SVG và chỉnh sửa
       onApplyDoc(newDoc);
       setLastResult(spec);
@@ -206,201 +224,210 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
   };
 
   return (
-    <div className="space-y-5 select-none text-slate-800">
-      {/* Banner Giới thiệu */}
-      <div className="p-3.5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl shadow-2xs">
-        <div className="flex items-center gap-2 mb-1.5">
-          <div className="p-1.5 bg-blue-600 text-white rounded-lg shadow-xs">
-            <Bot className="w-4 h-4" />
+    <div className="space-y-3 select-none text-slate-800">
+      {/* 1. Tiêu đề duy nhất: AI dựng hình */}
+      <div className="space-y-1">
+        <h2 className="text-base font-bold text-slate-900 tracking-tight">AI dựng hình</h2>
+
+        {/* Hàng nhỏ chọn bộ máy AI & Nút mở rộng Cài đặt AI */}
+        <div className="flex items-center justify-between text-xs text-slate-600">
+          <span className="font-medium text-slate-700">
+            {selectedProvider === 'gemini'
+              ? 'Gemini 3.8 Flash'
+              : selectedProvider === 'mock'
+              ? 'Quy tắc SGK'
+              : 'Claude (chưa tích hợp)'}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowAiSettings(!showAiSettings)}
+            className={`p-1 rounded-md transition ${
+              showAiSettings
+                ? 'bg-blue-100 text-blue-700'
+                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+            }`}
+            title="Cài đặt AI (bộ máy & API key)"
+            aria-label="Cài đặt AI"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* 2. Mục Cài đặt AI (Mặc định ĐÓNG, mở khi bấm icon góc phải) */}
+      {showAiSettings && (
+        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5 text-xs shadow-2xs">
+          <div className="flex items-center justify-between pb-1 border-b border-slate-200">
+            <span className="font-bold text-slate-800">Cài đặt AI</span>
+            <button
+              type="button"
+              onClick={() => setShowAiSettings(false)}
+              className="text-[11px] text-slate-500 hover:text-slate-700"
+            >
+              Thu gọn
+            </button>
           </div>
-          <div>
-            <h3 className="text-xs font-bold text-blue-900 uppercase tracking-wide flex items-center gap-1.5">
-              <span>AI TỰ ĐỘNG DỰNG HÌNH THCS</span>
-              <span className="text-[10px] bg-blue-200 text-blue-800 px-1.5 py-0.2 rounded-full font-semibold">
-                Toán 6-9
-              </span>
-            </h3>
-            <p className="text-[11px] text-slate-600">
-              Nhập đề bài tiếng Việt tự nhiên → AI tính toán tọa độ & vẽ hình chuẩn SGK
+
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold text-slate-700">Bộ máy phân tích:</label>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => setSelectedProvider('gemini')}
+                className={`px-2 py-1.5 rounded-lg text-xs font-semibold border transition text-center ${
+                  selectedProvider === 'gemini'
+                    ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                Gemini 3.8 Flash
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedProvider('mock')}
+                className={`px-2 py-1.5 rounded-lg text-xs font-semibold border transition text-center ${
+                  selectedProvider === 'mock'
+                    ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                Quy tắc SGK
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-1 pt-1 border-t border-slate-200">
+            <label htmlFor="geometry-user-api-key" className="text-[11px] font-semibold text-slate-700">
+              API key Gemini cá nhân (tùy chọn):
+            </label>
+            <div className="flex gap-1.5">
+              <input
+                id="geometry-user-api-key"
+                type={showApiKey ? 'text' : 'password'}
+                autoComplete="off"
+                spellCheck={false}
+                value={userApiKey}
+                onChange={(e) => changeApiKey(e.target.value)}
+                placeholder="Dùng key hệ thống nếu để trống"
+                className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <button
+                type="button"
+                className="rounded-lg px-2 border border-slate-300 bg-white text-[11px] text-slate-600 hover:bg-slate-50"
+                onClick={() => setShowApiKey(!showApiKey)}
+              >
+                {showApiKey ? 'Ẩn' : 'Hiện'}
+              </button>
+              {userApiKey && (
+                <button
+                  type="button"
+                  className="rounded-lg px-2 border border-slate-300 bg-white text-[11px] text-red-600 hover:bg-red-50"
+                  onClick={clearApiKey}
+                >
+                  Xóa
+                </button>
+              )}
+            </div>
+            <label className="flex items-center gap-1.5 text-[10px] text-slate-600 pt-0.5">
+              <input type="checkbox" checked={saveKeyForTab} onChange={(e) => changeSaveKey(e.target.checked)} />
+              <span>Nhớ key trong phiên làm việc này</span>
+            </label>
+            <p className="text-[10px] text-slate-500">
+              {userApiKey.trim()
+                ? '✓ Đang ưu tiên dùng API key cá nhân của bạn.'
+                : '✓ Chưa nhập key: Hệ thống tự động dùng key tích hợp sẵn.'}
             </p>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Lựa chọn Provider */}
+      {/* 3. Ô nhập đề bài (Ngay dưới tiêu đề & bộ máy) */}
       <div className="space-y-1.5">
-        <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-          <span className="flex items-center gap-1.5">
-            <Cpu className="w-3.5 h-3.5 text-indigo-600" />
-            Bộ máy xử lý AI:
-          </span>
-          <span className="text-[10px] text-slate-500 font-normal">Độc lập & Có thể mở rộng</span>
+        <label htmlFor="geometry-ai-prompt" className="sr-only">
+          Nội dung đề bài toán:
         </label>
-        <div className="grid grid-cols-3 gap-1.5">
-          <button
-            type="button"
-            onClick={() => setSelectedProvider('gemini')}
-            className={`px-2 py-1.5 rounded-lg text-xs font-semibold border transition text-center ${
-              selectedProvider === 'gemini'
-                ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            Gemini 3.8 Flash
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedProvider('mock')}
-            className={`px-2 py-1.5 rounded-lg text-xs font-semibold border transition text-center ${
-              selectedProvider === 'mock'
-                ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            Quy tắc SGK
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedProvider('claude')}
-            className={`px-2 py-1.5 rounded-lg text-xs font-semibold border transition text-center ${
-              selectedProvider === 'claude'
-                ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            Claude (chưa tích hợp)
-          </button>
-        </div>
-      </div>
-
-      {/* BYOK: mỗi khách hàng dùng key của mình, chỉ gửi tới server khi yêu cầu dựng hình. */}
-      <div className="space-y-2 p-3 rounded-xl border border-slate-200 bg-slate-50">
-        <label htmlFor="geometry-user-api-key" className="text-xs font-bold text-slate-800">
-          API key Gemini cá nhân (Gemini 3.8 Flash)
-        </label>
-        <div className="flex gap-2">
-          <input
-            id="geometry-user-api-key"
-            type={showApiKey ? 'text' : 'password'}
-            autoComplete="off"
-            spellCheck={false}
-            value={userApiKey}
-            onChange={(e) => changeApiKey(e.target.value)}
-            placeholder="Để trống để dùng key hệ thống hoặc dán API key cá nhân của bạn"
-            className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <button type="button" className="rounded-lg px-2 border border-slate-300 bg-white text-xs" onClick={() => setShowApiKey(!showApiKey)}>
-            {showApiKey ? 'Ẩn' : 'Hiện'}
-          </button>
-          <button type="button" className="rounded-lg px-2 border border-slate-300 bg-white text-xs" onClick={clearApiKey}>
-            Xóa
-          </button>
-        </div>
-        <label className="flex items-center gap-2 text-[11px] text-slate-700">
-          <input type="checkbox" checked={saveKeyForTab} onChange={(e) => changeSaveKey(e.target.checked)} />
-          Nhớ key trong phiên tab này (không chọn trên máy dùng chung)
-        </label>
-        <p className="text-[11px] text-slate-600">
-          {userApiKey.trim()
-            ? '✓ Đang ưu tiên dùng API key cá nhân bạn vừa nhập (chỉ gửi trong phiên gọi này).'
-            : '✓ Chưa nhập key: Hệ thống tự động dùng API key server tích hợp sẵn để phân tích.'}
-        </p>
-        <a className="text-[11px] text-blue-700 underline" href="https://aistudio.google.com/api-keys" target="_blank" rel="noopener noreferrer">
-          Mở Google AI Studio để tạo/quản lý API key
-        </a>
-      </div>
-
-      {/* Ô nhập đề bài */}
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-            <Wand2 className="w-3.5 h-3.5 text-blue-600" />
-            Nội dung đề bài toán:
-          </label>
-          <span className="text-[10px] text-slate-400">Hỗ trợ mọi cách diễn đạt</span>
-        </div>
         <div className="relative">
           <textarea
+            id="geometry-ai-prompt"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onPaste={handleImagePaste}
-            rows={4}
+            rows={5}
             maxLength={6000}
-            placeholder="Nhập đề, hoặc đặt con trỏ vào đây rồi Ctrl+V ảnh chụp đề..."
-            className="w-full text-xs font-sans p-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-2xs leading-relaxed"
+            placeholder="Nhập hoặc dán đề bài Toán vào đây..."
+            title="Nội dung đề bài toán (Hỗ trợ Ctrl+V ảnh)"
+            className="w-full text-xs font-sans p-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-2xs leading-relaxed resize-y"
           />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            ref={imageFileRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            className="hidden"
-            aria-label="Chọn ảnh đề bài"
-            onChange={(e) => {
-              void selectImage(e.target.files?.[0]);
-              e.target.value = '';
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => imageFileRef.current?.click()}
-            disabled={isProcessing || imageBusy}
-            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-2 rounded-lg border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:opacity-50"
-          >
-            <ImagePlus className="w-4 h-4" />
-            {imageBusy ? 'Đang xử lý ảnh...' : 'Chọn ảnh đề'}
-          </button>
-          <span className="text-[11px] text-slate-600">Hoặc nhấn Ctrl+V khi đang ở ô đề (PNG/JPG/WebP).</span>
-        </div>
-        {questionImage && (
-          <div className="flex items-center gap-3 p-2 rounded-lg border border-emerald-200 bg-emerald-50">
-            <img
-              src={`data:${questionImage.mimeType};base64,${questionImage.data}`}
-              alt="Ảnh đề bài đã dán hoặc tải lên"
-              className="w-20 h-20 object-contain rounded border border-emerald-200 bg-white"
+
+          <div className="absolute right-2 bottom-2.5 flex items-center gap-1 bg-white/90 p-0.5 rounded-md">
+            <input
+              ref={imageFileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              aria-label="Chọn ảnh đề bài"
+              onChange={(e) => {
+                void selectImage(e.target.files?.[0]);
+                e.target.value = '';
+              }}
             />
-            <div className="min-w-0 flex-1">
-              <div className="font-semibold text-[11px] text-emerald-800">Đã nhận ảnh đề</div>
-              <p className="text-[10px] text-emerald-700">Ảnh được giữ trong tab sau Refresh. Chỉ gửi Gemini khi bạn bấm Dựng hình.</p>
+            <button
+              type="button"
+              onClick={() => imageFileRef.current?.click()}
+              disabled={isProcessing || imageBusy}
+              className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
+              title="Chọn ảnh đề (hoặc nhấn Ctrl+V vào ô đề)"
+              aria-label="Chọn ảnh đề"
+            >
+              <ImagePlus className="w-3.5 h-3.5" />
+              <span className="sr-only">Chọn ảnh đề</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Thumbnail ảnh nếu có */}
+        {questionImage && (
+          <div className="flex items-center justify-between p-2 rounded-lg border border-blue-200 bg-blue-50/70 gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <img
+                src={`data:${questionImage.mimeType};base64,${questionImage.data}`}
+                alt="Ảnh đề bài"
+                className="w-10 h-10 object-contain rounded border border-blue-200 bg-white shrink-0"
+              />
+              <span className="text-xs font-semibold text-blue-900 truncate">Ảnh đề bài đã nhận</span>
             </div>
             <button
               type="button"
               onClick={() => setQuestionImage(undefined)}
               disabled={isProcessing}
-              className="p-2 rounded-lg border border-red-200 bg-white text-red-600 hover:bg-red-50"
+              className="p-1 rounded text-red-500 hover:bg-red-100 transition"
               title="Xóa ảnh đề"
-              aria-label="Xóa ảnh đề"
             >
-              <Trash2 className="w-4 h-4" />
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
-        <p className="text-[10px] text-slate-500">Đề chữ được nhớ trong trình duyệt. Khi dùng ảnh, xóa đề chữ cũ nếu đó là bài khác. Dựng lại sẽ gọi AI thêm một lượt.</p>
       </div>
 
-      {/* Nút hành động chính */}
+      {/* 4. Nút Dựng hình AI rõ ràng */}
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={() => handleRunAI()}
           disabled={isProcessing || imageBusy || (!prompt.trim() && !questionImage)}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold text-white shadow-md transition ${
-            isProcessing
-              ? 'bg-blue-400 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg active:scale-98'
+          className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition shadow-2xs flex items-center justify-center gap-1.5 ${
+            isProcessing || (!prompt.trim() && !questionImage)
+              ? 'bg-blue-100 text-blue-400 cursor-not-allowed border border-blue-200'
+              : 'bg-blue-100/90 hover:bg-blue-200/90 text-blue-900 border border-blue-200 active:scale-98'
           }`}
         >
           {isProcessing ? (
             <>
-              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <div className="w-3.5 h-3.5 border-2 border-blue-700 border-t-transparent rounded-full animate-spin" />
               <span>Đang dựng hình...</span>
             </>
           ) : (
-            <>
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Phân Tích & Dựng Hình AI</span>
-            </>
+            <span>Dựng hình AI</span>
           )}
         </button>
 
@@ -408,112 +435,77 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
           type="button"
           onClick={() => handleRunAI()}
           disabled={isProcessing || imageBusy || (!prompt.trim() && !questionImage)}
-          className="p-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 transition shadow-2xs"
+          className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition shadow-2xs"
           title="Dựng lại hình vẽ"
+          aria-label="Dựng lại hình vẽ"
         >
-          <RotateCcw className="w-4 h-4" />
+          <RotateCcw className="w-3.5 h-3.5" />
         </button>
       </div>
 
-      {/* Trạng thái xử lý / Thông báo */}
-      {stepStatus && (
-        <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-center gap-2.5 animate-pulse">
-          <div className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-ping" />
-          <span className="font-medium">{stepStatus}</span>
-        </div>
-      )}
-
+      {/* Trạng thái lỗi nếu có */}
       {errorMsg && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 space-y-1.5">
-          <div className="flex items-center gap-1.5 font-bold text-red-700">
-            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-            <span>
-              {failedProvider === 'gemini'
-                ? 'GEMINI THẤT BẠI'
-                : 'LỖI PHÂN TÍCH'}
-            </span>
-          </div>
-          <p className="text-[11px] text-red-700 leading-relaxed">{errorMsg}</p>
-          {failedProvider === 'gemini' && (
-            <p className="text-[10px] text-red-600 italic">
-              API lỗi. Hệ thống không tự chuyển sang parser quy tắc nội bộ.
-            </p>
-          )}
+        <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+          <span className="leading-snug">{errorMsg}</span>
         </div>
       )}
 
-      {/* Kết quả phân tích thành công */}
-      {lastResult && !isProcessing && (
-        <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2.5">
-          {/* Header trạng thái nguồn kết quả */}
-          {lastResult.generationInfo?.source === 'gemini' ? (
-            <div className="p-2.5 bg-white border border-emerald-300 rounded-lg space-y-1.5 shadow-2xs">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>GEMINI THÀNH CÔNG: Có phản hồi JSON hợp lệ</span>
-              </div>
-              <div className="text-[11px] text-slate-700 grid grid-cols-2 gap-x-2 gap-y-1 bg-slate-50 p-2 rounded border border-slate-200">
-                <div>
-                  Model thực tế: <strong className="font-mono text-emerald-900">{lastResult.generationInfo.model || 'gemini-3.8-flash'}</strong>
-                </div>
-                <div>
-                  Nguồn API key: <strong className="text-emerald-900">{lastResult.generationInfo.keySource || (userApiKey.trim() ? 'Key cá nhân' : 'Key hệ thống (server)')}</strong>
-                </div>
-                <div>
-                  Nhóm hình: <strong className="text-emerald-900">{lastResult.shapeCategory}</strong>
-                </div>
-                <div>
-                  Đường cao (altitudes): <strong className="text-emerald-900">{lastResult.altitudes?.length ?? 0}</strong>
-                </div>
-                <div>
-                  Trung tuyến (medians): <strong className="text-emerald-900">{lastResult.medians?.length ?? 0}</strong>
-                </div>
-                <div>
-                  Phân giác (bisectors): <strong className="text-emerald-900">{lastResult.bisectors?.length ?? 0}</strong>
-                </div>
-                <div>
-                  Điểm phụ (auxPoints): <strong className="text-emerald-900">{lastResult.auxPoints?.length ?? 0}</strong>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="p-2.5 bg-white border border-amber-300 rounded-lg space-y-1 shadow-2xs">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-amber-800">
-                <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>QUY TẮC SGK: Hình được phân tích bằng parser nội bộ</span>
-              </div>
-              <p className="text-[11px] text-slate-600">
-                {lastResult.generationInfo?.message || 'Không gọi Gemini AI.'}
-              </p>
-            </div>
-          )}
+      {/* 5. Mục Đề mẫu (Mặc định ĐÓNG theo đúng mockup: Đề mẫu ▾) */}
+      <div className="pt-0.5">
+        <button
+          type="button"
+          onClick={() => setIsPresetsOpen(!isPresetsOpen)}
+          className="text-xs text-slate-500 hover:text-slate-800 font-medium flex items-center gap-1 transition"
+        >
+          <span>Đề mẫu</span>
+          {isPresetsOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        </button>
 
-          {/* Nút xem hình & Xem JSON */}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setShowJsonSpec(!showJsonSpec)}
-              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg text-xs font-medium transition shadow-2xs"
-            >
-              <Code2 className="w-3.5 h-3.5 text-indigo-600" />
-              <span>{showJsonSpec ? 'Ẩn JSON GeometrySpecification' : 'Xem JSON GeometrySpecification AI'}</span>
-            </button>
-            {onViewDrawing && (
+        {isPresetsOpen && (
+          <div className="mt-2 space-y-1.5 max-h-64 overflow-y-auto pr-1">
+            {AI_GEOMETRY_PRESETS.map((preset) => (
               <button
+                key={preset.id}
                 type="button"
-                onClick={onViewDrawing}
-                className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-700 transition"
+                onClick={() => handleSelectPreset(preset)}
+                className="w-full text-left p-2 bg-slate-50 hover:bg-blue-50/70 hover:border-blue-300 border border-slate-200 rounded-lg text-xs transition space-y-0.5"
               >
-                Xem hình
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800 text-[11px] truncate">
+                    {preset.title}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-200 text-slate-600 font-semibold shrink-0">
+                    {preset.grade}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 line-clamp-1 font-normal">
+                  {preset.prompt}
+                </p>
               </button>
-            )}
+            ))}
           </div>
+        )}
+      </div>
 
-          {/* Khối hiển thị JSON GeometrySpecification */}
-          {showJsonSpec && (
-            <div className="rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-slate-100 text-[10px] font-mono space-y-1.5">
-              <div className="flex items-center justify-between text-slate-400 border-b border-slate-800 pb-1">
-                <span>JSON GeometrySpecification ({lastResult.generationInfo?.model || 'AI'})</span>
+      {/* 6. Chi tiết phân tích & JSON (Mặc định thu gọn) */}
+      {lastResult && !isProcessing && (
+        <div className="pt-1 border-t border-slate-100">
+          <button
+            type="button"
+            onClick={() => setShowAnalysisDetails(!showAnalysisDetails)}
+            className="text-[11px] text-slate-500 hover:text-slate-800 flex items-center gap-1"
+          >
+            <span>Thông tin phân tích & JSON</span>
+            {showAnalysisDetails ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+
+          {showAnalysisDetails && (
+            <div className="mt-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-emerald-800">
+                  {lastResult.generationInfo?.model || 'Gemini 3.8 Flash'}
+                </span>
                 <button
                   type="button"
                   onClick={() => {
@@ -521,76 +513,21 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
                     setCopiedJson(true);
                     setTimeout(() => setCopiedJson(false), 2000);
                   }}
-                  className="flex items-center gap-1 hover:text-white transition"
+                  className="flex items-center gap-1 text-[10px] text-blue-600 hover:underline"
                 >
-                  {copiedJson ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                  <span>{copiedJson ? 'Đã chép' : 'Sao chép'}</span>
+                  {copiedJson ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedJson ? 'Đã chép' : 'Chép JSON'}</span>
                 </button>
               </div>
-              <pre className="max-h-60 overflow-auto whitespace-pre-wrap leading-tight text-[10px] text-emerald-300">
-                {JSON.stringify(lastResult, null, 2)}
-              </pre>
-            </div>
-          )}
-
-          <div className="space-y-1 pt-1">
-            <div className="text-[11px] font-bold text-slate-700">Các thực thể nhận diện:</div>
-            {lastResult.detectedEntities.map((ent, i) => (
-              <div key={i} className="text-[11px] text-emerald-900 flex items-center gap-1.5 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                <span>{ent}</span>
+              <div className="text-[10px] text-slate-600 space-y-0.5">
+                <div>Nhóm: <b>{lastResult.shapeCategory}</b></div>
+                <div>Đường cao: {lastResult.altitudes?.length ?? 0} | Trung tuyến: {lastResult.medians?.length ?? 0}</div>
+                <div>Điểm phụ: {lastResult.auxPoints?.length ?? 0}</div>
               </div>
-            ))}
-          </div>
-
-          {onSwitchToManualTool && (
-            <div className="pt-2 border-t border-emerald-200/80">
-              <button
-                type="button"
-                onClick={() => onSwitchToManualTool(currentDoc.type)}
-                className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold transition shadow-2xs"
-              >
-                <span>Chuyển sang Chỉnh sửa thủ công</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
             </div>
           )}
         </div>
       )}
-
-      {/* Danh sách 12 Đề Mẫu THCS Tiêu Chuẩn */}
-      <div className="space-y-2 pt-2 border-t border-slate-200">
-        <div className="flex items-center justify-between">
-          <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-            <BookOpen className="w-3.5 h-3.5 text-amber-600" />
-            12 Đề mẫu THCS chuẩn SGK:
-          </h4>
-          <span className="text-[10px] text-slate-400 font-medium">Nhấn để dựng ngay</span>
-        </div>
-
-        <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
-          {AI_GEOMETRY_PRESETS.map((preset) => (
-            <button
-              key={preset.id}
-              type="button"
-              onClick={() => handleSelectPreset(preset)}
-              className="w-full text-left p-2.5 bg-slate-50 hover:bg-blue-50/70 hover:border-blue-300 border border-slate-200 rounded-lg text-xs transition group space-y-0.5"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-800 group-hover:text-blue-800 text-[11px]">
-                  {preset.title}
-                </span>
-                <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-200 text-slate-600 font-semibold group-hover:bg-blue-200 group-hover:text-blue-800">
-                  {preset.grade}
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-500 line-clamp-1 group-hover:text-slate-700 font-normal">
-                {preset.prompt}
-              </p>
-            </button>
-          ))}
-        </div>
-      </div>
     </div>
   );
 };

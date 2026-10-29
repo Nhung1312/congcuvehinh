@@ -684,8 +684,32 @@ export class GeometrySpecificationAdapter {
 
     const quadType = quadSpec.type || 'rectangle';
     const points = getQuadPresetPoints(quadType);
+    const v = quadSpec.vertices || ['A', 'B', 'C', 'D'];
     const showDiagonals = Boolean(quadSpec.showDiagonals);
+    const diagInterLabel = quadSpec.diagonalIntersection || 'O';
     const showCircumcircle = Boolean(quadSpec.showCircumcircle) || quadType === 'cyclic';
+
+    const hasExplicitDiagInter = Boolean(
+      spec.auxPoints?.some(
+        (p) =>
+          p.name === diagInterLabel ||
+          (p.type === 'intersection' &&
+            ((p.line1?.includes(v[0]) && p.line1?.includes(v[2])) ||
+             (p.line2?.includes(v[0]) && p.line2?.includes(v[2])) ||
+             (p.line1?.includes(v[1]) && p.line1?.includes(v[3])) ||
+             (p.line2?.includes(v[1]) && p.line2?.includes(v[3]))))
+      )
+    );
+    const hasExplicitDiagAC = Boolean(
+      spec.auxLines?.some(
+        (l) => (l.from === v[0] && l.to === v[2]) || (l.from === v[2] && l.to === v[0])
+      )
+    );
+    const hasExplicitDiagBD = Boolean(
+      spec.auxLines?.some(
+        (l) => (l.from === v[1] && l.to === v[3]) || (l.from === v[3] && l.to === v[1])
+      )
+    );
 
     return {
       ...this.buildAuxiliaryData(spec),
@@ -695,14 +719,18 @@ export class GeometrySpecificationAdapter {
       showVertices: true,
       showLabels: true,
       diagonals: {
-        AC: { enabled: showDiagonals, style: 'dashed', color: '#64748b' },
-        BD: { enabled: showDiagonals, style: 'dashed', color: '#64748b' },
-        showIntersection: showDiagonals,
-        intersectionLabel: quadSpec.diagonalIntersection || 'O',
+        AC: { enabled: showDiagonals && !hasExplicitDiagAC, style: 'dashed', color: '#64748b' },
+        BD: { enabled: showDiagonals && !hasExplicitDiagBD, style: 'dashed', color: '#64748b' },
+        showIntersection: showDiagonals && !hasExplicitDiagInter,
+        intersectionLabel: diagInterLabel,
       },
       showRightAngleMarkers: quadType === 'rectangle' || quadType === 'square' || quadType === 'right-trapezoid',
       showEqualSidesMarkers: quadType === 'square' || quadType === 'rhombus' || quadType === 'isosceles-trapezoid',
-      showParallelMarkers: quadType.includes('trapezoid') || quadType === 'parallelogram' || quadType === 'rectangle' || quadType === 'square' || quadType === 'rhombus',
+      showParallelMarkers:
+        quadType === 'parallelogram' ||
+        quadType === 'trapezoid' ||
+        quadType === 'right-trapezoid' ||
+        quadType === 'isosceles-trapezoid',
       showCircumcircle,
       circumcircleCenterName: 'O',
     };

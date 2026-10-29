@@ -365,9 +365,13 @@ export const getParallelArrowsPath = (
   p1: Point2D,
   p2: Point2D,
   arrowCount: 1 | 2 = 1,
-  arrowSize: number = 7
+  arrowSize: number = 7,
+  t: number = 0.5
 ): string => {
-  const mid = midpoint(p1, p2);
+  const centerPos: Point2D = {
+    x: p1.x + (p2.x - p1.x) * t,
+    y: p1.y + (p2.y - p1.y) * t,
+  };
   const v = vecNorm(vecSub(p2, p1)); // Hướng đoạn thẳng
   const n = vecNorm(vecPerp(v)); // Vector pháp tuyến
 
@@ -388,11 +392,11 @@ export const getParallelArrowsPath = (
   };
 
   if (arrowCount === 1) {
-    return buildArrow(mid);
+    return buildArrow(centerPos);
   } else {
     const offset = arrowSize * 0.8;
-    const c1: Point2D = { x: mid.x - v.x * (offset / 2), y: mid.y - v.y * (offset / 2) };
-    const c2: Point2D = { x: mid.x + v.x * (offset / 2), y: mid.y + v.y * (offset / 2) };
+    const c1: Point2D = { x: centerPos.x - v.x * (offset / 2), y: centerPos.y - v.y * (offset / 2) };
+    const c2: Point2D = { x: centerPos.x + v.x * (offset / 2), y: centerPos.y + v.y * (offset / 2) };
     return `${buildArrow(c1)} ${buildArrow(c2)}`;
   }
 };

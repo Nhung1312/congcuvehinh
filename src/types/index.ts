@@ -1285,6 +1285,20 @@ export interface SpatialGeometryData {
   lineWidth?: number;
 }
 
+// Thông tin Metadata đề bài do AI dựng hình tạo ra
+export interface DocumentAiMetadata {
+  aiPrompt?: string;
+  aiGeneratedPrompt?: string; // Đề bài thực tế đã dựng ra hình vẽ hiện tại
+  aiQuestionImage?: {
+    mimeType: string;
+    data: string;
+  };
+  aiDetectedEntities?: string[];
+  aiExplanation?: string;
+  aiGenerationSource?: string;
+  [key: string]: any;
+}
+
 // Tổng hợp Cấu hình biểu đồ hoàn chỉnh (Full Document Config)
 export interface ChartDocument {
   id: string;
@@ -1306,4 +1320,5 @@ export interface ChartDocument {
     fractionBar?: FractionBarData;
     numberLine?: NumberLineData;
   };
+  metadata?: DocumentAiMetadata;
 }

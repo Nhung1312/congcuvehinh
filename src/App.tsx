@@ -18,6 +18,9 @@ import {
   readJsonConfig,
 } from './export/exportService';
 import { copyTikzToClipboard } from './export/tikzExport';
+import { GeminiGeometryProvider } from './ai/providers/GeminiGeometryProvider';
+import { MockGeometryProvider } from './ai/providers/MockGeometryProvider';
+import { GeometrySpecificationAdapter } from './ai/adapter/geometrySpecificationAdapter';
 
 // Editor components
 import { PieChartEditor } from './components/EditorPanels/PieChartEditor';
@@ -135,6 +138,54 @@ export const App: React.FC = () => {
     setTimeout(() => {
       setCopyFeedback(null);
     }, 3500);
+  };
+
+  const [isAIRunning, setIsAIRunning] = useState(false);
+
+  const handleUpdateAiPrompt = (newPrompt: string) => {
+    setCurrentDoc((prev) => ({
+      ...prev,
+      metadata: {
+        ...(prev.metadata || {}),
+        aiPrompt: newPrompt,
+      },
+    }));
+    showToast('Đã cập nhật đề bài.');
+  };
+
+  const handleRerunAIFromPrompt = async (promptText: string) => {
+    if (!promptText.trim()) return;
+    setIsAIRunning(true);
+    showToast('Đang phân tích & dựng lại hình bằng AI...');
+    try {
+      const gemini = new GeminiGeometryProvider();
+      let spec;
+      try {
+        spec = await gemini.parseGeometryProblem(promptText);
+      } catch {
+        const mock = new MockGeometryProvider();
+        spec = await mock.parseGeometryProblem(promptText);
+        spec.generationInfo = { source: 'rules', message: 'Bộ quy tắc SGK.' };
+      }
+      const newDoc = GeometrySpecificationAdapter.specToChartDocument(
+        spec,
+        currentDoc.settings
+      );
+      newDoc.metadata = {
+        ...(currentDoc.metadata || {}),
+        aiPrompt: promptText,
+        aiGeneratedPrompt: promptText,
+        aiDetectedEntities: spec.detectedEntities,
+        aiExplanation: spec.explanation,
+        aiGenerationSource: spec.generationInfo?.source || 'gemini',
+      };
+      setCurrentDoc(newDoc);
+      showToast('Đã dựng lại hình thành công!');
+    } catch (err: any) {
+      showToast('Lỗi khi dựng lại: ' + (err.message || 'Không thể dựng hình'));
+    } finally {
+      setIsAIRunning(false);
+    }
   };
 
   const handleSelectTool = (type: ToolType) => {
@@ -751,6 +802,10 @@ export const App: React.FC = () => {
               }
             }
             settings={settings}
+            metadata={currentDoc.metadata}
+            onUpdateAiPrompt={handleUpdateAiPrompt}
+            onRerunAI={handleRerunAIFromPrompt}
+            isAIRunning={isAIRunning}
             onChangeData={(geometry) => setCurrentDoc((prev) => ({ ...prev, data: { ...prev.data, geometry } }))}
             onChangeSettings={(st) => setCurrentDoc((prev) => ({ ...prev, settings: st }))}
           />
@@ -999,17 +1054,23 @@ export const App: React.FC = () => {
           onOpenTemplates={() => setShowTemplatesModal(true)}
         />
 
-        <section className="w-80 lg:w-96 bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-y-auto p-4 select-none h-full">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-            <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-              Tùy chỉnh & Số liệu
-            </h2>
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700">
-              {currentDoc.type.replace('_', ' ')}
-            </span>
-          </div>
+        <section
+          className={`${
+            currentDoc.type === 'AI_GEOMETRY' ? 'w-[320px] lg:w-[340px]' : 'w-80 lg:w-96'
+          } bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-y-auto select-none h-full`}
+        >
+          {currentDoc.type !== 'AI_GEOMETRY' && (
+            <div className="flex items-center justify-between p-4 pb-3 border-b border-slate-100">
+              <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                Tùy chỉnh & Số liệu
+              </h2>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700">
+                {currentDoc.type.replace('_', ' ')}
+              </span>
+            </div>
+          )}
 
-          <div className="flex-1 space-y-4">
+          <div className={`flex-1 ${currentDoc.type === 'AI_GEOMETRY' ? 'p-3.5 space-y-3' : 'p-4 space-y-4'}`}>
             {renderEditorPanel()}
           </div>
         </section>
