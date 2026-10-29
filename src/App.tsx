@@ -250,19 +250,8 @@ export const App: React.FC = () => {
   const getInitialDataForType = (type: ToolType) => {
     switch (type) {
       case 'AI_GEOMETRY':
-        return {
-          geometry: {
-            subType: 'triangle' as const,
-            triangle: {
-              type: 'general' as const, vertexNames: ['A', 'B', 'C'],
-              points: [{ x: 260, y: 110 }, { x: 130, y: 340 }, { x: 430, y: 340 }] as [Point2D, Point2D, Point2D],
-              showVertices: true, showLabels: true,
-              altitudes: [{ fromVertex: 'A' as const, enabled: true, label: 'H', style: 'dashed' as const, showRightAngle: true }],
-              medians: [], bisectors: [], perpBisectors: [], showRightAngleMarker: true, showEqualSidesMarker: true,
-              showSideLengths: false, sideLengthLabels: ['', '', ''],
-            },
-          },
-        };
+        // Start with an empty AI canvas; only display a diagram after generation.
+        return { geometry: { subType: 'triangle' as const } };
       case 'GEOMETRY_SPATIAL':
         return {
           spatialGeometry: {
