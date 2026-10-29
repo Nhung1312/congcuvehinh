@@ -1,3 +1,4 @@
+import { geometryVerificationMessage } from '../../ai/adapter/geometryVerificationState';
 import React, { useState } from 'react';
 import {
   BaseChartSettings,
@@ -231,6 +232,12 @@ export const GeometryEditor: React.FC<GeometryEditorProps> = ({
           onRerunAI={onRerunAI}
           isAIRunning={isAIRunning}
         />
+      )}
+
+      {metadata?.aiVerification && (
+        <p role="status" className={`text-xs ${metadata.aiVerification.valid ? 'text-emerald-700' : 'text-amber-700'}`}>
+          {geometryVerificationMessage(metadata.aiVerification)}
+        </p>
       )}
 
       {/* 2. Mục CHỈNH SỬA HÌNH: có thể mở/thu gọn (mặc định mở) */}

@@ -3,6 +3,8 @@
  * Chuyển đổi GeometrySpecification (lớp dữ liệu trung gian từ AI) sang ChartDocument của Geometry Engine hiện tại
  */
 import { GeometrySpecification, GeometricAuxPointSpec } from '../types';
+import { verifyGeometryScene } from './verifyGeometryScene';
+import { solveGeometryCoordinates } from './solveGeometryCoordinates';
 import {
   ChartDocument,
   Point2D,
@@ -18,6 +20,8 @@ import {
 } from '../../types';
 import {
   getQuadPresetPoints,
+  getConstrainedQuadPoints,
+  QuadConstraintOptions,
   getLineRayPresetPoints,
   getAnglePresetPoints,
   getCirclePresetPoints,
@@ -34,7 +38,15 @@ export class GeometrySpecificationAdapter {
     spec: GeometrySpecification,
     currentSettings?: BaseChartSettings
   ): ChartDocument {
-    const baseSettings: BaseChartSettings = currentSettings || {
+    const vertices = spec.shapeCategory === 'triangle' ? spec.triangle?.vertices : spec.shapeCategory === 'quadrilateral' ? spec.quadrilateral?.vertices : undefined;
+    const expected = spec.shapeCategory === 'triangle' ? 3 : 4;
+    const needsVertices = spec.shapeCategory === 'triangle' && spec.triangle || spec.shapeCategory === 'quadrilateral' && spec.quadrilateral;
+    if (needsVertices && (!Array.isArray(vertices) || vertices.length !== expected || vertices.some(v => typeof v !== 'string' || !v.trim()))) {
+      const message = 'Thiếu danh sách đỉnh hợp lệ của hình chính.';
+      spec.verification = { valid: false, status: 'incomplete', errors: [], missingData: [message] };
+      throw new Error(message);
+    }
+    const baseSettings: BaseChartSettings = currentSettings ? { ...currentSettings } : {
       title: spec.title || 'HÌNH VẼ TOÁN HỌC THCS',
       fontFamily: 'Times New Roman',
       titleFontSize: 18,
@@ -119,7 +131,7 @@ export class GeometrySpecificationAdapter {
       }
     }
 
-    return {
+    const doc: ChartDocument = {
       id: 'doc_' + Date.now(),
       type: docType,
       title: spec.title,
@@ -128,6 +140,15 @@ export class GeometrySpecificationAdapter {
       settings: baseSettings,
       data,
     };
+
+    data.geometry.strictAuxiliaryCoordinates = true;
+    solveGeometryCoordinates(spec, doc);
+    spec.verification = this.verifyGeometryScene(spec, doc);
+    const storedSpec = structuredClone(spec);
+    delete storedSpec.verification;
+    doc.metadata = { aiGeometrySpec: storedSpec, aiVerification: spec.verification };
+
+    return doc;
   }
 
   /**
@@ -195,6 +216,7 @@ export class GeometrySpecificationAdapter {
         const inMedians = medians.some(m => m.midpoint === point.name);
         return {
           ...point,
+          triangleVertices: point.triangleVertices || triangle?.vertices,
           id: `ai-point-${index}`,
           showPoint: hidden || inMedians || point.showPoint === false ? false : true,
           showLabel: hidden || inMedians || point.showLabel === false ? false : true,
@@ -577,8 +599,8 @@ export class GeometrySpecificationAdapter {
     // Perpendicular Bisectors
     const perpBisectors: NonNullable<TriangleData['perpBisectors']> = (spec.perpBisectors || [])
       .map(item => {
-        const names = Array.isArray(item.segment) ? item.segment.join('') : item.segment;
-        const sorted = names.split('').sort().join('');
+        const names = Array.isArray(item.segment) ? item.segment : item.segment.split('');
+        const sorted = names.map(roleOf).sort().join('');
         const side: 'AB' | 'AC' | 'BC' | null = sorted === 'AB' ? 'AB' : sorted === 'AC' ? 'AC' : sorted === 'BC' ? 'BC' : null;
         return side ? {
           side,
@@ -641,6 +663,7 @@ export class GeometrySpecificationAdapter {
     return {
       ...this.buildAuxiliaryData(spec),
       type: triType,
+      specialVertex: triSpec.specialVertex,
       vertexNames: triSpec.vertices,
       points,
       showVertices: true,
@@ -683,8 +706,13 @@ export class GeometrySpecificationAdapter {
     };
 
     const quadType = quadSpec.type || 'rectangle';
-    const points = getQuadPresetPoints(quadType);
-    const v = quadSpec.vertices || ['A', 'B', 'C', 'D'];
+    const v = (quadSpec.vertices || ['A', 'B', 'C', 'D']) as [string, string, string, string];
+
+    const points = getConstrainedQuadPoints(quadType, {
+      vertices: v,
+      sideComparisons: quadSpec.sideComparisons,
+      specialAngle: quadSpec.specialAngle,
+    });
     const showDiagonals = Boolean(quadSpec.showDiagonals);
     const diagInterLabel = quadSpec.diagonalIntersection || 'O';
     const showCircumcircle = Boolean(quadSpec.showCircumcircle) || quadType === 'cyclic';
@@ -842,6 +870,12 @@ export class GeometrySpecificationAdapter {
 
     const angleType = angleSpec.type || 'single';
     const points = getAnglePresetPoints(angleType);
+    if (typeof angleSpec.degrees === 'number' && angleSpec.degrees > 0 && angleSpec.degrees < 180 &&
+        ['single','bisector'].includes(angleType)) {
+      const r = 210, a = angleSpec.degrees * Math.PI / 180;
+      points[1] = { x: points[0].x + r, y: points[0].y };
+      points[2] = { x: points[0].x + r * Math.cos(a), y: points[0].y - r * Math.sin(a) };
+    }
 
     return {
       ...this.buildAuxiliaryData(spec),
@@ -954,6 +988,14 @@ export class GeometrySpecificationAdapter {
       reflectedNames: symSpec.reflectedNames || presets.reflectedNames,
     };
   }
+
+  /**
+   * Kiểm định các ràng buộc hình học (độ dài cạnh, góc, vị trí điểm trên đoạn thẳng)
+   */
+  public static verifyGeometryScene(spec: GeometrySpecification, doc: ChartDocument) {
+    return verifyGeometryScene(spec, doc);
+  }
+
 }
 
 /**

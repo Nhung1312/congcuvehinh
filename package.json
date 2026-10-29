@@ -16,7 +16,10 @@
     "test:geometry-constructions": "node --import tsx --test scripts/test_geometry_constructions.ts",
     "test:api-runtime": "node --import tsx --test scripts/test_vercel_api_runtime.ts",
     "test:textbook-templates": "node --import tsx --test scripts/test_textbook_templates.ts",
-    "test:geometry-groups": "tsx --test scripts/test_geometry_groups_a_to_f.ts"
+    "test:geometry-groups": "tsx --test scripts/test_geometry_groups_a_to_f.ts",
+    "test:geometry-constraints": "node --import tsx --test scripts/test_geometry_constraints_audit.ts scripts/test_geometry_verification.ts",
+    "test:geometry-dom": "node --import tsx --test scripts/test_geometry_dom.ts",
+    "test:geometry-all": "node --import tsx --test scripts/test_*.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -36,6 +39,7 @@
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
+    "jsdom": "^30.1.3",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",

@@ -1,3 +1,4 @@
+import { assertVerifiedGeometry, revalidateGeometryDocument, geometryVerificationMessage } from './ai/adapter/geometryVerificationState';
 import React, { useState, useEffect } from 'react';
 import { ChartDocument, ToolType, BaseChartSettings, Point2D, PolygonData, SymmetryData } from './types';
 import { Header } from './components/Header';
@@ -69,7 +70,7 @@ export const App: React.FC = () => {
         if (parsed && parsed.type && parsed.data) {
           return {
             past: [] as ChartDocument[],
-            present: parsed as ChartDocument,
+            present: revalidateGeometryDocument(parsed as ChartDocument),
             future: [] as ChartDocument[],
           };
         }
@@ -95,8 +96,9 @@ export const App: React.FC = () => {
 
   const setCurrentDoc = (value: React.SetStateAction<ChartDocument>) => {
     setHistoryState((prev) => {
-      const nextDoc = typeof value === 'function' ? value(prev.present) : value;
-      if (nextDoc === prev.present) return prev;
+      const updatedDoc = typeof value === 'function' ? value(prev.present) : value;
+      if (updatedDoc === prev.present) return prev;
+      const nextDoc = revalidateGeometryDocument(updatedDoc);
 
       const newPast = [...prev.past, prev.present];
       if (newPast.length > 50) newPast.shift();
@@ -140,6 +142,11 @@ export const App: React.FC = () => {
     }, 3500);
   };
 
+  useEffect(() => {
+    const v = currentDoc.metadata?.aiVerification;
+    if (v && !v.valid) showToast(geometryVerificationMessage(v));
+  }, [currentDoc.metadata?.aiVerification?.valid, currentDoc.metadata?.aiVerification?.status]);
+
   const [isAIRunning, setIsAIRunning] = useState(false);
 
   const handleUpdateAiPrompt = (newPrompt: string) => {
@@ -171,8 +178,10 @@ export const App: React.FC = () => {
         spec,
         currentDoc.settings
       );
+      assertVerifiedGeometry(spec, newDoc);
       newDoc.metadata = {
         ...(currentDoc.metadata || {}),
+        ...newDoc.metadata,
         aiPrompt: promptText,
         aiGeneratedPrompt: promptText,
         aiDetectedEntities: spec.detectedEntities,

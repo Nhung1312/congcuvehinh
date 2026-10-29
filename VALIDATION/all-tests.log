@@ -1,0 +1,502 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> react-example@0.0.0 test:geometry-all
+> node --import tsx --test scripts/test_*.ts
+
+✔ Đường cao AH, trung tuyến AM và trung trực AB giữ nguyên tên/cạnh (6.108598ms)
+✔ D, E và K phụ thuộc H/D giải được dù Gemini trả về ngược thứ tự (1.706789ms)
+✔ Trung điểm M, N và đoạn MN song song BC (10.606141ms)
+✔ Không sinh điểm giả khi có tham chiếu khuyết hoặc vòng phụ thuộc (0.98101ms)
+✔ Đề bài tam giác ABC vuông tại A, đường cao AH, hình chiếu D, E, trung điểm M, nối DE và AM (26.607691ms)
+✔ Kéo điểm B hoặc C trong tam giác vuông bảo toàn tuyệt đối góc vuông tại A (0.827922ms)
+✔ Kéo đỉnh tam giác cân bảo toàn hai cạnh bên bằng nhau (0.232058ms)
+✔ Không tự thêm đường trung tuyến khi đề chỉ cho trung điểm (10.924659ms)
+✔ Trực tâm H là giao điểm hai đường cao BD và CE (5.926625ms)
+✔ Bài toán kết hợp Toán 9: tam giác nội tiếp đường tròn (O), 2 đường cao, trực tâm H và tiếp tuyến Ax (6.014477ms)
+✔ Tam giác tù có góc lớn hơn 90 độ (0.912118ms)
+✔ Tỉ số Ta-lét tính đúng theo trung điểm (0.5) hoặc phân số, không mặc định 0.45 (15.061641ms)
+✔ Không biến kết luận cần chứng minh thành giả thiết (0.937024ms)
+✔ Kéo tam giác tù phải giữ góc tù đúng đỉnh, không biến thành tam giác nhọn (3.271695ms)
+✔ Tam giác vuông xoay vẫn giữ vuông góc chính xác khi kéo một cạnh (0.256815ms)
+✔ Các tứ giác đặc biệt giữ quan hệ cơ bản khi kéo (0.794572ms)
+✔ Tứ giác nội tiếp: kéo một đỉnh trùng tâm không làm mất tính nội tiếp (0.381312ms)
+✔ Đường tròn: không cho bán kính bằng 0 và giữ điểm trên đường tròn khi kéo (0.299278ms)
+✔ Đợt 2 - Hình chữ nhật bị xoay: kéo mọi đỉnh luôn bảo toàn 4 góc vuông và cặp cạnh đối song song (0.437886ms)
+✔ Đợt 2 - Hình vuông bị xoay: kéo mọi đỉnh luôn bảo toàn 4 cạnh bằng nhau và 4 góc vuông (0.685778ms)
+✔ Đợt 2 - Hình bình hành bị xoay: hai cặp cạnh đối luôn song song và bằng nhau (0.182614ms)
+✔ Đợt 2 - Hình thoi bị xoay: 4 cạnh luôn bằng nhau, 2 đường chéo vuông góc (0.425758ms)
+✔ Đợt 2 - Hình thang bị xoay: hai đáy luôn song song (0.6539ms)
+✔ Đợt 2 - Hình thang cân bị xoay: hai đáy song song và hai cạnh bên bằng nhau (0.191437ms)
+✔ Đợt 2 - Hình thang vuông bị xoay: hai đáy song song và duy trì các góc vuông (0.784436ms)
+✔ Đợt 2 - Tứ giác nội tiếp: kéo mọi đỉnh đều luôn thuộc cùng đường tròn (0.221342ms)
+✔ Đợt 2 - Đường tròn & tiếp tuyến: kéo tâm O, tiếp điểm A, điểm ngoài P (0.245367ms)
+✔ Đợt 2 - Cập nhật điểm phụ thời gian thực: chuỗi H -> D -> E -> K khi kéo đỉnh gốc (0.442253ms)
+✔ Hình Toán 9 hỗn hợp: tam giác, (O), trực tâm, M và tiếp tuyến cắt BC tại T (24.604006ms)
+✔ Gemini phân loại circle không được làm mất tam giác ABC (0.952598ms)
+✔ Tiếp tuyến Ax độc lập vẫn hiển thị tia và dấu vuông góc (3.190193ms)
+✔ Không biến mục tiêu chứng minh tiếp tuyến thành phép dựng (0.624155ms)
+✔ Hồi quy Đợt 2: Tam giác nhọn nội tiếp (O) + BD, CE cắt nhau tại H, M trung điểm BC, tiếp tuyến tại A cắt BC tại T (2.829272ms)
+✔ Bỏ đề trên hình và giữ T, không hiện điểm trợ giúp x (19.873605ms)
+✔ Bố cục tiếp tuyến ngắn hơn mà tam giác vẫn nhọn (1.171967ms)
+✔ Viewport giữ đúng tỉ lệ và bao trọn điểm ngoài (0.592608ms)
+✔ Ký hiệu góc vuông phải có hai cạnh vuông góc thật (0.442393ms)
+✔ CanvasArea không để nút kéo xanh lệch khỏi hình SVG khi viewBox thay đổi (11.598669ms)
+✔ Tiếp tuyến của đường tròn (O) tại A tự động dựng bán kính OA nét đứt và ký hiệu vuông góc OA ⟂ AT (25.348157ms)
+✔ Nếu OA không được hiển thị thì không được hiển thị ký hiệu vuông góc tại A (15.176963ms)
+✔ Không làm ảnh hưởng các ký hiệu vuông góc khác như BD ⟂ AC tại D và CE ⟂ AB tại E (1.317355ms)
+✔ Chuỗi dựng hình nhiều bước M -> D -> K -> N, tiếp tuyến tại B và các đoạn nối AM, DE, MN, BT (35.274885ms)
+✔ Audit Parallelogram ABCD with AB > AD, angle BAD acute, H in AD (18.007557ms)
+✔ Audit Parallelogram with angle BAD obtuse constraint (2.986277ms)
+✔ Audit Rectangle PQRS with PQ > PS constraint (2.290514ms)
+✔ Đề người dùng: cả bộ quy tắc và JSON AI sai đều dựng đủ chuỗi M/E/F/H/I/J (30.82982ms)
+✔ Đề thật: "Trên tia MF lấy điểm H" và điều kiện nằm giữa trước FM = FH (33.292212ms)
+✔ Quy tắc độc lập tên điểm, đỉnh vuông ở cả ba vị trí, đảo dấu bằng và hai thứ tự cạnh (72 biến thể) (134.186283ms)
+✔ Đề ảnh: chép đề để kiểm tra giả thiết, không dùng detectedEntities/lời giải làm dữ kiện (1.841771ms)
+✔ Đề ảnh bọc tên điểm bằng LaTeX vẫn bổ sung thứ tự cạnh khi JSON AI bỏ sót (1.993449ms)
+✔ Định dạng OCR không thay đổi hình: LaTeX, Markdown, chữ nghiêng Unicode, khoảng trắng (128 biến thể) (169.706066ms)
+✔ Phân số LaTeX và dấu lớn hơn giữ đúng độ dài, hướng tia và thứ tự cạnh (3.672005ms)
+✔ Pipeline SDK Gemini và đề ảnh hoạt động với schema điểm trên tia (mock HTTP, không dùng quota) (12.218878ms)
+✔ Điểm trên tia tính độ dài từ gốc và tham chiếu đoạn khác; hỗ trợ hệ số và phân số (2.269192ms)
+✔ Đảo tia thay đổi phía dựng; đổi thứ tự đoạn độ dài không thay đổi kết quả (0.423114ms)
+✔ Điều kiện nằm giữa/kéo dài chọn đúng nhánh khi độ dài cho hai nghiệm trên tia (0.834812ms)
+✔ Ghi chú chữ về thứ tự cạnh ưu tiên hơn dữ kiện chép từ ảnh (3.365696ms)
+✔ Giải chuỗi phụ thuộc ngược thứ tự, kể cả khi kéo/đổi hướng các đỉnh gốc (3.686697ms)
+✔ Đối xứng tâm và tỉ số ngoài [0,1] không bị ép vào đoạn thẳng (0.628151ms)
+✔ Không dựng tọa độ giả khi tia suy biến, thiếu độ dài, không giao hoặc phụ thuộc vòng (0.162814ms)
+✔ Bỏ mục tiêu chứng minh vẫn giữ phép dựng ở phần b/c khi không có dấu chấm (1.251866ms)
+✔ Một đoạn phụ bằng đoạn khác không biến tam giác vuông thành cân; hai cạnh gốc bằng nhau vẫn đúng (2.539327ms)
+✔ Các nhóm đoạn bằng nhau độc lập có ký hiệu khác nhau; nhóm nối tiếp được gộp (218.53241ms)
+✔ SVG, bounds và TikZ cùng dùng điểm H/I/J được giải từ giả thiết (12.182384ms)
+✔ Chuẩn hóa lại giữ nguyên quan hệ và không thêm đối tượng trùng (11.812675ms)
+✔ Tứ giác không đọc đỉnh tam giác phụ: đủ 7 loại, đổi tên điểm và JSON thiếu trường (126 biến thể) (52.737815ms)
+✔ Hình chiếu và trung điểm của tứ giác vẫn được vẽ khi JSON có cả đường cao/trung tuyến phụ (4.810522ms)
+✔ Đường tròn, đoạn thẳng, góc, đa giác và đối xứng bỏ qua mô tả tam giác phụ chưa đầy đủ (96.405562ms)
+✔ Editor button blocks contradictory JSON and preserves the working document (863.53537ms)
+✔ Editor success retains original image/text, verification and personal key request separation (416.561624ms)
+✔ App rerun button blocks failed verification without replacing the current canvas (236.367123ms)
+✔ App rerun success stores an independently verified document and original prompt (134.983623ms)
+✔ Nhóm A - Bài 1: Đoạn thẳng AB, trung điểm M và đường trung trực vuông góc (30.500196ms)
+✔ Nhóm A - Bài 2: Góc xOy và tia phân giác Oz (13.714481ms)
+✔ Nhóm B - Bài 3: Tam giác ABC vuông tại A, đường cao AH, hình chiếu D và E (15.400288ms)
+✔ Nhóm B - Bài 4: Tam giác ABC cân tại A, trung tuyến AM và phân giác BD (187.618224ms)
+✔ Nhóm B - Bài 5: Tam giác đều ABC và đường cao AH (9.946812ms)
+✔ Nhóm C - Bài 6: Hình bình hành ABCD và giao điểm O của 2 đường chéo (10.852711ms)
+✔ Nhóm C - Bài 7: Hình chữ nhật ABCD và đường cao AH của tam giác ABD (10.516026ms)
+✔ Nhóm C - Bài 8: Hình vuông ABCD (11.3925ms)
+✔ Nhóm D - Bài 9: Từ điểm P ngoài đường tròn (O), kẻ hai tiếp tuyến PA, PB (11.258188ms)
+✔ Nhóm D - Bài 10: Đường tròn (O), dây cung CD và khoảng cách OH (8.416678ms)
+✔ Nhóm E - Bài 11: Bài toán chuẩn Section IV (ABC, AC < AB, M, ME, MF, on-ray H, I, J) (13.819959ms)
+✔ Nhóm E - Bài 12: Đổi tên đỉnh bài Section IV (tam giác DEF vuông tại D, DF < DE, N trung điểm EF, NP ⟂ DE tại P, NQ ⟂ DF tại Q, trên tia NQ lấy K sao cho Q nằm giữa N và K, QN = QK, R là giao điểm PK và DQ, S là trung điểm NP) (10.862395ms)
+✔ Nhóm F - Bài 13: Lục giác đều ABCDEF tâm O hiển thị chuẩn trong CanvasArea (9.076387ms)
+✔ Nhóm F - Bài 14: Ngũ giác đều ABCDE hiển thị chuẩn trong CanvasArea (11.591047ms)
+✔ Nhóm F - Bài 15: Đối xứng trục và đối xứng tâm hiển thị chuẩn trong CanvasArea (18.891312ms)
+✔ Nhóm F - Dựng X đối xứng của A qua B trong hình bình hành vẫn là tứ giác (0.54034ms)
+✔ Đề chữ cũ tiếp tục gọi Gemini bằng phần text (không gửi ảnh) (0.906629ms)
+✔ Ảnh và ghi chú cùng vào một lần Gemini, không lưu ảnh trong prompt text (0.928382ms)
+✔ Từ chối mime lạ, dataURL, ảnh quá lớn, payload sai (0.458427ms)
+✔ Vercel API từ chối ảnh sai trước khi gọi model hoặc đọc key (4.822891ms)
+✔ Giao diện có Ctrl+V, chọn ảnh, xóa ảnh, nhớ đề và dựng lại (28.237884ms)
+Spec A: {
+  "title": "Hình chữ nhật PQRS",
+  "shapeCategory": "quadrilateral",
+  "quadrilateral": {
+    "type": "rectangle",
+    "vertices": [
+      "P",
+      "Q",
+      "R",
+      "S"
+    ],
+    "showDiagonals": true,
+    "diagonalIntersection": "O",
+    "sideComparisons": [
+      {
+        "shorter": "PS",
+        "longer": "PQ"
+      }
+    ]
+  },
+  "detectedEntities": [
+    "Hình chữ nhật PQRS",
+    "Hai đường chéo PR và QS cắt nhau tại O"
+  ],
+  "explanation": "Đã dựng rectangle PQRS chính xác các quan hệ cạnh song song, góc vuông và đường chéo.",
+  "auxPoints": [
+    {
+      "name": "M",
+      "type": "midpoint",
+      "segment": "QR",
+      "showPoint": true,
+      "showLabel": true
+    },
+    {
+      "name": "N",
+      "type": "projection",
+      "fromPoint": "P",
+      "targetLine": "QS",
+      "mustBeInsideSegment": false,
+      "showPoint": true,
+      "showLabel": true
+    },
+    {
+      "name": "O",
+      "type": "intersection",
+      "line1": "PR",
+      "line2": "QS",
+      "showPoint": true,
+      "showLabel": true
+    }
+  ],
+  "auxLines": [
+    {
+      "from": "P",
+      "to": "N",
+      "style": "solid"
+    },
+    {
+      "from": "P",
+      "to": "M",
+      "style": "solid"
+    },
+    {
+      "from": "M",
+      "to": "N",
+      "style": "solid"
+    },
+    {
+      "from": "P",
+      "to": "R",
+      "style": "solid"
+    },
+    {
+      "from": "Q",
+      "to": "S",
+      "style": "solid"
+    }
+  ],
+  "rightAngles": [
+    {
+      "vertex": "N",
+      "ray1": "P",
+      "ray2": "Q"
+    }
+  ],
+  "altitudes": [],
+  "medians": [],
+  "equalSegments": [
+    {
+      "segments": [
+        "QM",
+        "MR"
+      ],
+      "tickType": 1
+    }
+  ],
+  "bisectors": [],
+  "pointConstraints": [],
+  "angleConstraints": []
+}
+Doc A quad: {
+  "auxPoints": [
+    {
+      "name": "M",
+      "type": "midpoint",
+      "segment": "QR",
+      "showPoint": true,
+      "showLabel": true,
+      "id": "ai-point-0"
+    },
+    {
+      "name": "N",
+      "type": "projection",
+      "fromPoint": "P",
+      "targetLine": "QS",
+      "mustBeInsideSegment": false,
+      "showPoint": true,
+      "showLabel": true,
+      "id": "ai-point-1"
+    },
+    {
+      "name": "O",
+      "type": "intersection",
+      "line1": "PR",
+      "line2": "QS",
+      "showPoint": true,
+      "showLabel": true,
+      "id": "ai-point-2"
+    }
+  ],
+  "auxLines": [
+    {
+      "id": "ai-line-0",
+      "from": "P",
+      "to": "N",
+      "style": "solid",
+      "enabled": true
+    },
+    {
+      "id": "ai-line-1",
+      "from": "P",
+      "to": "M",
+      "style": "solid",
+      "enabled": true
+    },
+    {
+      "id": "ai-line-2",
+      "from": "M",
+      "to": "N",
+      "style": "solid",
+      "enabled": true
+    },
+    {
+      "id": "ai-line-3",
+      "from": "P",
+      "to": "R",
+      "style": "solid",
+      "enabled": true
+    },
+    {
+      "id": "ai-line-4",
+      "from": "Q",
+      "to": "S",
+      "style": "solid",
+      "enabled": true
+    }
+  ],
+  "rightAngleMarkers": [
+    {
+      "id": "ai-right-0",
+      "vertex": "N",
+      "ray1": "P",
+      "ray2": "Q",
+      "enabled": true
+    }
+  ],
+  "equalSidesMarkers": [
+    {
+      "id": "ai-equal-0",
+      "segments": [
+        "QM",
+        "MR"
+      ],
+      "tickType": 1,
+      "enabled": true
+    }
+  ],
+  "equalAnglesMarkers": [],
+  "parallelMarkers": [],
+  "type": "rectangle",
+  "vertexNames": [
+    "P",
+    "Q",
+    "R",
+    "S"
+  ],
+  "points": [
+    {
+      "x": 150,
+      "y": 130
+    },
+    {
+      "x": 410,
+      "y": 130
+    },
+    {
+      "x": 410,
+      "y": 310
+    },
+    {
+      "x": 150,
+      "y": 310
+    }
+  ],
+  "showVertices": true,
+  "showLabels": true,
+  "diagonals": {
+    "AC": {
+      "enabled": false,
+      "style": "dashed",
+      "color": "#64748b"
+    },
+    "BD": {
+      "enabled": false,
+      "style": "dashed",
+      "color": "#64748b"
+    },
+    "showIntersection": false,
+    "intersectionLabel": "O"
+  },
+  "showRightAngleMarkers": true,
+  "showEqualSidesMarkers": false,
+  "showParallelMarkers": false,
+  "showCircumcircle": false,
+  "circumcircleCenterName": "O"
+}
+Number of O text labels in SVG: 1
+All labels found in SVG: [
+  'P', 'Q', 'R',
+  'S', 'M', 'N',
+  'O'
+]
+Lines count: 11
+Line 0: x1="150" y1="130" x2="410" y2="130" stroke="#000000" stroke-width="1.4" stroke-linecap="round"
+Line 1: x1="410" y1="130" x2="410" y2="310" stroke="#000000" stroke-width="1.4" stroke-linecap="round"
+Line 2: x1="410" y1="310" x2="150" y2="310" stroke="#000000" stroke-width="1.4" stroke-linecap="round"
+Line 3: x1="150" y1="310" x2="150" y2="130" stroke="#000000" stroke-width="1.4" stroke-linecap="round"
+Line 4: x1="150" y1="130" x2="234.23999999999998" y2="251.68" stroke="#000000" stroke-width="1.3" stroke-linecap="round"
+Line 5: x1="150" y1="130" x2="410" y2="220" stroke="#000000" stroke-width="1.3" stroke-linecap="round"
+Line 6: x1="410" y1="220" x2="234.23999999999998" y2="251.68" stroke="#000000" stroke-width="1.3" stroke-linecap="round"
+Line 7: x1="150" y1="130" x2="410" y2="310" stroke="#000000" stroke-width="1.3" stroke-linecap="round"
+Line 8: x1="410" y1="130" x2="150" y2="310" stroke="#000000" stroke-width="1.3" stroke-linecap="round"
+Line 9: x1="414.5" y1="175" x2="405.5" y2="175" stroke="#000000" stroke-width="1.3"
+Line 10: x1="414.5" y1="265" x2="405.5" y2="265" stroke="#000000" stroke-width="1.3"
+Parallel paths count: 0
+Position of label N: { nx: 231.37783298880024, ny: 267.42191856159855 }
+All labels found in SVG Case B: [ 'O', 'P', 'A', 'B', 'H' ]
+✔ Trường hợp A: Phân tích đề hình chữ nhật PQRS (45.703019ms)
+✔ Trường hợp A2: Kiểm tra khi bật showParallelMarkers, mũi tên song song tự động tránh trung điểm M (7.48354ms)
+✔ Trường hợp B: Phân tích đề đường tròn (O) hai tiếp tuyến PA, PB và H = OP giao AB (7.02367ms)
+✔ Xuất tam giác có đường cao AH, hình chiếu D/E, trung tuyến AM và nối DE (25.690576ms)
+✔ Xuất tam giác nội tiếp (O) và trực tâm H từ hai đường cao (4.160347ms)
+✔ Xuất tứ giác đúng tọa độ người dùng đã chỉnh sửa (8.325462ms)
+✔ Xuất đường tròn cơ bản cùng bán kính (2.677885ms)
+✔ Không được trả lại hình tam giác mẫu khi loại hình không hỗ trợ (0.312339ms)
+✔ Regression: right angle rejects the 108.434948° false positive (6.749239ms)
+✔ Regression: exact 60° rejects the 67.619865° false positive (0.848723ms)
+✔ Parametric quadrilateral: A,B,C,D 32° + sides + multistep feet (2.108431ms)
+✔ Parametric quadrilateral: A,B,C,D 60° + sides + multistep feet (0.569865ms)
+✔ Parametric quadrilateral: A,B,C,D 90° + sides + multistep feet (0.703725ms)
+✔ Parametric quadrilateral: A,B,C,D 118° + sides + multistep feet (0.788862ms)
+✔ Parametric quadrilateral: A,B,C,D 147° + sides + multistep feet (0.817586ms)
+✔ Parametric quadrilateral: P,Q,R,S 32° + sides + multistep feet (0.658848ms)
+✔ Parametric quadrilateral: P,Q,R,S 60° + sides + multistep feet (0.484526ms)
+✔ Parametric quadrilateral: P,Q,R,S 90° + sides + multistep feet (0.557816ms)
+✔ Parametric quadrilateral: P,Q,R,S 118° + sides + multistep feet (0.332508ms)
+✔ Parametric quadrilateral: P,Q,R,S 147° + sides + multistep feet (0.668552ms)
+✔ Parametric quadrilateral: A1,B1,C1,D1 32° + sides + multistep feet (0.345408ms)
+✔ Parametric quadrilateral: A1,B1,C1,D1 60° + sides + multistep feet (0.386349ms)
+✔ Parametric quadrilateral: A1,B1,C1,D1 90° + sides + multistep feet (0.246189ms)
+✔ Parametric quadrilateral: A1,B1,C1,D1 118° + sides + multistep feet (0.258477ms)
+✔ Parametric quadrilateral: A1,B1,C1,D1 147° + sides + multistep feet (0.584987ms)
+✔ Shape invariant: rectangle accepted, distorted shape rejected (0.431297ms)
+✔ Shape invariant: square accepted, distorted shape rejected (0.791517ms)
+✔ Shape invariant: rhombus accepted, distorted shape rejected (0.394251ms)
+✔ Shape invariant: right-trapezoid accepted, distorted shape rejected (0.19344ms)
+✔ Shape invariant: isosceles-trapezoid accepted, distorted shape rejected (0.222524ms)
+✔ Shape invariant: trapezoid accepted, distorted shape rejected (0.145939ms)
+✔ Shape invariant: cyclic accepted, distorted shape rejected (0.636264ms)
+✔ Shape invariant: general accepted, distorted shape rejected (0.147311ms)
+✔ Angle at each quadrilateral vertex: A 60 (0.407661ms)
+✔ Angle at each quadrilateral vertex: A 90 (0.341162ms)
+✔ Angle at each quadrilateral vertex: A 120 (0.205939ms)
+✔ Angle at each quadrilateral vertex: B 60 (0.275814ms)
+✔ Angle at each quadrilateral vertex: B 90 (0.234452ms)
+✔ Angle at each quadrilateral vertex: B 120 (0.191718ms)
+✔ Angle at each quadrilateral vertex: C 60 (0.183656ms)
+✔ Angle at each quadrilateral vertex: C 90 (0.203195ms)
+✔ Angle at each quadrilateral vertex: C 120 (0.191026ms)
+✔ Angle at each quadrilateral vertex: D 60 (0.178658ms)
+✔ Angle at each quadrilateral vertex: D 90 (0.172759ms)
+✔ Angle at each quadrilateral vertex: D 120 (0.174772ms)
+✔ Multistep projection outside segment is checked using actual K, not skipped (2.085567ms)
+✔ Solver simultaneously respects two angles, inequality and dependent projection (13.725628ms)
+✔ Triangle invariant and changed coordinates: general (4.384023ms)
+✔ Triangle invariant and changed coordinates: right (0.22724ms)
+✔ Triangle invariant and changed coordinates: isosceles (0.266931ms)
+✔ Triangle invariant and changed coordinates: equilateral (0.198608ms)
+✔ Triangle invariant and changed coordinates: right-isosceles (0.226259ms)
+✔ Triangle invariant and changed coordinates: obtuse (0.145608ms)
+✔ Renamed triangle: right apex P, centroid, orthocenter, circumcenter, incenter (1.270795ms)
+✔ Renamed triangle: right apex Q, centroid, orthocenter, circumcenter, incenter (0.288843ms)
+✔ Renamed triangle: right apex R, centroid, orthocenter, circumcenter, incenter (0.528132ms)
+✔ Numeric sides use actual length ratios: {"AB":3,"AC":4,"BC":5} (3.605976ms)
+✔ Numeric sides use actual length ratios: {"AB":5,"AC":5,"BC":6} (2.432256ms)
+✔ Numeric sides use actual length ratios: {"AB":"30 mm","AC":"4 cm","BC":"0.5 dm"} (2.880217ms)
+✔ Triangle numeric angles solved together (3.5821ms)
+✔ Triangle numeric angles: right type plus 30 degree B (1.415152ms)
+✔ Equivalent numeric-angle normalization: góc BAD bằng 60 độ (13.639449ms)
+✔ Equivalent numeric-angle normalization: góc DAB = 60° (5.276251ms)
+✔ Equivalent numeric-angle normalization: góc A bằng 60 (2.149172ms)
+✔ Equivalent side wording: AB > AD (0.90036ms)
+✔ Equivalent side wording: AD < AB (0.410526ms)
+✔ Equivalent side wording: AB dài hơn AD (0.431988ms)
+✔ Equivalent side wording: AD ngắn hơn AB (0.257246ms)
+✔ Normalizer preserves both explicit angles and membership of the correct target (149.823206ms)
+✔ Contradictory strict-order cycle cannot be overwritten by normalization (23.290528ms)
+✔ Provably contradictory triangle data gets incomplete/contradiction status (0.257777ms)
+✔ Provably contradictory triangle data gets incomplete/contradiction status (0.234191ms)
+✔ Rectangle 60 degree hypothesis is explicitly contradictory (0.22666ms)
+✔ Conflicting two measurements of the same angle are retained (0.232328ms)
+✔ Missing-data fixture: Missing shape (0.243936ms)
+✔ Missing-data fixture: Missing point (101.612368ms)
+✔ Missing Gemini vertices cannot become verified by server display defaults (3.5349ms)
+✔ Unknown construction cannot pass simply because errors is empty (0.392789ms)
+✔ Unhandled textual conditions get unsupported status and block application (0.451608ms)
+✔ Cyclic auxiliary dependencies cannot use stale default coordinates (0.13379ms)
+✔ Degenerate projection target is unresolved, never a fake valid foot (0.081412ms)
+✔ Membership distinguishes segment (121.707175ms)
+✔ Membership distinguishes ray (141.763583ms)
+✔ Membership distinguishes line (0.276614ms)
+✔ Both application paths reject forged Gemini success and keep current settings untouched (1.38081ms)
+✔ Drag invalidates stored verification and recomputes multistep feet without re-solving roots (2.114931ms)
+✔ Revalidation recovers after undoing an invalid drag (0.709754ms)
+✔ Circle invariant and renamed entities: basic (0.735613ms)
+✔ Circle invariant and renamed entities: diameter-chord (0.278438ms)
+✔ Circle invariant and renamed entities: tangent-point (0.199559ms)
+✔ Circle invariant and renamed entities: two-tangents (0.438588ms)
+✔ Circle invariant and renamed entities: secant (0.363044ms)
+✔ Circle invariant and renamed entities: inscribed-angle (0.222483ms)
+✔ New AI SVG and TikZ use the resolved multistep coordinates (22.315926ms)
+✔ Regular polygon 3: equilateral alone is insufficient (0.52039ms)
+✔ Regular polygon 4: equilateral alone is insufficient (0.171587ms)
+✔ Regular polygon 5: equilateral alone is insufficient (0.227731ms)
+✔ Regular polygon 6: equilateral alone is insufficient (0.245488ms)
+✔ Regular polygon 8: equilateral alone is insufficient (0.217976ms)
+✔ Symmetry central: changed transformation cannot retain verification (0.563625ms)
+✔ Symmetry axial: changed transformation cannot retain verification (0.222313ms)
+✔ Equilateral triangle cannot satisfy a strict side inequality (0.324096ms)
+✔ Declared equality plus strict inequality is provably contradictory (0.298117ms)
+✔ Distorted on-circle auxiliary point cannot retain verification after editing its construction (0.352278ms)
+✔ Numeric root-angle normalization does not interpret BAC as a length AC (1.792928ms)
+✔ Existing AI preset remains honest: preset-1 (3.96232ms)
+✔ Existing AI preset remains honest: preset-2 (1.143975ms)
+✔ Existing AI preset remains honest: preset-3 (0.487691ms)
+✔ Existing AI preset remains honest: preset-4 (0.482563ms)
+✔ Existing AI preset remains honest: preset-5 (0.440741ms)
+✔ Existing AI preset remains honest: preset-6 (1.270054ms)
+✔ Existing AI preset remains honest: preset-7 (0.729073ms)
+✔ Existing AI preset remains honest: preset-8 (0.835593ms)
+✔ Existing AI preset remains honest: preset-9 (0.469093ms)
+✔ Existing AI preset remains honest: preset-10 (0.522252ms)
+✔ Existing AI preset remains honest: preset-11 (0.630615ms)
+✔ Existing AI preset remains honest: preset-12 (0.513169ms)
+✔ Existing AI preset remains honest: preset-13 (0.791217ms)
+✔ Existing AI preset remains honest: preset-14 (0.625007ms)
+✔ Existing AI preset remains honest: preset-15 (0.343645ms)
+✔ Existing AI preset remains honest: preset-16 (0.438127ms)
+✔ Coordinate invariance under similarity: scale 0.15, rotation 0 (0.439579ms)
+✔ Coordinate invariance under similarity: scale 0.15, rotation 0.7 (0.270315ms)
+✔ Coordinate invariance under similarity: scale 0.15, rotation 2.4 (0.356093ms)
+✔ Coordinate invariance under similarity: scale 1, rotation 0 (0.309635ms)
+✔ Coordinate invariance under similarity: scale 1, rotation 0.7 (0.254361ms)
+✔ Coordinate invariance under similarity: scale 1, rotation 2.4 (0.40068ms)
+✔ Coordinate invariance under similarity: scale 7, rotation 0 (0.310165ms)
+✔ Coordinate invariance under similarity: scale 7, rotation 0.7 (0.268242ms)
+✔ Coordinate invariance under similarity: scale 7, rotation 2.4 (0.563645ms)
+✔ Renaming by permuting A/B/C preserves actual altitude roles in SVG (7.383409ms)
+✔ Mọi mẫu hình có sẵn vẽ được SVG hữu hạn, có nội dung và ID xem trước riêng (78.559908ms)
+✔ Mẫu tam giác cân, đều, vuông và vuông cân thỏa điều kiện hình học (0.252558ms)
+✔ Hai tam giác c.c.c. có các cạnh tương ứng bằng nhau và ba nhóm ký hiệu (0.775012ms)
+✔ Mẫu đường trung bình thỏa MN song song BC và MN = BC/2 (0.175954ms)
+✔ Tiếp tuyến từ A ngoài (O): B, C thuộc (O), AB = AC và vuông góc bán kính (1.329343ms)
+✔ Chọn mẫu tạo tài liệu độc lập, không đổi mẫu gốc hoặc trùng ID (0.810215ms)
+✔ Dấu góc vuông được vẽ tại tiếp điểm của cả hai mẫu tiếp tuyến (3.061179ms)
+✔ API khởi chạy và xử lý request sau khi biên dịch thành ESM production (1671.027935ms)
+ℹ tests 232
+ℹ suites 0
+ℹ pass 232
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6521.145354

@@ -260,6 +260,8 @@ JSON trả về:
 QUAN TRỌNG:
 - Không trả lời bất kỳ văn bản giải thích nào ngoài JSON.
 - Không tự bịa thêm dữ kiện hình học khi đề không có.
+- Xuất tất cả ràng buộc góc vào angleConstraints (giữ vertex, ray1, ray2, degrees hoặc type), các quan hệ thuộc đoạn/tia/đường thẳng vào pointConstraints. Không bỏ điều kiện thứ hai khi có nhiều góc.
+- Độ dài số của tam giác dùng sideLengths.a (đối diện đỉnh thứ nhất), b, c. Điều kiện bắt buộc không biểu diễn được bằng schema phải giữ nguyên trong unhandledConditions; không tự xác nhận hình hợp lệ.
 - Không tính tọa độ x, y số học (Geometry Engine sẽ tính toán tọa độ chính xác dựa vào các quan hệ).
 - Đối với các bài có trung tuyến AM hoặc đường cao AH: nếu đã khai báo trong medians/altitudes thì cũng có thể thêm vào auxLines hoặc giữ trong medians/altitudes; đảm bảo không bị thiếu đối tượng nào.`;
 
@@ -273,6 +275,20 @@ const GEOMETRY_RESPONSE_SCHEMA = {
       enum: ['triangle', 'quadrilateral', 'circle', 'line-ray', 'angle', 'polygon', 'symmetry'],
       description: 'Nhóm hình học phẳng chính',
     },
+    angleConstraints: {
+      type: Type.ARRAY,
+      items: { type: Type.OBJECT, properties: {
+        vertex: {type: Type.STRING}, ray1: {type: Type.STRING}, ray2: {type: Type.STRING},
+        type: {type: Type.STRING, enum:['acute','obtuse','right']}, degrees: {type: Type.NUMBER},
+      }, required:['vertex'] },
+    },
+    pointConstraints: {
+      type: Type.ARRAY,
+      items: {type: Type.OBJECT, properties: {
+        point: {type: Type.STRING}, target: {type: Type.STRING}, kind: {type: Type.STRING,enum:['segment','ray','line']},
+      }, required:['point','target','kind']},
+    },
+    unhandledConditions: {type: Type.ARRAY,items:{type: Type.STRING}},
     triangle: {
       type: Type.OBJECT,
       properties: {
@@ -286,6 +302,7 @@ const GEOMETRY_RESPONSE_SCHEMA = {
           description: '3 đỉnh tam giác ví dụ ["A", "B", "C"]',
         },
         specialVertex: { type: Type.STRING, description: 'Đỉnh góc vuông hoặc đỉnh cân' },
+        sideLengths: { type: Type.OBJECT, properties: {a:{type:Type.NUMBER},b:{type:Type.NUMBER},c:{type:Type.NUMBER}} },
         equalSides: {
           type: Type.ARRAY,
           items: { type: Type.STRING },
@@ -332,6 +349,25 @@ const GEOMETRY_RESPONSE_SCHEMA = {
         showDiagonals: { type: Type.BOOLEAN },
         diagonalIntersection: { type: Type.STRING },
         showCircumcircle: { type: Type.BOOLEAN, description: 'Tứ giác nội tiếp đường tròn' },
+        sideComparisons: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: { shorter: { type: Type.STRING }, longer: { type: Type.STRING } },
+            required: ['shorter', 'longer'],
+          },
+          description: 'Bất đẳng thức cạnh của tứ giác, ví dụ AB > AD',
+        },
+        specialAngle: {
+          type: Type.OBJECT,
+          properties: {
+            vertex: { type: Type.STRING },
+            type: { type: Type.STRING, enum: ['acute', 'obtuse', 'right'] },
+            degrees: { type: Type.NUMBER },
+          },
+          required: ['vertex', 'type'],
+          description: 'Góc đặc biệt hoặc số đo góc của tứ giác, ví dụ góc BAD nhọn hoặc BAD = 60°',
+        },
       },
       required: ['type', 'vertices'],
     },
@@ -524,6 +560,8 @@ const GEOMETRY_RESPONSE_SCHEMA = {
           rayPosition: { type: Type.STRING, enum: ['between', 'beyond'], description: 'Chọn nhánh giữa hai điểm gốc hoặc kéo dài qua điểm thứ hai' },
           fromPoint: { type: Type.STRING, description: 'Điểm hạ hình chiếu vuông góc (VD: H hạ xuống AB thì fromPoint là H)' },
           targetLine: { type: Type.STRING, description: 'Đường thẳng nhận hình chiếu (VD: AB, AC, BC)' },
+          mustBeInsideSegment: { type: Type.BOOLEAN, description: 'Bắt buộc hình chiếu phải nằm bên trong đoạn thẳng' },
+          triangleVertices: {type:Type.ARRAY,items:{type:Type.STRING}},
           line1: { type: Type.STRING, description: 'Đường thẳng 1 khi tìm giao điểm' },
           line2: { type: Type.STRING, description: 'Đường thẳng 2 khi tìm giao điểm' },
           centerPoint: { type: Type.STRING },
@@ -724,6 +762,14 @@ export async function parseGeometryWithGemini(prompt: string, userApiKey?: strin
  * Chuẩn hóa và kiểm tra tính hợp lệ của Specification
  */
 export function validateAndNormalizeSpec(spec: GeometrySpecification, originalPrompt: string, fromImage = false): void {
+  // Retain missing input even when legacy display defaults are added below.
+  spec.inputIssues = [];
+  if (!spec.shapeCategory) spec.inputIssues.push('JSON thiếu nhóm hình chính.');
+  const main = spec.shapeCategory === 'line-ray' ? spec.lineRay : (spec as any)[spec.shapeCategory];
+  if (!main) spec.inputIssues.push('JSON thiếu mô tả hình chính.');
+  if (spec.shapeCategory === 'triangle' && (!spec.triangle?.vertices || spec.triangle.vertices.length !== 3)) spec.inputIssues.push('JSON thiếu ba đỉnh tam giác.');
+  if (spec.shapeCategory === 'quadrilateral' && (!spec.quadrilateral?.vertices || spec.quadrilateral.vertices.length !== 4)) spec.inputIssues.push('JSON thiếu bốn đỉnh tứ giác.');
+
   if (!spec.shapeCategory) {
     spec.shapeCategory = 'triangle';
   }
@@ -912,7 +958,8 @@ export function validateAndNormalizeSpec(spec: GeometrySpecification, originalPr
 
     // 6. Tiếp tuyến tại một điểm của (O) (Ax, tiếp tuyến tại A, tiếp tuyến tại B...)
     const tanMatch = combinedText.match(/tiếp\s+tuyến\s+(?:của\s+(?:\(O\)|đường\s+tròn(?:\s+\(O\))?)\s+)?tại\s+([A-Za-z])|tiếp\s+tuyến\s+([A-Za-z])([a-z])\b/i);
-    if (tanMatch || rawText.includes('tiếp tuyến ax') || (rawText.includes('tiếp tuyến') && rawText.includes('ax'))) {
+    if ((tanMatch || rawText.includes('tiếp tuyến ax') || (rawText.includes('tiếp tuyến') && rawText.includes('ax'))) &&
+        spec.circle?.presetType !== 'two-tangents' && (!tanMatch?.[3] || tanMatch[3] === tanMatch[3].toLowerCase())) {
       const tanAt = (tanMatch?.[1] || tanMatch?.[2] || 'A').toUpperCase();
       const tanHelper = (tanMatch?.[3] || 'x');
       if (!spec.auxPoints.some(p => p.name === tanHelper)) {
@@ -1014,6 +1061,8 @@ export function validateAndNormalizeSpec(spec: GeometrySpecification, originalPr
       }
     }
   }
+  // Không tin vào verification do Gemini tự sinh ra, xóa để bộ máy hình học kiểm định độc lập
+  delete spec.verification;
   completeCompositeTriangle(spec, sanitizedPrompt);
   normalizeExplicitConstructions(spec, problemText);
 }

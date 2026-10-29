@@ -1,3 +1,4 @@
+import { minimizeGeometryConstraints } from './minimizeGeometryConstraints';
 /**
  * geometryMath.ts - Thư viện toán hình học phẳng SGK Toán THCS
  * Cung cấp các thuật toán vector, hình chiếu, giao điểm, phân giác, trung trực và định vị nhãn
@@ -480,6 +481,63 @@ export const getQuadPresetPoints = (
         { x: 140, y: 310 },
       ];
   }
+};
+
+export interface QuadConstraintOptions {
+  vertices?: [string, string, string, string];
+  sideComparisons?: { shorter: string; longer: string }[];
+  specialAngle?: { vertex: string; type: 'acute' | 'obtuse' | 'right'; degrees?: number };
+  /** Adapter supplies all dependent-point and cross-condition residuals. */
+  score?: (points: [Point2D,Point2D,Point2D,Point2D]) => number;
+}
+
+/** Parametric families preserve shape invariants while solving simultaneous constraints. */
+export const getConstrainedQuadPoints = (
+  type: string, options?: QuadConstraintOptions
+): [Point2D,Point2D,Point2D,Point2D] => {
+  const original=getQuadPresetPoints(type);
+  if(!options)return original;
+  const names=options.vertices || ['A','B','C','D'];
+  const sa=options.specialAngle;
+  const angle0=sa ? (sa.degrees ?? (sa.type==='right'?90:sa.type==='acute'?65:115)) : 110;
+  const at=sa?names.indexOf(sa.vertex):0;
+  const theta=(at===1||at===3?180-angle0:angle0)*Math.PI/180;
+  let seed:number[],bounds:[number,number][],construct:(p:number[])=>Point2D[];
+  if(['parallelogram','rectangle','rhombus','square'].includes(type)) {
+    const right=type==='rectangle'||type==='square',equal=type==='rhombus'||type==='square';
+    seed=[...(equal?[]:[0.75]),...(right?[]:[theta])];
+    bounds=[...(equal?[]:[[0.12,6] as [number,number]]),...(right?[]:[[0.1,Math.PI-0.1] as [number,number]])];
+    construct=p=>{const ratio=equal?1:p[0],a=right?Math.PI/2:p[equal?0:1],x=ratio*Math.cos(a),y=ratio*Math.sin(a);return [{x:0,y:0},{x:1,y:0},{x:1+x,y},{x,y}];};
+  } else if(['trapezoid','right-trapezoid','isosceles-trapezoid'].includes(type)) {
+    seed=type==='trapezoid'?[1.7,0.9,-0.3]:[1.7,0.9];
+    bounds=[[0.12,6],[0.12,5],...(type==='trapezoid'?[[-4,4] as [number,number]]:[])];
+    construct=p=>{const [b,h]=p,x=type==='isosceles-trapezoid'?(1-b)/2:type==='right-trapezoid'?0:p[2];return [{x:0,y:0},{x:1,y:0},{x:x+b,y:h},{x,y:h}];};
+  } else if(type==='cyclic') {
+    seed=[1.4,1.7,1.7];bounds=[[0.2,2.8],[0.2,2.8],[0.2,2.8]];
+    construct=p=>[0,p[0],p[0]+p[1],p[0]+p[1]+p[2]].map(a=>({x:Math.cos(a),y:Math.sin(a)}));
+  } else {
+    seed=[1.2,1,-0.2,1];bounds=[[-3,4],[0.1,4],[-3,4],[0.1,4]];
+    construct=p=>[{x:0,y:0},{x:1,y:0},{x:p[0],y:p[1]},{x:p[2],y:p[3]}];
+  }
+  const fit=(p:Point2D[])=>{
+    const minX=Math.min(...p.map(p=>p.x)),maxX=Math.max(...p.map(p=>p.x)),minY=Math.min(...p.map(p=>p.y)),maxY=Math.max(...p.map(p=>p.y));
+    const k=Math.min(330/Math.max(maxX-minX,1e-5),230/Math.max(maxY-minY,1e-5));
+    return p.map(p=>({x:280+(p.x-(minX+maxX)/2)*k,y:225+(p.y-(minY+maxY)/2)*k})) as [Point2D,Point2D,Point2D,Point2D];
+  };
+  const score=(pts:[Point2D,Point2D,Point2D,Point2D])=>{
+    if(options.score)return options.score(pts);
+    let result=0;
+    const len=(side:string)=>{const pairs=names.flatMap((a,i)=>names.map((b,j)=>({name:a+b,i,j})));const pair=pairs.find(p=>p.name===side);return pair?dist(pts[pair.i],pts[pair.j]):NaN;};
+    for(const c of options.sideComparisons||[]){const r=Math.max(0,(len(c.shorter)-len(c.longer))/330+1e-4);result+=r*r;}
+    if(sa&&at>=0){const a=vecSub(pts[(at+3)%4],pts[at]),b=vecSub(pts[(at+1)%4],pts[at]);const deg=Math.acos(Math.max(-1,Math.min(1,dotProd(a,b)/(vecLen(a)*vecLen(b)))))*180/Math.PI;
+      const r=sa.degrees!==undefined?(deg-sa.degrees)/180:sa.type==='right'?(deg-90)/180:sa.type==='acute'?Math.max(0,(deg-89.99)/180):Math.max(0,(90.01-deg)/180);result+=r*r;}
+    return Number.isFinite(result)?result:1e5;
+  };
+  if(score(original)<1e-16)return original;
+  const seeds=[seed,...[0.35,0.8,1.6,3].map((r,i)=>seed.map((v,j)=>j===0&&bounds[j][1]>3?r:j===seed.length-1&&bounds[j][1]<3.2?(0.5+i*0.6):v))];
+  const solution=minimizeGeometryConstraints(seeds,bounds,p=>score(fit(construct(p))));
+  const candidate=fit(construct(solution));
+  return score(candidate)<score(original)?candidate:original;
 };
 
 /**

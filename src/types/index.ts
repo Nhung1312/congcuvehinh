@@ -403,6 +403,8 @@ export interface CustomAuxPoint {
   distanceSegment?: string | [string, string] | string[];
   distanceRatio?: number;
   rayPosition?: 'between' | 'beyond';
+  mustBeInsideSegment?: boolean;
+  triangleVertices?: [string, string, string];
   fromPoint?: string; // Đỉnh hạ hình chiếu (cho type 'projection')
   targetLine?: string | [string, string] | string[]; // Cạnh nhận hình chiếu
   line1?: string | [string, string] | string[]; // Đường 1 (cho type 'intersection')
@@ -455,6 +457,7 @@ export interface CustomEqualAnglesMarker {
 
 export interface TriangleData {
   type: TriangleType;
+  specialVertex?: string;
   vertexNames: string[]; // [A, B, C]
   points?: [Point2D, Point2D, Point2D]; // Coordinates of [A, B, C]
   showVertices?: boolean;
@@ -1103,6 +1106,7 @@ export interface SymmetryData {
 
 export interface GeometryData {
   subType: 'triangle' | 'quadrilateral' | 'circle' | 'angle' | 'line-ray' | 'polygon' | 'symmetry';
+  strictAuxiliaryCoordinates?: boolean;
   
   // Tam giác (kèm Định lý Ta-lét MN // BC)
   triangle?: TriangleData;
@@ -1296,6 +1300,8 @@ export interface DocumentAiMetadata {
   aiDetectedEntities?: string[];
   aiExplanation?: string;
   aiGenerationSource?: string;
+  aiGeometrySpec?: import('../ai/types').GeometrySpecification;
+  aiVerification?: import('../ai/types').GeometryVerification;
   [key: string]: any;
 }
 

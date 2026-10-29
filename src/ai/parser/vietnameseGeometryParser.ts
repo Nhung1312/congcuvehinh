@@ -938,7 +938,8 @@ export class VietnameseGeometryParser {
 
     // 3. Tiếp tuyến của đường tròn (O) tại tiếp điểm (A, B, C...)
     const tanMatch = constructionPrompt.match(/tiếp\s+tuyến\s+(?:của\s+đường\s+tròn\s+\(O\)\s+)?(?:tại\s+([A-Z])|([A-Z])([a-z]))/i);
-    if (tanMatch || constrText.includes('tiếp tuyến ax')) {
+    if ((tanMatch || constrText.includes('tiếp tuyến ax')) && spec.circle?.presetType !== 'two-tangents' &&
+        (!tanMatch?.[3] || tanMatch[3] === tanMatch[3].toLowerCase())) {
       const tanAt = (tanMatch?.[1] || tanMatch?.[2] || 'A').toUpperCase();
       const tanHelper = (tanMatch?.[3] || 'x');
       if (!spec.auxPoints.some(p => p.name === tanHelper)) {

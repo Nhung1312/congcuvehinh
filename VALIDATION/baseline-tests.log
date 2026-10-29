@@ -1,0 +1,368 @@
+✔ Đường cao AH, trung tuyến AM và trung trực AB giữ nguyên tên/cạnh (7.740272ms)
+✔ D, E và K phụ thuộc H/D giải được dù Gemini trả về ngược thứ tự (5.803079ms)
+✔ Trung điểm M, N và đoạn MN song song BC (0.619359ms)
+✔ Không sinh điểm giả khi có tham chiếu khuyết hoặc vòng phụ thuộc (6.52386ms)
+✔ Đề bài tam giác ABC vuông tại A, đường cao AH, hình chiếu D, E, trung điểm M, nối DE và AM (24.355249ms)
+✔ Kéo điểm B hoặc C trong tam giác vuông bảo toàn tuyệt đối góc vuông tại A (0.698437ms)
+✔ Kéo đỉnh tam giác cân bảo toàn hai cạnh bên bằng nhau (0.209013ms)
+✔ Không tự thêm đường trung tuyến khi đề chỉ cho trung điểm (7.162828ms)
+✔ Trực tâm H là giao điểm hai đường cao BD và CE (1.1275ms)
+✔ Bài toán kết hợp Toán 9: tam giác nội tiếp đường tròn (O), 2 đường cao, trực tâm H và tiếp tuyến Ax (6.604089ms)
+✔ Tam giác tù có góc lớn hơn 90 độ (0.662843ms)
+✔ Tỉ số Ta-lét tính đúng theo trung điểm (0.5) hoặc phân số, không mặc định 0.45 (3.393958ms)
+✔ Không biến kết luận cần chứng minh thành giả thiết (0.636063ms)
+✔ Kéo tam giác tù phải giữ góc tù đúng đỉnh, không biến thành tam giác nhọn (1.32043ms)
+✔ Tam giác vuông xoay vẫn giữ vuông góc chính xác khi kéo một cạnh (0.149714ms)
+✔ Các tứ giác đặc biệt giữ quan hệ cơ bản khi kéo (1.025267ms)
+✔ Tứ giác nội tiếp: kéo một đỉnh trùng tâm không làm mất tính nội tiếp (0.422964ms)
+✔ Đường tròn: không cho bán kính bằng 0 và giữ điểm trên đường tròn khi kéo (2.786066ms)
+✔ Đợt 2 - Hình chữ nhật bị xoay: kéo mọi đỉnh luôn bảo toàn 4 góc vuông và cặp cạnh đối song song (0.509473ms)
+✔ Đợt 2 - Hình vuông bị xoay: kéo mọi đỉnh luôn bảo toàn 4 cạnh bằng nhau và 4 góc vuông (0.264016ms)
+✔ Đợt 2 - Hình bình hành bị xoay: hai cặp cạnh đối luôn song song và bằng nhau (0.23297ms)
+✔ Đợt 2 - Hình thoi bị xoay: 4 cạnh luôn bằng nhau, 2 đường chéo vuông góc (0.271477ms)
+✔ Đợt 2 - Hình thang bị xoay: hai đáy luôn song song (0.264617ms)
+✔ Đợt 2 - Hình thang cân bị xoay: hai đáy song song và hai cạnh bên bằng nhau (0.3468ms)
+✔ Đợt 2 - Hình thang vuông bị xoay: hai đáy song song và duy trì các góc vuông (0.553169ms)
+✔ Đợt 2 - Tứ giác nội tiếp: kéo mọi đỉnh đều luôn thuộc cùng đường tròn (0.259189ms)
+✔ Đợt 2 - Đường tròn & tiếp tuyến: kéo tâm O, tiếp điểm A, điểm ngoài P (0.330796ms)
+✔ Đợt 2 - Cập nhật điểm phụ thời gian thực: chuỗi H -> D -> E -> K khi kéo đỉnh gốc (0.451357ms)
+✔ Hình Toán 9 hỗn hợp: tam giác, (O), trực tâm, M và tiếp tuyến cắt BC tại T (20.768883ms)
+✔ Gemini phân loại circle không được làm mất tam giác ABC (1.359418ms)
+✔ Tiếp tuyến Ax độc lập vẫn hiển thị tia và dấu vuông góc (3.619686ms)
+✔ Không biến mục tiêu chứng minh tiếp tuyến thành phép dựng (0.757025ms)
+✔ Hồi quy Đợt 2: Tam giác nhọn nội tiếp (O) + BD, CE cắt nhau tại H, M trung điểm BC, tiếp tuyến tại A cắt BC tại T (12.046588ms)
+✔ Bỏ đề trên hình và giữ T, không hiện điểm trợ giúp x (18.98557ms)
+✔ Bố cục tiếp tuyến ngắn hơn mà tam giác vẫn nhọn (0.934041ms)
+✔ Viewport giữ đúng tỉ lệ và bao trọn điểm ngoài (0.224907ms)
+✔ Ký hiệu góc vuông phải có hai cạnh vuông góc thật (0.392127ms)
+✔ CanvasArea không để nút kéo xanh lệch khỏi hình SVG khi viewBox thay đổi (11.336353ms)
+✔ Tiếp tuyến của đường tròn (O) tại A tự động dựng bán kính OA nét đứt và ký hiệu vuông góc OA ⟂ AT (13.280529ms)
+✔ Nếu OA không được hiển thị thì không được hiển thị ký hiệu vuông góc tại A (8.488034ms)
+✔ Không làm ảnh hưởng các ký hiệu vuông góc khác như BD ⟂ AC tại D và CE ⟂ AB tại E (1.169473ms)
+✔ Chuỗi dựng hình nhiều bước M -> D -> K -> N, tiếp tuyến tại B và các đoạn nối AM, DE, MN, BT (27.060314ms)
+✔ Audit Parallelogram ABCD with AB > AD, angle BAD acute, H in AD (16.24408ms)
+✔ Audit Parallelogram with angle BAD obtuse constraint (1.942512ms)
+✔ Audit Rectangle PQRS with PQ > PS constraint (3.629701ms)
+✔ Đề người dùng: cả bộ quy tắc và JSON AI sai đều dựng đủ chuỗi M/E/F/H/I/J (41.605959ms)
+✔ Đề thật: "Trên tia MF lấy điểm H" và điều kiện nằm giữa trước FM = FH (74.275122ms)
+✔ Quy tắc độc lập tên điểm, đỉnh vuông ở cả ba vị trí, đảo dấu bằng và hai thứ tự cạnh (72 biến thể) (63.848301ms)
+✔ Đề ảnh: chép đề để kiểm tra giả thiết, không dùng detectedEntities/lời giải làm dữ kiện (2.727769ms)
+✔ Đề ảnh bọc tên điểm bằng LaTeX vẫn bổ sung thứ tự cạnh khi JSON AI bỏ sót (4.982869ms)
+✔ Định dạng OCR không thay đổi hình: LaTeX, Markdown, chữ nghiêng Unicode, khoảng trắng (128 biến thể) (100.417029ms)
+✔ Phân số LaTeX và dấu lớn hơn giữ đúng độ dài, hướng tia và thứ tự cạnh (7.084059ms)
+✔ Pipeline SDK Gemini và đề ảnh hoạt động với schema điểm trên tia (mock HTTP, không dùng quota) (10.211528ms)
+✔ Điểm trên tia tính độ dài từ gốc và tham chiếu đoạn khác; hỗ trợ hệ số và phân số (1.268471ms)
+✔ Đảo tia thay đổi phía dựng; đổi thứ tự đoạn độ dài không thay đổi kết quả (0.37395ms)
+✔ Điều kiện nằm giữa/kéo dài chọn đúng nhánh khi độ dài cho hai nghiệm trên tia (0.776984ms)
+✔ Ghi chú chữ về thứ tự cạnh ưu tiên hơn dữ kiện chép từ ảnh (0.70729ms)
+✔ Giải chuỗi phụ thuộc ngược thứ tự, kể cả khi kéo/đổi hướng các đỉnh gốc (1.589723ms)
+✔ Đối xứng tâm và tỉ số ngoài [0,1] không bị ép vào đoạn thẳng (0.435172ms)
+✔ Không dựng tọa độ giả khi tia suy biến, thiếu độ dài, không giao hoặc phụ thuộc vòng (0.148662ms)
+✔ Bỏ mục tiêu chứng minh vẫn giữ phép dựng ở phần b/c khi không có dấu chấm (0.629904ms)
+✔ Một đoạn phụ bằng đoạn khác không biến tam giác vuông thành cân; hai cạnh gốc bằng nhau vẫn đúng (1.577024ms)
+✔ Các nhóm đoạn bằng nhau độc lập có ký hiệu khác nhau; nhóm nối tiếp được gộp (1.125958ms)
+✔ SVG, bounds và TikZ cùng dùng điểm H/I/J được giải từ giả thiết (5.399373ms)
+✔ Chuẩn hóa lại giữ nguyên quan hệ và không thêm đối tượng trùng (1.045157ms)
+✔ Tứ giác không đọc đỉnh tam giác phụ: đủ 7 loại, đổi tên điểm và JSON thiếu trường (126 biến thể) (21.975783ms)
+✔ Hình chiếu và trung điểm của tứ giác vẫn được vẽ khi JSON có cả đường cao/trung tuyến phụ (3.983737ms)
+✔ Đường tròn, đoạn thẳng, góc, đa giác và đối xứng bỏ qua mô tả tam giác phụ chưa đầy đủ (72.55999ms)
+✔ Nhóm A - Bài 1: Đoạn thẳng AB, trung điểm M và đường trung trực vuông góc (35.451183ms)
+✔ Nhóm A - Bài 2: Góc xOy và tia phân giác Oz (17.192442ms)
+✔ Nhóm B - Bài 3: Tam giác ABC vuông tại A, đường cao AH, hình chiếu D và E (18.170628ms)
+✔ Nhóm B - Bài 4: Tam giác ABC cân tại A, trung tuyến AM và phân giác BD (10.842453ms)
+✔ Nhóm B - Bài 5: Tam giác đều ABC và đường cao AH (8.056757ms)
+✔ Nhóm C - Bài 6: Hình bình hành ABCD và giao điểm O của 2 đường chéo (10.643875ms)
+✔ Nhóm C - Bài 7: Hình chữ nhật ABCD và đường cao AH của tam giác ABD (6.92466ms)
+✔ Nhóm C - Bài 8: Hình vuông ABCD (15.101278ms)
+✔ Nhóm D - Bài 9: Từ điểm P ngoài đường tròn (O), kẻ hai tiếp tuyến PA, PB (15.069144ms)
+✔ Nhóm D - Bài 10: Đường tròn (O), dây cung CD và khoảng cách OH (8.19853ms)
+✔ Nhóm E - Bài 11: Bài toán chuẩn Section IV (ABC, AC < AB, M, ME, MF, on-ray H, I, J) (10.476144ms)
+✔ Nhóm E - Bài 12: Đổi tên đỉnh bài Section IV (tam giác DEF vuông tại D, DF < DE, N trung điểm EF, NP ⟂ DE tại P, NQ ⟂ DF tại Q, trên tia NQ lấy K sao cho Q nằm giữa N và K, QN = QK, R là giao điểm PK và DQ, S là trung điểm NP) (9.242786ms)
+✔ Nhóm F - Bài 13: Lục giác đều ABCDEF tâm O hiển thị chuẩn trong CanvasArea (7.241305ms)
+✔ Nhóm F - Bài 14: Ngũ giác đều ABCDE hiển thị chuẩn trong CanvasArea (7.276478ms)
+✔ Nhóm F - Bài 15: Đối xứng trục và đối xứng tâm hiển thị chuẩn trong CanvasArea (16.983959ms)
+✔ Nhóm F - Dựng X đối xứng của A qua B trong hình bình hành vẫn là tứ giác (0.654842ms)
+✔ Đề chữ cũ tiếp tục gọi Gemini bằng phần text (không gửi ảnh) (0.883184ms)
+✔ Ảnh và ghi chú cùng vào một lần Gemini, không lưu ảnh trong prompt text (0.816884ms)
+✔ Từ chối mime lạ, dataURL, ảnh quá lớn, payload sai (0.492388ms)
+✔ Vercel API từ chối ảnh sai trước khi gọi model hoặc đọc key (4.901978ms)
+✔ Giao diện có Ctrl+V, chọn ảnh, xóa ảnh, nhớ đề và dựng lại (17.882817ms)
+Spec A: {
+  "title": "Hình chữ nhật PQRS",
+  "shapeCategory": "quadrilateral",
+  "quadrilateral": {
+    "type": "rectangle",
+    "vertices": [
+      "P",
+      "Q",
+      "R",
+      "S"
+    ],
+    "showDiagonals": true,
+    "diagonalIntersection": "O",
+    "sideComparisons": [
+      {
+        "shorter": "PS",
+        "longer": "PQ"
+      }
+    ]
+  },
+  "detectedEntities": [
+    "Hình chữ nhật PQRS",
+    "Hai đường chéo PR và QS cắt nhau tại O"
+  ],
+  "explanation": "Đã dựng rectangle PQRS chính xác các quan hệ cạnh song song, góc vuông và đường chéo.",
+  "auxPoints": [
+    {
+      "name": "M",
+      "type": "midpoint",
+      "segment": "QR",
+      "showPoint": true,
+      "showLabel": true
+    },
+    {
+      "name": "N",
+      "type": "projection",
+      "fromPoint": "P",
+      "targetLine": "QS",
+      "mustBeInsideSegment": false,
+      "showPoint": true,
+      "showLabel": true
+    },
+    {
+      "name": "O",
+      "type": "intersection",
+      "line1": "PR",
+      "line2": "QS",
+      "showPoint": true,
+      "showLabel": true
+    }
+  ],
+  "auxLines": [
+    {
+      "from": "P",
+      "to": "N",
+      "style": "solid"
+    },
+    {
+      "from": "P",
+      "to": "M",
+      "style": "solid"
+    },
+    {
+      "from": "M",
+      "to": "N",
+      "style": "solid"
+    },
+    {
+      "from": "P",
+      "to": "R",
+      "style": "solid"
+    },
+    {
+      "from": "Q",
+      "to": "S",
+      "style": "solid"
+    }
+  ],
+  "rightAngles": [
+    {
+      "vertex": "N",
+      "ray1": "P",
+      "ray2": "Q"
+    }
+  ],
+  "altitudes": [],
+  "medians": [],
+  "equalSegments": [
+    {
+      "segments": [
+        "QM",
+        "MR"
+      ],
+      "tickType": 1
+    }
+  ],
+  "bisectors": []
+}
+Doc A quad: {
+  "auxPoints": [
+    {
+      "name": "M",
+      "type": "midpoint",
+      "segment": "QR",
+      "showPoint": true,
+      "showLabel": true,
+      "id": "ai-point-0"
+    },
+    {
+      "name": "N",
+      "type": "projection",
+      "fromPoint": "P",
+      "targetLine": "QS",
+      "mustBeInsideSegment": false,
+      "showPoint": true,
+      "showLabel": true,
+      "id": "ai-point-1"
+    },
+    {
+      "name": "O",
+      "type": "intersection",
+      "line1": "PR",
+      "line2": "QS",
+      "showPoint": true,
+      "showLabel": true,
+      "id": "ai-point-2"
+    }
+  ],
+  "auxLines": [
+    {
+      "id": "ai-line-0",
+      "from": "P",
+      "to": "N",
+      "style": "solid",
+      "enabled": true
+    },
+    {
+      "id": "ai-line-1",
+      "from": "P",
+      "to": "M",
+      "style": "solid",
+      "enabled": true
+    },
+    {
+      "id": "ai-line-2",
+      "from": "M",
+      "to": "N",
+      "style": "solid",
+      "enabled": true
+    },
+    {
+      "id": "ai-line-3",
+      "from": "P",
+      "to": "R",
+      "style": "solid",
+      "enabled": true
+    },
+    {
+      "id": "ai-line-4",
+      "from": "Q",
+      "to": "S",
+      "style": "solid",
+      "enabled": true
+    }
+  ],
+  "rightAngleMarkers": [
+    {
+      "id": "ai-right-0",
+      "vertex": "N",
+      "ray1": "P",
+      "ray2": "Q",
+      "enabled": true
+    }
+  ],
+  "equalSidesMarkers": [
+    {
+      "id": "ai-equal-0",
+      "segments": [
+        "QM",
+        "MR"
+      ],
+      "tickType": 1,
+      "enabled": true
+    }
+  ],
+  "equalAnglesMarkers": [],
+  "parallelMarkers": [],
+  "type": "rectangle",
+  "vertexNames": [
+    "P",
+    "Q",
+    "R",
+    "S"
+  ],
+  "points": [
+    {
+      "x": 150,
+      "y": 130
+    },
+    {
+      "x": 410,
+      "y": 130
+    },
+    {
+      "x": 410,
+      "y": 310
+    },
+    {
+      "x": 150,
+      "y": 310
+    }
+  ],
+  "showVertices": true,
+  "showLabels": true,
+  "diagonals": {
+    "AC": {
+      "enabled": false,
+      "style": "dashed",
+      "color": "#64748b"
+    },
+    "BD": {
+      "enabled": false,
+      "style": "dashed",
+      "color": "#64748b"
+    },
+    "showIntersection": false,
+    "intersectionLabel": "O"
+  },
+  "showRightAngleMarkers": true,
+  "showEqualSidesMarkers": false,
+  "showParallelMarkers": false,
+  "showCircumcircle": false,
+  "circumcircleCenterName": "O"
+}
+Number of O text labels in SVG: 1
+All labels found in SVG: [
+  'P', 'Q', 'R',
+  'S', 'M', 'N',
+  'O'
+]
+Lines count: 11
+Line 0: x1="150" y1="130" x2="410" y2="130" stroke="#000000" stroke-width="1.4" stroke-linecap="round"
+Line 1: x1="410" y1="130" x2="410" y2="310" stroke="#000000" stroke-width="1.4" stroke-linecap="round"
+Line 2: x1="410" y1="310" x2="150" y2="310" stroke="#000000" stroke-width="1.4" stroke-linecap="round"
+Line 3: x1="150" y1="310" x2="150" y2="130" stroke="#000000" stroke-width="1.4" stroke-linecap="round"
+Line 4: x1="150" y1="130" x2="234.23999999999998" y2="251.68" stroke="#000000" stroke-width="1.3" stroke-linecap="round"
+Line 5: x1="150" y1="130" x2="410" y2="220" stroke="#000000" stroke-width="1.3" stroke-linecap="round"
+Line 6: x1="410" y1="220" x2="234.23999999999998" y2="251.68" stroke="#000000" stroke-width="1.3" stroke-linecap="round"
+Line 7: x1="150" y1="130" x2="410" y2="310" stroke="#000000" stroke-width="1.3" stroke-linecap="round"
+Line 8: x1="410" y1="130" x2="150" y2="310" stroke="#000000" stroke-width="1.3" stroke-linecap="round"
+Line 9: x1="414.5" y1="175" x2="405.5" y2="175" stroke="#000000" stroke-width="1.3"
+Line 10: x1="414.5" y1="265" x2="405.5" y2="265" stroke="#000000" stroke-width="1.3"
+Parallel paths count: 0
+Position of label N: { nx: 231.37783298880024, ny: 267.42191856159855 }
+All labels found in SVG Case B: [ 'O', 'P', 'A', 'B', 'H' ]
+✔ Trường hợp A: Phân tích đề hình chữ nhật PQRS (45.169181ms)
+✔ Trường hợp A2: Kiểm tra khi bật showParallelMarkers, mũi tên song song tự động tránh trung điểm M (8.517638ms)
+✔ Trường hợp B: Phân tích đề đường tròn (O) hai tiếp tuyến PA, PB và H = OP giao AB (6.021697ms)
+✔ Xuất tam giác có đường cao AH, hình chiếu D/E, trung tuyến AM và nối DE (32.346744ms)
+✔ Xuất tam giác nội tiếp (O) và trực tâm H từ hai đường cao (2.972977ms)
+✔ Xuất tứ giác đúng tọa độ người dùng đã chỉnh sửa (3.021529ms)
+✔ Xuất đường tròn cơ bản cùng bán kính (1.185768ms)
+✔ Không được trả lại hình tam giác mẫu khi loại hình không hỗ trợ (0.205818ms)
+✔ Mọi mẫu hình có sẵn vẽ được SVG hữu hạn, có nội dung và ID xem trước riêng (78.334051ms)
+✔ Mẫu tam giác cân, đều, vuông và vuông cân thỏa điều kiện hình học (0.38048ms)
+✔ Hai tam giác c.c.c. có các cạnh tương ứng bằng nhau và ba nhóm ký hiệu (1.056183ms)
+✔ Mẫu đường trung bình thỏa MN song song BC và MN = BC/2 (0.277886ms)
+✔ Tiếp tuyến từ A ngoài (O): B, C thuộc (O), AB = AC và vuông góc bán kính (1.987669ms)
+✔ Chọn mẫu tạo tài liệu độc lập, không đổi mẫu gốc hoặc trùng ID (1.079388ms)
+✔ Dấu góc vuông được vẽ tại tiếp điểm của cả hai mẫu tiếp tuyến (3.087618ms)
+✔ API khởi chạy và xử lý request sau khi biên dịch thành ESM production (1968.819744ms)
+ℹ tests 105
+ℹ suites 0
+ℹ pass 105
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3903.719776

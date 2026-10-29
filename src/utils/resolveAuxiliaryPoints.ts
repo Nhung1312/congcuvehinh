@@ -12,22 +12,17 @@ import {
   getTriangleIncircle,
 } from './geometryMath';
 
-function endpoints(value: string | string[] | undefined, points: Record<string, Point2D>): [Point2D, Point2D] | null {
+export function geometryEndpoints(value: string | string[] | undefined, points: Record<string, Point2D>): [Point2D, Point2D] | null {
   if (!value) return null;
   let names: string[];
-  if (Array.isArray(value)) {
-    names = value;
-  } else {
-    const trimmed = value.trim();
-    if (trimmed.includes(',')) {
-      names = trimmed.split(',').map(s => s.trim());
-    } else if (trimmed.includes('-')) {
-      names = trimmed.split('-').map(s => s.trim());
-    } else if (trimmed.includes("'")) {
-      const tokens = trimmed.match(/[A-Za-z0-9]+'?/g);
-      names = tokens && tokens.length === 2 ? tokens : trimmed.split('');
-    } else {
-      names = trimmed.split('');
+  if (Array.isArray(value)) names = value;
+  else {
+    const text = value.trim();
+    if (/[,;-]/.test(text)) names = text.split(/[,;-]/).map(s => s.trim());
+    else {
+      const candidates = Object.keys(points).filter(n => text.startsWith(n) && points[text.slice(n.length)])
+        .map(n => [n, text.slice(n.length)]);
+      names = candidates.length === 1 ? candidates[0] : text.split('');
     }
   }
   if (names.length !== 2) return null;
@@ -38,7 +33,7 @@ function endpoints(value: string | string[] | undefined, points: Record<string, 
 
 function computePoint(point: CustomAuxPoint, points: Record<string, Point2D>, defaultCircleRadius?: number): Point2D | null {
   if (point.type === 'midpoint' || point.type === 'ratio') {
-    const segment = endpoints(point.segment, points);
+    const segment = geometryEndpoints(point.segment, points);
     if (!segment) return null;
     if (point.type === 'midpoint') return midpoint(...segment);
     const ratio = point.ratio;
@@ -51,15 +46,16 @@ function computePoint(point: CustomAuxPoint, points: Record<string, Point2D>, de
 
   if (point.type === 'projection') {
     const from = point.fromPoint && resolvePointCoordinate(point.fromPoint, points);
-    const target = endpoints(point.targetLine, points);
-    return from && target ? projectPointToLine(from, ...target).point : null;
+    const target = geometryEndpoints(point.targetLine, points);
+    return from && target && Math.hypot(target[0].x - target[1].x, target[0].y - target[1].y) > 1e-8
+      ? projectPointToLine(from, ...target).point : null;
   }
 
   // Giao của tia có hướng với đường tròn tâm fromPoint, bán kính là một
   // độ dài phụ thuộc. Không dùng tọa độ tự do hoặc gán vai trò theo tên điểm.
   if (point.type === 'on-ray') {
-    const ray = endpoints(point.segment, points);
-    const reference = endpoints(point.distanceSegment, points);
+    const ray = geometryEndpoints(point.segment, points);
+    const reference = geometryEndpoints(point.distanceSegment, points);
     const center = point.fromPoint && resolvePointCoordinate(point.fromPoint, points);
     const scale = point.distanceRatio ?? 1;
     if (!ray || !reference || !center || !Number.isFinite(scale) || scale <= 0) return null;
@@ -84,18 +80,18 @@ function computePoint(point: CustomAuxPoint, points: Record<string, Point2D>, de
   }
 
   if (point.type === 'intersection') {
-    const first = endpoints(point.line1, points);
-    const second = endpoints(point.line2, points);
+    const first = geometryEndpoints(point.line1, points);
+    const second = geometryEndpoints(point.line2, points);
     return first && second ? lineIntersection(...first, ...second) : null;
   }
 
   // Trực tâm (Giao điểm các đường cao)
   if (point.type === 'orthocenter' || (point as any).type === 'ortho') {
-    const verts = (point as any).triangleVertices || ['A', 'B', 'C'];
+    const verts = point.triangleVertices || ['A', 'B', 'C'];
     const pA = resolvePointCoordinate(verts[0], points);
     const pB = resolvePointCoordinate(verts[1], points);
     const pC = resolvePointCoordinate(verts[2], points);
-    if (pA && pB && pC) {
+    if (pA && pB && pC && Math.abs((pB.x-pA.x)*(pC.y-pA.y)-(pB.y-pA.y)*(pC.x-pA.x)) > 1e-8) {
       // Đường cao từ A vuông góc BC: vector hướng perp(BC)
       const vBC = { x: pC.x - pB.x, y: pC.y - pB.y };
       const d1 = { x: -vBC.y, y: vBC.x };
@@ -110,11 +106,11 @@ function computePoint(point: CustomAuxPoint, points: Record<string, Point2D>, de
 
   // Trọng tâm G (Giao điểm các đường trung tuyến)
   if (point.type === 'centroid' || (point as any).type === 'gravity') {
-    const verts = (point as any).triangleVertices || ['A', 'B', 'C'];
+    const verts = point.triangleVertices || ['A', 'B', 'C'];
     const pA = resolvePointCoordinate(verts[0], points);
     const pB = resolvePointCoordinate(verts[1], points);
     const pC = resolvePointCoordinate(verts[2], points);
-    if (pA && pB && pC) {
+    if (pA && pB && pC && Math.abs((pB.x-pA.x)*(pC.y-pA.y)-(pB.y-pA.y)*(pC.x-pA.x)) > 1e-8) {
       return {
         x: (pA.x + pB.x + pC.x) / 3,
         y: (pA.y + pB.y + pC.y) / 3,
@@ -124,22 +120,22 @@ function computePoint(point: CustomAuxPoint, points: Record<string, Point2D>, de
 
   // Tâm đường tròn nội tiếp I
   if (point.type === 'incenter') {
-    const verts = (point as any).triangleVertices || ['A', 'B', 'C'];
+    const verts = point.triangleVertices || ['A', 'B', 'C'];
     const pA = resolvePointCoordinate(verts[0], points);
     const pB = resolvePointCoordinate(verts[1], points);
     const pC = resolvePointCoordinate(verts[2], points);
-    if (pA && pB && pC) {
+    if (pA && pB && pC && Math.abs((pB.x-pA.x)*(pC.y-pA.y)-(pB.y-pA.y)*(pC.x-pA.x)) > 1e-8) {
       return getTriangleIncircle(pA, pB, pC).center;
     }
   }
 
   // Tâm đường tròn ngoại tiếp O
   if (point.type === 'circumcenter') {
-    const verts = (point as any).triangleVertices || ['A', 'B', 'C'];
+    const verts = point.triangleVertices || ['A', 'B', 'C'];
     const pA = resolvePointCoordinate(verts[0], points);
     const pB = resolvePointCoordinate(verts[1], points);
     const pC = resolvePointCoordinate(verts[2], points);
-    if (pA && pB && pC) {
+    if (pA && pB && pC && Math.abs((pB.x-pA.x)*(pC.y-pA.y)-(pB.y-pA.y)*(pC.x-pA.x)) > 1e-8) {
       return getTriangleCircumcircle(pA, pB, pC).center;
     }
   }

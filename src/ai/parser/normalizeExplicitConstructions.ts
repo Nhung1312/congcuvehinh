@@ -112,8 +112,12 @@ export function normalizeExplicitConstructions(spec: GeometrySpecification, prob
       return false;
     });
     const previous = spec.auxPoints!.find(p => p.name === name);
-    const changed = previous && Object.entries(point).some(([key, value]) =>
-      JSON.stringify(previous[key as keyof GeometricAuxPointSpec]) !== JSON.stringify(value));
+    const changed = previous && (
+      previous.type !== point.type ||
+      previous.fromPoint !== point.fromPoint ||
+      previous.targetLine !== point.targetLine ||
+      previous.segment !== point.segment
+    );
     if (changed || discardedLines.size) {
       if (previous?.type === 'projection' && previous.fromPoint) discardedLines.add(segmentKey(previous.fromPoint + name));
       // Bỏ ký hiệu gắn với phép dựng sai trước khi thêm quan hệ thật bên dưới.
@@ -159,10 +163,65 @@ export function normalizeExplicitConstructions(spec: GeometrySpecification, prob
     if (comparisons.length) {
       const latest = new Map<string, { shorter: string; longer: string }>();
       for (const comparison of comparisons) {
-        const key = [segmentKey(comparison.shorter), segmentKey(comparison.longer)].sort().join('|');
+        const key = [segmentKey(comparison.shorter), segmentKey(comparison.longer)].join('>');
         latest.set(key, comparison);
       }
       spec.triangle.sideComparisons = [...latest.values()];
+    }
+  }
+
+  // Chuẩn hóa và bảo toàn các ràng buộc hình học cho Tứ Giác
+  if (spec.shapeCategory === 'quadrilateral' && spec.quadrilateral) {
+    const qVerts = spec.quadrilateral.vertices;
+    // 1. Phân tích so sánh cạnh cho tứ giác (ví dụ: AB > AD, PQ > PS, AB < CD...)
+    const qComparisons = [...raw.matchAll(/\b([A-Z]{2})\s*(<|>|nhỏ\s+hơn|lớn\s+hơn|ngắn\s+hơn|dài\s+hơn)\s*([A-Z]{2})\b/gi)]
+      .map(m => ({ first: m[1].toUpperCase(), operator: m[2], second: m[3].toUpperCase() }))
+      .filter(m => [...m.first, ...m.second].every(v => qVerts.includes(v)) && m.first[0] !== m.first[1] && m.second[0] !== m.second[1])
+      .map(m => /^(?:>|lớn|dài)/i.test(m.operator)
+        ? { shorter: m.second, longer: m.first } : { shorter: m.first, longer: m.second });
+    if (qComparisons.length) {
+      const latest = new Map<string, { shorter: string; longer: string }>();
+      for (const comp of qComparisons) {
+        const key = [segmentKey(comp.shorter), segmentKey(comp.longer)].join('>');
+        latest.set(key, comp);
+      }
+      spec.quadrilateral.sideComparisons = [...latest.values()];
+    }
+
+    // 2. Phân tích điều kiện góc của tứ giác (ví dụ: góc BAD là góc nhọn, góc BAD nhọn, góc A nhọn, góc BAD tù...)
+    const anglePatterns = [
+      /(?:góc\s+([A-Z]{3})|∠\s*([A-Z]{3}))\s*(?:là\s+)?(góc\s+)?(nhọn|tù|vuông)(?![a-zA-ZÀ-ỹ])/gi,
+      /(?:góc\s+([A-Z])|∠\s*([A-Z]))\s*(?:là\s+)?(góc\s+)?(nhọn|tù|vuông)(?![a-zA-ZÀ-ỹ])/gi,
+      /\b(nhọn|tù|vuông)\s+tại\s+([A-Z])\b/gi,
+      /(?:góc\s+([A-Z]{3})|∠\s*([A-Z]{3}))\s*<\s*90/gi,
+      /(?:góc\s+([A-Z]{3})|∠\s*([A-Z]{3}))\s*>\s*90/gi,
+      /(?:góc\s+([A-Z])|∠\s*([A-Z]))\s*<\s*90/gi,
+      /(?:góc\s+([A-Z])|∠\s*([A-Z]))\s*>\s*90/gi,
+    ];
+
+    for (const pat of anglePatterns) {
+      for (const m of raw.matchAll(pat)) {
+        let v = '';
+        let type: 'acute' | 'obtuse' | 'right' = 'acute';
+        if (m[0].includes('<')) {
+          v = m[1] || m[2];
+          type = 'acute';
+        } else if (m[0].includes('>')) {
+          v = m[1] || m[2];
+          type = 'obtuse';
+        } else if (pat.source.startsWith('\\b(nhọn')) {
+          v = m[2];
+          type = m[1].toLowerCase() === 'tù' ? 'obtuse' : m[1].toLowerCase() === 'vuông' ? 'right' : 'acute';
+        } else {
+          v = m[1] || m[2];
+          const typeStr = (m[4] || '').toLowerCase();
+          type = typeStr === 'tù' ? 'obtuse' : typeStr === 'vuông' ? 'right' : 'acute';
+        }
+        if (v && v.length === 3) v = v[1]; // Đỉnh là chữ cái ở giữa góc, ví dụ BAD -> A
+        if (v && qVerts.includes(v.toUpperCase())) {
+          spec.quadrilateral.specialAngle = { vertex: v.toUpperCase(), type };
+        }
+      }
     }
   }
 
@@ -179,15 +238,36 @@ export function normalizeExplicitConstructions(spec: GeometrySpecification, prob
   }
 
   // Hình chiếu được xác định từ điểm nguồn và đường nhận, không từ tên H/D/E.
-  const projection = /(?:từ\s+([A-Z])\s+kẻ\s+)?\b([A-Z])([A-Z])\s*(?:vuông\s*góc|⊥)\s*(?:với\s+)?([A-Z]{2})\s+tại\s+([A-Z])\b|\b([A-Z])\s+là\s+hình\s+chiếu\s+(?:vuông\s+góc\s+)?của\s+([A-Z])\s+(?:trên|lên)\s+([A-Z]{2})\b/gi;
+  const projection = /(?:từ\s+([A-Z])\s+kẻ\s+)?\b([A-Z])([A-Z])\s*(?:vuông\s*góc|⊥)\s*(?:với\s+)?([A-Z]{2})\s+tại\s+([A-Z])\b(?:\s*\(([^)]+)\))?|\b([A-Z])\s+là\s+hình\s+chiếu\s+(?:vuông\s+góc\s+)?của\s+([A-Z])\s+(?:trên|lên)\s+([A-Z]{2})\b(?:\s*\(([^)]+)\))?/gi;
   for (const match of raw.matchAll(projection)) {
-    const name = (match[6] || match[5]).toUpperCase();
-    const source = (match[7] || match[1] || (match[2].toUpperCase() === name ? match[3] : match[2])).toUpperCase();
-    const targetLine = (match[8] || match[4]).toUpperCase();
+    const name = (match[7] || match[5]).toUpperCase();
+    const source = (match[8] || match[1] || (match[2].toUpperCase() === name ? match[3] : match[2])).toUpperCase();
+    const targetLine = (match[9] || match[4]).toUpperCase();
+    const note = (match[10] || match[6] || '').toLowerCase();
+    const mustBeInsideSegment =
+      note.includes('thuộc đoạn') ||
+      note.includes('nằm trên đoạn') ||
+      note.includes('nằm giữa') ||
+      new RegExp(`\\b${name}\\s+(?:thuộc|nằm\\s+trên|nằm\\s+giữa)\\s+(?:đoạn\\s+thẳng\\s+|đoạn\\s+)?${targetLine}\\b`, 'i').test(raw);
+
     if (name === source || targetLine.includes(name)) continue;
-    setPoint({ name, type: 'projection', fromPoint: source, targetLine });
+    setPoint({ name, type: 'projection', fromPoint: source, targetLine, mustBeInsideSegment });
     addLine(source, name);
     spec.rightAngles.push({ vertex: name, ray1: source, ray2: targetLine[0] });
+  }
+
+  // Giữ cả đối tượng chứa điểm, tránh gắn cờ vào nhầm đường nhận hình chiếu.
+  spec.pointConstraints ||= [];
+  for (const m of raw.matchAll(/\b([A-Z])\s+(?:thuộc|nằm\s+trên)\s+(đoạn(?:\s+thẳng)?|tia|đường\s+thẳng)\s+([A-Z]{2})\b/gi)) {
+    const point=m[1].toUpperCase(), target=m[3].toUpperCase();
+    const kind = m[2].toLowerCase().startsWith('đoạn') ? 'segment' : m[2].toLowerCase()==='tia' ? 'ray' : 'line';
+    if (!spec.pointConstraints.some(p=>p.point===point&&p.target===target&&p.kind===kind))spec.pointConstraints.push({point,target,kind});
+    const p=spec.auxPoints?.find(p=>p.name===point);
+    if (kind==='segment'&&p?.type==='projection'&&p.targetLine&&segmentKey(p.targetLine)===segmentKey(target))p.mustBeInsideSegment=true;
+  }
+  for (const m of raw.matchAll(/\b([A-Z])\s+(?:nằm\s+)?giữa\s+([A-Z])\s+và\s+([A-Z])\b/gi)) {
+    const point=m[1].toUpperCase(),target=(m[2]+m[3]).toUpperCase();
+    if(!spec.pointConstraints.some(p=>p.point===point&&p.target===target&&p.kind==='segment'))spec.pointConstraints.push({point,target,kind:'segment'});
   }
 
   // Câu dựng điểm trên tia có thể viết ở cả hai thứ tự:
@@ -239,7 +319,7 @@ export function normalizeExplicitConstructions(spec: GeometrySpecification, prob
   }
 
   const intersectionPatterns = [
-    /\b([A-Z])\s+(?:là\s+)?giao\s+điểm\s+(?:của\s+)?(?:hai\s+đường\s+thẳng\s+|đường\s+thẳng\s+)?([A-Z]{2})\s*(?:và|với|,)\s*(?:đường\s+thẳng\s+)?([A-Z]{2})\b/gi,
+    /\b([A-Z])\s+(?:là\s+)?giao\s+điểm\s+(?:của\s+)?(?:hai\s+đường\s+thẳng\s+|đường\s+thẳng\s+|hai\s+đường\s+chéo\s+|đường\s+chéo\s+|hai\s+đoạn\s+thẳng\s+|đoạn\s+thẳng\s+)?([A-Z]{2})\s*(?:và|với|,)\s*(?:đường\s+thẳng\s+|đường\s+chéo\s+|đoạn\s+thẳng\s+)?([A-Z]{2})\b/gi,
     /\b([A-Z]{2})\s+(?:và|với)\s+([A-Z]{2})\s+(?:cắt|giao)\s+nhau\s+tại\s+([A-Z])\b/gi,
   ];
   for (const [index, pattern] of intersectionPatterns.entries()) for (const match of raw.matchAll(pattern)) {
@@ -271,6 +351,30 @@ export function normalizeExplicitConstructions(spec: GeometrySpecification, prob
     const others = spec.triangle.vertices.filter(p => p !== vertex);
     if (!spec.rightAngles.some(p => p.vertex === vertex) && others.length === 2) {
       spec.rightAngles.push({ vertex, ray1: others[0], ray2: others[1] });
+    }
+  }
+  // Không làm mất điều kiện góc thứ hai, số đo, hoặc góc có hai tia được nêu tường minh.
+  spec.angleConstraints ||= [];
+  const addAngle=(item:NonNullable<GeometrySpecification['angleConstraints']>[number])=>{
+    if(!spec.angleConstraints!.some(p=>JSON.stringify(p)===JSON.stringify(item)))spec.angleConstraints!.push(item);
+  };
+  for(const m of raw.matchAll(/(?:góc\s*|∠\s*)([A-Z]{3}|[A-Z])\s*(?:là\s+)?(?:góc\s+)?(nhọn|tù|vuông)(?![a-zA-ZÀ-ỹ])/gi)) {
+    const n=m[1].toUpperCase();
+    const type=m[2].toLowerCase()==='nhọn'?'acute':m[2].toLowerCase()==='tù'?'obtuse':'right';
+    addAngle(n.length===3?{vertex:n[1],ray1:n[0],ray2:n[2],type}:{vertex:n,type});
+  }
+  for(const m of raw.matchAll(/(?:góc\s*|∠\s*)([A-Z]{3}|[A-Z])\s*(?:=|bằng)\s*(\d+(?:[.,]\d+)?)\s*(?:°|độ)?/gi)) {
+    const n=m[1].toUpperCase(),degrees=Number(m[2].replace(',','.'));
+    addAngle(n.length===3?{vertex:n[1],ray1:n[0],ray2:n[2],degrees}:{vertex:n,degrees});
+  }
+  if(spec.shapeCategory==='triangle'&&spec.triangle) {
+    if(/tam\s+giác\s+[A-Z]{3}\s+nhọn/i.test(raw))for(const vertex of spec.triangle.vertices)addAngle({vertex,type:'acute'});
+    for(const m of raw.matchAll(/\b([A-Z]{2})\s*=\s*(\d+(?:[.,]\d+)?)\s*(cm|mm|dm|m)?(?![0-9])/gi)) {
+      const segment=m[1].toUpperCase();
+      if([...segment].every(v=>spec.triangle!.vertices.includes(v))) {
+        spec.triangle.sideLengths ||= {};
+        spec.triangle.sideLengths[segment]=m[2].replace(',','.')+(m[3]?' '+m[3]:'');
+      }
     }
   }
   return spec;

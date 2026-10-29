@@ -1,0 +1,593 @@
+{
+  "source_zip_name": "congcuvehinh (3)(1).zip",
+  "source_zip_sha256": "d4752ebff6d365ff482c7e1452d3558b10077a283664f3a67701ec676c234727",
+  "basis": "Attached ZIP only; GitHub not read or overwritten.",
+  "modified_files": [
+    "package.json",
+    "src/App.tsx",
+    "src/ai/adapter/geometrySpecificationAdapter.ts",
+    "src/ai/parser/normalizeExplicitConstructions.ts",
+    "src/ai/parser/vietnameseGeometryParser.ts",
+    "src/ai/types.ts",
+    "src/components/EditorPanels/AIGeometryEditor.tsx",
+    "src/components/EditorPanels/GeometryEditor.tsx",
+    "src/renderers/GeometrySvg.tsx",
+    "src/server/geminiGeometryService.ts",
+    "src/types/index.ts",
+    "src/utils/geometryMath.ts",
+    "src/utils/resolveAuxiliaryPoints.ts"
+  ],
+  "added_files": [
+    "package-lock.json",
+    "scripts/test_geometry_verification.ts",
+    "scripts/test_geometry_dom.ts",
+    "src/utils/minimizeGeometryConstraints.ts",
+    "src/utils/geometrySceneCoordinates.ts",
+    "src/ai/adapter/geometryVerificationState.ts",
+    "src/ai/adapter/solveGeometryCoordinates.ts",
+    "src/ai/adapter/verifyGeometryScene.ts"
+  ],
+  "validation": {
+    "node_tests": {
+      "pass": 232,
+      "fail": 0,
+      "skipped": 0
+    },
+    "typescript": "PASS",
+    "production_build": "PASS",
+    "live_gemini_calls": 0,
+    "chromium_browser": "NOT RUN: browser download returned invalid/truncated archive; React DOM flows tested with jsdom instead."
+  },
+  "source_files": [
+    {
+      "path": ".aistudio/artifacts/brain/bfea587f-6fc0-43d5-9f29-d34f72f472b1/.tempmediaStorage/media_1793259390994_d43fdad8.png",
+      "sha256": "91f862f80b2e2bb1af99115232efa9b093a898506d41393dffd8765f0f960e00",
+      "size": 29135
+    },
+    {
+      "path": ".env.example",
+      "sha256": "662bf3fa7561243a8a244d828423d6d6d56062cb97e83d7b8d87a667f12650cb",
+      "size": 158
+    },
+    {
+      "path": ".github/workflows/geometry-ai-checks.yml",
+      "sha256": "3be0fecc4abd6c550842ad1cbe09640bb8fea0dcd0d04e44de2a4efa508d085d",
+      "size": 2434
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "db691f14fcf678985362a42c6aedb581e42cd6bb99962ce1b44aea460fb2a4df",
+      "size": 73
+    },
+    {
+      "path": "README.md",
+      "sha256": "d11457d224ca3ae6aefeed5903d778bf4a3e9f8d1a762908d332bdfb79de8f18",
+      "size": 1383
+    },
+    {
+      "path": "api/geometry/parse.ts",
+      "sha256": "8f778a4b71aa72615ff5dcee3bdee54c4dd4094d25b7e7d24b251100933904ed",
+      "size": 4273
+    },
+    {
+      "path": "api/health.ts",
+      "sha256": "b43c591d61c66b6c489d46cb1c4584ab536546396c0228b2ba9f3bb41b6c8afd",
+      "size": 754
+    },
+    {
+      "path": "index.html",
+      "sha256": "f5d81631748178d4b71eba0b7cf54ae1f348c184abc9a44db0146a8e84b0ce03",
+      "size": 1269
+    },
+    {
+      "path": "metadata.json",
+      "sha256": "fa4e7d8ad0649d04d36c6f3893671258ebeaebd2f3bbfae80b6f2e16485b5ba7",
+      "size": 387
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "bbbc9238a2612f4568d16ba0a2f1912512c069ea74df4ad2d2d70677fe476ae4",
+      "size": 171136
+    },
+    {
+      "path": "package.json",
+      "sha256": "90409a024e24fe23a7ec5a232f3bf56582585afcb8fcd9894cebb0a45adbee31",
+      "size": 1972
+    },
+    {
+      "path": "public/assets/aistudio/image_91f862f8.png",
+      "sha256": "91f862f80b2e2bb1af99115232efa9b093a898506d41393dffd8765f0f960e00",
+      "size": 29135
+    },
+    {
+      "path": "public/icon.png",
+      "sha256": "f26253d639b73a32bf94d549dd3cafa0111a2875e898857684dad5be2b5abd23",
+      "size": 1808476
+    },
+    {
+      "path": "scripts/test_geometry_ai_aux.ts",
+      "sha256": "66bafb5ed22aecdf33b29b6ab158ff040533252276a42539f4fe2559de8d307e",
+      "size": 33537
+    },
+    {
+      "path": "scripts/test_geometry_ai_composite.ts",
+      "sha256": "b72503534e714236b0efa0ce5f25d1ea42ba1a5fb3914b51251af2ff36db83e3",
+      "size": 22740
+    },
+    {
+      "path": "scripts/test_geometry_constraints_audit.ts",
+      "sha256": "12d32cbc1da54f382f1da5ded5e03afe7ba26ddc2c66fcbb4d7f7274e768afd8",
+      "size": 6075
+    },
+    {
+      "path": "scripts/test_geometry_constructions.ts",
+      "sha256": "48263b307265a55e7c4cd6827333dbd3b0679d07c9a495e39679a0ef888b967f",
+      "size": 26131
+    },
+    {
+      "path": "scripts/test_geometry_dom.ts",
+      "sha256": "c7554cfc2488624a2cba59af0f6207c223202a73c9a2c7e38cce29460142d771",
+      "size": 8495
+    },
+    {
+      "path": "scripts/test_geometry_groups_a_to_f.ts",
+      "sha256": "6030949f8916012383bd80b1536ac393e129dde02d8ddeb661629ca312d239c7",
+      "size": 17908
+    },
+    {
+      "path": "scripts/test_geometry_image.ts",
+      "sha256": "5ec446e1608cc194959fa4cc0eadcc9b6939bb3a7cc4e863b3ea45ca83035763",
+      "size": 3187
+    },
+    {
+      "path": "scripts/test_geometry_label_audit.ts",
+      "sha256": "9d261ac2304f270cf206f4c0bf5fb390c4884091ccd4ab85390ae18860d76b5e",
+      "size": 5697
+    },
+    {
+      "path": "scripts/test_geometry_tikz.ts",
+      "sha256": "b9a2634d2c22e9854b71fcb55dd354491f61388d3c508dcf1fecd4765dc54784",
+      "size": 2705
+    },
+    {
+      "path": "scripts/test_geometry_verification.ts",
+      "sha256": "f5c0b8165e50ed0a0b87edeb9baa1aa56e85f98bdc303e3a8e3ec25fb588089c",
+      "size": 22399
+    },
+    {
+      "path": "scripts/test_textbook_templates.ts",
+      "sha256": "b26b4459bee2c960a4bd8e37bbeb1d71436c543921dbb43e2e040a948fa30c83",
+      "size": 4575
+    },
+    {
+      "path": "scripts/test_vercel_api_runtime.ts",
+      "sha256": "98cafb69d3be3a9f96a8fd07d1c11b3de8a1b3a5fce6a88fe989c7221d29a04a",
+      "size": 9108
+    },
+    {
+      "path": "server.ts",
+      "sha256": "0362be1f8878d4a1687cad8e73084f19dd182c033e93fb1cf4f459b4754a4baf",
+      "size": 3127
+    },
+    {
+      "path": "src/App.tsx",
+      "sha256": "32849ff497a362618758030b926577a4d07c2b65f24a42e22384841a4cd68453",
+      "size": 49423
+    },
+    {
+      "path": "src/ai/AIGeometryProvider.ts",
+      "sha256": "f96e6bce0e34d413e82eb7a5765d13bbed225e09a893d92c3ba012c129af5988",
+      "size": 511
+    },
+    {
+      "path": "src/ai/adapter/geometrySpecificationAdapter.ts",
+      "sha256": "84864d8a17a7bfdd5ddea1a12618acd4228ee817eb5f206caaf3fcd8d76be152",
+      "size": 39220
+    },
+    {
+      "path": "src/ai/adapter/geometryVerificationState.ts",
+      "sha256": "723ad8c72ff9fa326f0fbd35225aab111cd744f78a2575ac1201239a56576aa3",
+      "size": 1508
+    },
+    {
+      "path": "src/ai/adapter/solveGeometryCoordinates.ts",
+      "sha256": "f6964d3f65bd35cfde693808bb44e39bff48a0c23cec8aea1ad0a57c871ef871",
+      "size": 3604
+    },
+    {
+      "path": "src/ai/adapter/verifyGeometryScene.ts",
+      "sha256": "d74a5993156be89715cb6f936b9940dfa381a3422779ab22139615fca0a6c080",
+      "size": 34191
+    },
+    {
+      "path": "src/ai/aiPresets.ts",
+      "sha256": "1a1f8a45dbb11ec7985929e30bafcbf8e42beb1937948f9552fea147ae3d1b7e",
+      "size": 5137
+    },
+    {
+      "path": "src/ai/geometryImageClient.ts",
+      "sha256": "6aacd709cf8eaae0cf47fe474d493360743b0c110db15fcccdffab818aa36d30",
+      "size": 2156
+    },
+    {
+      "path": "src/ai/geometryImageInput.ts",
+      "sha256": "da449b230b2d8bbc85dea2daf36e3fc3da75a90c49f2f8b6e0c7ed65c460fcc2",
+      "size": 2477
+    },
+    {
+      "path": "src/ai/parser/completeCompositeTriangle.ts",
+      "sha256": "de7677776f11b42d5c50acd71c1fe8f6947d55c2b7703d84472bd40a112775b6",
+      "size": 9999
+    },
+    {
+      "path": "src/ai/parser/normalizeExplicitConstructions.ts",
+      "sha256": "d02e386f975eba26f964f6265b89c3830b17c871b1fd961142f82dc797440807",
+      "size": 22814
+    },
+    {
+      "path": "src/ai/parser/vietnameseGeometryParser.ts",
+      "sha256": "b7512dab828d8056e024ad32d2283b094d78451049674a4a3e2c22e9694b6e8f",
+      "size": 44560
+    },
+    {
+      "path": "src/ai/providers/ClaudeGeometryProvider.ts",
+      "sha256": "3cabcd1c859f02a864a31c0e23647c7b39b062105f08555d92e626904612f7fa",
+      "size": 876
+    },
+    {
+      "path": "src/ai/providers/GeminiGeometryProvider.ts",
+      "sha256": "d298c347f6b4cb27bb3b66417fbb0aaa69a0c5f4c30d3603c9e42f8e88e980a0",
+      "size": 1572
+    },
+    {
+      "path": "src/ai/providers/MockGeometryProvider.ts",
+      "sha256": "6dd604d3e763d7bd41aa2fe1c61803db713c92457197c28656aa7f7b0c5d1ece",
+      "size": 1135
+    },
+    {
+      "path": "src/ai/types.ts",
+      "sha256": "f076558d599ad9f1ff16993de4b3eac7b869d0431628034f0ba14bdac9469ad9",
+      "size": 8312
+    },
+    {
+      "path": "src/calculations/mathCalculations.ts",
+      "sha256": "4ba0327f413528affd4ea0e7c45c6361d426d67b818e85b22ef11e5f55c4a6ba",
+      "size": 5672
+    },
+    {
+      "path": "src/components/AIGeometryModal.tsx",
+      "sha256": "8c08e04fb5519b03ec205c47b0cebf9b51fbf1b1ea49ec45760d8d95ee08c8da",
+      "size": 2582
+    },
+    {
+      "path": "src/components/AuthModal.tsx",
+      "sha256": "fec828c2244306932ff2a5d026db0d5821caba8e97b041adeaab0ead193ff461",
+      "size": 21367
+    },
+    {
+      "path": "src/components/CanvasArea.tsx",
+      "sha256": "143f38bbd334e10397669b1379609ed891dfa08a997b1661348322c51f3c06e2",
+      "size": 24443
+    },
+    {
+      "path": "src/components/DataTableModal.tsx",
+      "sha256": "1826b9d59a57b643bc44943d8fd173de4d7e07355031d834577524d1ca5b3579",
+      "size": 9978
+    },
+    {
+      "path": "src/components/EditorPanels/AIGeometryEditor.tsx",
+      "sha256": "d9c2e9c333c6694bd0a44b92d0dbdffa63ee7b00d5043f78eb1332b923ee3cf5",
+      "size": 23029
+    },
+    {
+      "path": "src/components/EditorPanels/AIProblemPromptCard.tsx",
+      "sha256": "a4c6d2e74101dcb77edc4031fb0bf96cb9fa67e912f3f5f2c7e276f170b6f95d",
+      "size": 12365
+    },
+    {
+      "path": "src/components/EditorPanels/AngleEditor.tsx",
+      "sha256": "7b868b48c21a6fc00d4f7484c8daab6071d72f3e606954a988d5423dee577954",
+      "size": 26021
+    },
+    {
+      "path": "src/components/EditorPanels/AuxiliaryElementsEditor.tsx",
+      "sha256": "f6852f76293a82f7cd2a9880822bdcf51249a08d0b3057b59d9173c22e431c17",
+      "size": 51470
+    },
+    {
+      "path": "src/components/EditorPanels/BarChartEditor.tsx",
+      "sha256": "18e1d55530ca610420896e8c2ae6edc919df87f5b3ee4602231a1c702806e690",
+      "size": 9325
+    },
+    {
+      "path": "src/components/EditorPanels/CircleEditor.tsx",
+      "sha256": "cb38be5038c2bd54d22448e37ef60532098fc1c087b521c94f4de08e7f135e04",
+      "size": 47481
+    },
+    {
+      "path": "src/components/EditorPanels/CommonStyleEditor.tsx",
+      "sha256": "3da6ac5169b1491ce2038a9719d1830442a85b6cafbcd263329d9c3cfbc22892",
+      "size": 3574
+    },
+    {
+      "path": "src/components/EditorPanels/CoordinatePlaneEditor.tsx",
+      "sha256": "f63e503a20b33a72990e43e1683097f7048932f340587009a3ba4ba0791397c7",
+      "size": 11100
+    },
+    {
+      "path": "src/components/EditorPanels/DoubleBarChartEditor.tsx",
+      "sha256": "bfaf72c0684b98bea5c05f604cf3d10d32e53d276ca26870c74d1ac0afa674fb",
+      "size": 9731
+    },
+    {
+      "path": "src/components/EditorPanels/FractionBarEditor.tsx",
+      "sha256": "e6db9aad4cc88a3cd8e40b4d0333754a65d06711205de17165ad50eabfa06c23",
+      "size": 6435
+    },
+    {
+      "path": "src/components/EditorPanels/FunctionGraphEditor.tsx",
+      "sha256": "7018c448a76a46ecce611eb5ec55c4b6b7e38e903938b7b96dd4639e67174d6e",
+      "size": 14263
+    },
+    {
+      "path": "src/components/EditorPanels/GeometryEditor.tsx",
+      "sha256": "aec7468b93f9e3601cfe25ee503e5182d3052b3304cf2234630b4eb7685582fb",
+      "size": 17334
+    },
+    {
+      "path": "src/components/EditorPanels/LineChartEditor.tsx",
+      "sha256": "dbae1d2095a87307678859a1d1afa2c836a5e4b11b41aa2f527133210b900559",
+      "size": 12168
+    },
+    {
+      "path": "src/components/EditorPanels/LineRayEditor.tsx",
+      "sha256": "3d7263b9f8579ca94b13168ed6c42709eb0e43ae8e1054c08f9d986a9b662aa9",
+      "size": 30977
+    },
+    {
+      "path": "src/components/EditorPanels/NumberLineEditor.tsx",
+      "sha256": "a1fd5a0ec7d483f62846a49e699e46c19bd031c76bb565bcf4358740a07530be",
+      "size": 27156
+    },
+    {
+      "path": "src/components/EditorPanels/PictogramEditor.tsx",
+      "sha256": "90ccb759d9dbb71c770045dc47a11e069e3c0185699de3b5de5114a7f305e33b",
+      "size": 7434
+    },
+    {
+      "path": "src/components/EditorPanels/PieChartEditor.tsx",
+      "sha256": "171bc00001d667477deb6b499b24529ea2dc27a7a1cedba4c6fe1df4878d3d93",
+      "size": 13582
+    },
+    {
+      "path": "src/components/EditorPanels/QuadEditor.tsx",
+      "sha256": "a6ff3ce6333572cedb4f0d47a3413617253bff6386cc0230d4821cefd3d99068",
+      "size": 45939
+    },
+    {
+      "path": "src/components/EditorPanels/RegularPolygonEditor.tsx",
+      "sha256": "789c1a8099ab70980bf6efb4d0f6cbd2b08a2ff6057b40eea010ab987c82bc4b",
+      "size": 26453
+    },
+    {
+      "path": "src/components/EditorPanels/SpatialGeometryEditor.tsx",
+      "sha256": "993b1274d42050cd353cf7599558c976348a32fe5d7178a147efb2b9b889bb3c",
+      "size": 19278
+    },
+    {
+      "path": "src/components/EditorPanels/SymmetryEditor.tsx",
+      "sha256": "1aeb6c0ce3b9d709ec68fcfa05156717b367a2fb861e6d49909e396ffc9fb592",
+      "size": 16930
+    },
+    {
+      "path": "src/components/EditorPanels/TriangleEditor.tsx",
+      "sha256": "8c90f848ebb54b77274cfadff7b69923f6c75aa433e4a890562bf0a6f20ace7a",
+      "size": 73745
+    },
+    {
+      "path": "src/components/Header.tsx",
+      "sha256": "29bb227e8a4d4b07297b3be8bb3f243074aa6b121966a3efbb2ee540259e6eea",
+      "size": 16384
+    },
+    {
+      "path": "src/components/HelpModal.tsx",
+      "sha256": "d55d355ccd572ad3906c63df07fd2391fbbec30aa7b0b23d433537520ddeae1e",
+      "size": 5483
+    },
+    {
+      "path": "src/components/SavedProjectsModal.tsx",
+      "sha256": "6fd104f7807b8f5734da449e24e48630260cec307bd96bc527c7d5660ef436f3",
+      "size": 12983
+    },
+    {
+      "path": "src/components/Sidebar.tsx",
+      "sha256": "3fa30a3a2462a32882427bddfb264e3792665f4feea688090f649c61bbab297a",
+      "size": 13647
+    },
+    {
+      "path": "src/components/SubscriptionModal.tsx",
+      "sha256": "d87c19b176fe4d8f67158ca9046ae2fc4b11a8ba023d7a10c49207cb3b8ce306",
+      "size": 18092
+    },
+    {
+      "path": "src/components/TemplatesModal.tsx",
+      "sha256": "2abbfa0e4155ceb688ff237f262f9e3855503948bf6b3edc33279e4bd735df95",
+      "size": 6616
+    },
+    {
+      "path": "src/config/trialConfig.ts",
+      "sha256": "19f23ca498de5e1fcce38506581bfd9719e225170ee280c8795e9c245c0e756c",
+      "size": 1309
+    },
+    {
+      "path": "src/constants/style.ts",
+      "sha256": "914ccd93e0bdc8446965aa671137ede2dae68016266ae231134636247686050a",
+      "size": 2213
+    },
+    {
+      "path": "src/export/exportService.ts",
+      "sha256": "11e955bf275a4af48d4c6f7de06cae48dcf395efbfd8274da4f533b8e6947aa2",
+      "size": 6703
+    },
+    {
+      "path": "src/export/tikzExport.ts",
+      "sha256": "795d568277133b27be95eff95893c3f47fba3d5f1a1f125e82675fdfc75ab2da",
+      "size": 12378
+    },
+    {
+      "path": "src/index.css",
+      "sha256": "42070e0b45bb201b2b838a52aaaa6e965f964e0b542d97f1fe517fe59c4b75a8",
+      "size": 23
+    },
+    {
+      "path": "src/main.tsx",
+      "sha256": "5580d48b0fec68698a113d45a640b88d479dc35eb1f4b87c51f67c6cc81cee9b",
+      "size": 231
+    },
+    {
+      "path": "src/renderers/BarChartSvg.tsx",
+      "sha256": "c9bda918b04e2b78b17275c53ad23130ac5410ff792f3b248d4c1037dcdb5520",
+      "size": 13500
+    },
+    {
+      "path": "src/renderers/CoordinatePlaneSvg.tsx",
+      "sha256": "89aa2776d4492e01a301134ca9f798c11b89bebb833fb5a970468501006066d6",
+      "size": 8368
+    },
+    {
+      "path": "src/renderers/DoubleBarChartSvg.tsx",
+      "sha256": "81bf1b3de9fed040ac7f0c7ec3d1e9be24f1dd7c4be120cadc009897c069f15c",
+      "size": 10239
+    },
+    {
+      "path": "src/renderers/FractionBarSvg.tsx",
+      "sha256": "d79f2bd437fd0f31564413fa0090cf9f2d7be0ba844377ea104ce26c3222e107",
+      "size": 4854
+    },
+    {
+      "path": "src/renderers/FunctionGraphSvg.tsx",
+      "sha256": "a774b013f1e8662048e3c0eb8607b1d2f75d3f9c0c99c472564e3d8c8406db0f",
+      "size": 15559
+    },
+    {
+      "path": "src/renderers/GeometrySvg.tsx",
+      "sha256": "007ee5137a59a962612c39963732c5e4c1b22e92186f291ee064f8e178a9035e",
+      "size": 199524
+    },
+    {
+      "path": "src/renderers/LineChartSvg.tsx",
+      "sha256": "663f1067911750098cdf4e583f47634f575a9ede07194e3c759d1836edf540b1",
+      "size": 10654
+    },
+    {
+      "path": "src/renderers/NumberLineSvg.tsx",
+      "sha256": "cc335cfaf9c4863dd9ef5380439584a03b26436889d12df2e1a27b56316a0371",
+      "size": 22930
+    },
+    {
+      "path": "src/renderers/PictogramSvg.tsx",
+      "sha256": "68ff265a1c5d6f77065eb6b38e74cd7eb32e2b1a227f2752a82c161a272c0b95",
+      "size": 9075
+    },
+    {
+      "path": "src/renderers/PieChartSvg.tsx",
+      "sha256": "945b1529ef59adfdc78ba9e393851075ea82ea0be458c35ff62085325ef96aec",
+      "size": 6810
+    },
+    {
+      "path": "src/renderers/SpatialGeometrySvg.tsx",
+      "sha256": "ce766c6b3821abef6a33d283faac489f26632c3f7f82df277c08a24c03355ca8",
+      "size": 9769
+    },
+    {
+      "path": "src/renderers/patterns/SvgPatterns.tsx",
+      "sha256": "425be941c175f6a3ada4ae62f6f34a4aac6afe05cfea5d713a7ccbf0b4f256e9",
+      "size": 6911
+    },
+    {
+      "path": "src/server/geminiGeometryService.ts",
+      "sha256": "e49c9a31989f0d2775736df75f32a267bdc4aa5e7068fafc9d35d0bf1d6ac34e",
+      "size": 49119
+    },
+    {
+      "path": "src/storage/authService.ts",
+      "sha256": "263c7da24b31d0e5f48399dec50ae3e6754c01224a2246228a568625c37bae50",
+      "size": 10732
+    },
+    {
+      "path": "src/storage/cloudStorageService.ts",
+      "sha256": "e619e0f80b8a3b9bbac42b11788071fcb937c4e8d197ca4f5e97d80f40d0b41a",
+      "size": 4095
+    },
+    {
+      "path": "src/storage/storageService.ts",
+      "sha256": "c05d6581c5383221a144957a2d78f423e4dc265d635dd1c8fb7438739b1f7664",
+      "size": 8273
+    },
+    {
+      "path": "src/storage/textbookTemplates.ts",
+      "sha256": "e38ff718335689ad2338941481f06b4fa6e2ecfe8c92450c2bf7a0265d93994e",
+      "size": 13444
+    },
+    {
+      "path": "src/supabaseClient.ts",
+      "sha256": "21206b99410ca32ab946ba7fcc1f60ea008afabd360d17389730e02d60347f90",
+      "size": 341
+    },
+    {
+      "path": "src/types/index.ts",
+      "sha256": "d3def619f1b23b7a409606a7e3736111943c32fde84f82e49e52a61e3d4124dc",
+      "size": 44228
+    },
+    {
+      "path": "src/utils/geometryMath.ts",
+      "sha256": "075ab0fc0d8fb97625fe615ab6f651499c3f6f45ce4ab3ab086115e26871f01e",
+      "size": 95318
+    },
+    {
+      "path": "src/utils/geometrySceneBounds.ts",
+      "sha256": "be1476b9555c84573200308ef6c909eeaa446ac7a6f49dc3f161509c9217cb23",
+      "size": 10972
+    },
+    {
+      "path": "src/utils/geometrySceneCoordinates.ts",
+      "sha256": "de9008dcae11111b79e57d5b5939ae53b4b49b299a0947422f7b738947d94fce",
+      "size": 7717
+    },
+    {
+      "path": "src/utils/minimizeGeometryConstraints.ts",
+      "sha256": "01aaffd765c4daefdc9bb86692030590b692ac556df709c39b7a5eb2a9c87e33",
+      "size": 2000
+    },
+    {
+      "path": "src/utils/numberLineMath.ts",
+      "sha256": "60f4a2504c9b7ba709bb65ecae884ee7e218e09343cfa68ee09235302fa42214",
+      "size": 9099
+    },
+    {
+      "path": "src/utils/resolveAuxiliaryPoints.ts",
+      "sha256": "5bbfe1cff67883d31c2492301df437b570bc58b5930a9ebb6aef83c90b6471ad",
+      "size": 9123
+    },
+    {
+      "path": "src/utils/spatialMath.ts",
+      "sha256": "bf0183bb87dfb0cff3d7ef21ed7f8d7471cce84acf7583899ed26d3679c61264",
+      "size": 20175
+    },
+    {
+      "path": "tsconfig.json",
+      "sha256": "873c19061090f0d66f62e91c8b99ffc1d4b5806a6b73fc732ae84534ee88d13b",
+      "size": 546
+    },
+    {
+      "path": "vercel.json",
+      "sha256": "9197c4b5cf317dcc06a1273de75b39c455f0a72ad078d17061075efd618ba8c7",
+      "size": 233
+    },
+    {
+      "path": "vite.config.ts",
+      "sha256": "0c4bc77a0d4dfe53e056b1944da3b7e1ab1bfeb247affd5acf9c3ef4d2415091",
+      "size": 502
+    }
+  ]
+}

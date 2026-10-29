@@ -53,6 +53,8 @@ export interface GeometricAuxPointSpec {
   rayPosition?: 'between' | 'beyond';
   fromPoint?: string;
   targetLine?: string | [string, string];
+  mustBeInsideSegment?: boolean;
+  triangleVertices?: [string, string, string];
   line1?: string | [string, string];
   line2?: string | [string, string];
   angle?: number; // degree on circle
@@ -95,6 +97,25 @@ export interface GeometricEqualAnglesSpec {
   angles: { vertex: string; ray1: string; ray2: string }[];
 }
 
+export interface GeometryAngleCondition {
+  vertex: string;
+  ray1?: string;
+  ray2?: string;
+  type?: 'acute' | 'obtuse' | 'right';
+  degrees?: number;
+}
+
+export interface GeometryVerification {
+  valid: boolean;
+  status?: 'verified' | 'invalid' | 'unsupported' | 'incomplete';
+  errors?: string[];
+  warnings?: string[];
+  checkedConditions?: string[];
+  unsupportedConditions?: string[];
+  contradictions?: string[];
+  missingData?: string[];
+}
+
 export interface GeometrySpecification {
   title: string;
   shapeCategory: ShapeCategory;
@@ -121,6 +142,8 @@ export interface GeometrySpecification {
     showDiagonals?: boolean;
     diagonalIntersection?: string; // 'O'
     showCircumcircle?: boolean; // Tứ giác nội tiếp đường tròn
+    specialAngle?: { vertex: string; type: 'acute' | 'obtuse' | 'right'; degrees?: number };
+    sideComparisons?: { shorter: string; longer: string }[];
   };
 
   circle?: {
@@ -197,6 +220,12 @@ export interface GeometrySpecification {
     showEqualDistanceMarkers?: boolean;
   };
 
+  /** Giữ tất cả góc/quan hệ vị trí, không ghi đè khi đề có nhiều điều kiện. */
+  angleConstraints?: GeometryAngleCondition[];
+  unhandledConditions?: string[];
+  inputIssues?: string[];
+  pointConstraints?: { point: string; target: string | [string, string]; kind: 'segment' | 'ray' | 'line' }[];
+
   // Các đường phụ và quan hệ hình học
   altitudes?: GeometricAltitudeSpec[];
   medians?: GeometricMedianSpec[];
@@ -214,4 +243,6 @@ export interface GeometrySpecification {
   explanation: string;
   /** Nguồn thực sự được dùng để dựng hình; không chứa API key. */
   generationInfo?: { source: 'gemini' | 'rules'; model?: string; message?: string; keySource?: string };
+  /** Kết quả kiểm định các ràng buộc toán học của hình */
+  verification?: GeometryVerification;
 }

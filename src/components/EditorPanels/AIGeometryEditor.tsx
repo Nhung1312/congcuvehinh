@@ -1,3 +1,4 @@
+import { assertVerifiedGeometry, geometryVerificationMessage } from '../../ai/adapter/geometryVerificationState';
 /**
  * AIGeometryEditor.tsx
  * Giao diện công cụ 🤖 AI TỰ DỰNG HÌNH TOÁN THCS
@@ -191,8 +192,11 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
         currentDoc.settings
       );
 
+      assertVerifiedGeometry(spec, newDoc);
+
       // Lưu trữ đề bài gốc vào metadata của tài liệu để luôn hiển thị ưu tiên khi chỉnh sửa
       newDoc.metadata = {
+        ...newDoc.metadata,
         aiPrompt: input,
         aiGeneratedPrompt: input,
         aiQuestionImage: image ? { mimeType: image.mimeType, data: image.data } : undefined,
@@ -487,6 +491,12 @@ export const AIGeometryEditor: React.FC<AIGeometryEditorProps> = ({
           </div>
         )}
       </div>
+
+      {currentDoc.metadata?.aiVerification && (
+        <p role="status" className={`text-xs ${currentDoc.metadata.aiVerification.valid ? 'text-emerald-700' : 'text-amber-700'}`}>
+          {geometryVerificationMessage(currentDoc.metadata.aiVerification)}
+        </p>
+      )}
 
       {/* 6. Chi tiết phân tích & JSON (Mặc định thu gọn) */}
       {lastResult && !isProcessing && (

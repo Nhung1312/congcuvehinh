@@ -1,3 +1,4 @@
+import { geometrySceneCoordinates } from '../utils/geometrySceneCoordinates';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   BaseChartSettings,
@@ -366,7 +367,9 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     } = auxData;
 
     // Giải chuỗi H → D/E dù điểm phụ được trả về không đúng thứ tự.
-    const pointsMap = resolveAuxiliaryPoints(namedPoints, auxPoints, circle?.radius);
+    const pointsMap = data.strictAuxiliaryCoordinates
+      ? geometrySceneCoordinates(data).points
+      : resolveAuxiliaryPoints(namedPoints, auxPoints, circle?.radius);
 
     // Only tangent-line intersections should hide helper x, never arbitrary AC intersections.
     const centerPointName = triangle?.circumscribedCircle?.centerName || 'O';
@@ -1498,8 +1501,8 @@ export const GeometrySvg: React.FC<GeometrySvgProps> = ({
     // Chân đường cao/trung tuyến/phân giác là gốc cho các phép dựng nhiều bước.
     const auxiliaryAnchors: Record<string, Point2D> = {};
     const opposite = (vertex: string): [Point2D, Point2D, Point2D] => {
-      if (vertex === nameB || vertex === 'B') return [pB, pA, pC];
-      if (vertex === nameC || vertex === 'C') return [pC, pA, pB];
+      if (vertex === 'B') return [pB, pA, pC];
+      if (vertex === 'C') return [pC, pA, pB];
       return [pA, pB, pC];
     };
     for (const alt of altitudes) {

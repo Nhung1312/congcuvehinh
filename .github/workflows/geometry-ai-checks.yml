@@ -5,67 +5,110 @@ on:
     branches:
       - main
       - chore/geometry-sync-to-main-no-api
+      - test/geometry-ai-core-verified-20261029
   pull_request:
-    paths:
-      - 'src/ai/**'
-      - 'src/components/EditorPanels/AIGeometryEditor.tsx'
-      - 'src/components/TemplatesModal.tsx'
-      - 'src/components/Sidebar.tsx'
-      - 'src/components/Header.tsx'
-      - 'src/App.tsx'
-      - 'src/components/CanvasArea.tsx'
-      - 'src/utils/geometrySceneBounds.ts'
-      - 'scripts/test_geometry_groups_a_to_f.ts'
-      - 'src/storage/textbookTemplates.ts'
-      - 'src/storage/storageService.ts'
-      - 'scripts/test_textbook_templates.ts'
-      - 'api/geometry/parse.ts'
-      - 'api/health.ts'
-      - 'server.ts'
-      - 'scripts/test_geometry_image.ts'
-      - 'scripts/test_geometry_constructions.ts'
-      - 'src/types/index.ts'
-      - 'scripts/test_vercel_api_runtime.ts'
-      - 'src/server/geminiGeometryService.ts'
-      - 'src/renderers/GeometrySvg.tsx'
-      - 'src/utils/resolveAuxiliaryPoints.ts'
-      - 'scripts/test_geometry_ai_aux.ts'
-      - 'scripts/test_geometry_ai_composite.ts'
-      - 'scripts/test_geometry_tikz.ts'
-      - 'src/export/tikzExport.ts'
-      - 'package.json'
-      - '.github/workflows/geometry-ai-checks.yml'
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
   geometry-ai:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
+    env:
+      # All model/Cloud requests in the test suites use fixed offline fixtures.
+      GEMINI_API_KEY: ''
+      GOOGLE_API_KEY: ''
+      API_KEY: ''
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Check out source
+        uses: actions/checkout@v5
         with:
-          node-version: '22'
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
-      - name: TypeScript check
-        run: npm run lint
-      - name: Planar geometry regression tests
-        run: npm run test:geometry-ai
-      - name: Composite geometry regression tests
-        run: npm run test:geometry-ai-composite
-      - name: TikZ export regression tests
-        run: npm run test:geometry-tikz
-      - name: Image question & prompt persistence UI tests
-        run: npm run test:geometry-image
-      - name: Explicit construction and image interpretation regression tests
-        run: npm run test:geometry-constructions
-      - name: Compiled API startup and request tests (plain Node ESM)
-        run: npm run test:api-runtime
-      - name: Textbook template geometry and SVG checks
-        run: npm run test:textbook-templates
-      - name: Geometry groups A-F regression tests
-        run: npm run test:geometry-groups
-      - name: Production bundle check
-        run: npm run build
+          persist-credentials: false
 
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install locked dependencies
+        id: install
+        shell: bash
+        run: |
+          mkdir -p .ci-logs
+          set -o pipefail
+          npm ci --no-audit --no-fund 2>&1 | tee .ci-logs/install.log
+
+      - name: TypeScript check
+        id: lint
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run lint 2>&1 | tee .ci-logs/typescript.log
+
+      - name: Full geometry regression suite (A-F, constraints, DOM, API, exports)
+        id: tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:geometry-all 2>&1 | tee .ci-logs/tests.log
+
+      - name: Production bundle check
+        id: build
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee .ci-logs/build.log
+
+      - name: Summarize results and compare with handed-off baseline
+        if: always()
+        env:
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          TESTS_OUTCOME: ${{ steps.tests.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const totals = {};
+          const log = fs.existsSync('.ci-logs/tests.log') ? fs.readFileSync('.ci-logs/tests.log', 'utf8') : '';
+          for (const match of log.matchAll(/(?:#|ℹ)\s*(tests|pass|fail|skipped)\s+(\d+)/g)) {
+            totals[match[1]] = Number(match[2]);
+          }
+          const outcomes = [
+            ['npm ci', process.env.INSTALL_OUTCOME],
+            ['TypeScript', process.env.LINT_OUTCOME],
+            ['Full regression suite', process.env.TESTS_OUTCOME],
+            ['Production build', process.env.BUILD_OUTCOME],
+          ];
+          const report = [
+            '## Geometry AI validation', '',
+            '| Step | GitHub result |', '| --- | --- |',
+            ...outcomes.map(([step, outcome]) => `| ${step} | ${outcome || 'not run'} |`), '',
+            `Actual tests: ${totals.tests ?? 'unavailable'}; PASS: ${totals.pass ?? 'unavailable'}; FAIL: ${totals.fail ?? 'unavailable'}; SKIP: ${totals.skipped ?? 'unavailable'}.`,
+            'Handed-off baseline: 232 PASS / 0 FAIL / 0 SKIP.',
+            'No live Gemini key or Chromium browser is used by this workflow.', '',
+          ].join('\n');
+          console.log(report);
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, report);
+          if (process.env.TESTS_OUTCOME === 'success' &&
+              !(totals.tests >= 232 && totals.pass >= 232 && totals.fail === 0 && totals.skipped === 0)) {
+            console.error('::error::Regression totals are missing or fall below the 232-pass baseline, or failures/skips were reported.');
+            process.exitCode = 1;
+          }
+          NODE
+
+      - name: Upload validation logs (including failed steps)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: geometry-ai-checks-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .ci-logs/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
