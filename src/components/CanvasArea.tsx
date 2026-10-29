@@ -311,6 +311,8 @@ export const CanvasArea: React.FC<CanvasAreaProps> = ({
       case 'GEOMETRY_POLYGON':
       case 'GEOMETRY_SYMMETRY':
       case 'AI_GEOMETRY':
+        // Do not render GeometrySvg's fallback triangle on an empty AI canvas.
+        if (type === 'AI_GEOMETRY' && !data.geometry?.triangle && !data.geometry?.quadrilateral && !data.geometry?.circle && !data.geometry?.angle && !data.geometry?.lineRay && !data.geometry?.polygon && !data.geometry?.symmetry) return null;
         return (
           <GeometrySvg
             data={data.geometry as any}
